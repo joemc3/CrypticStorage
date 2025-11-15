@@ -1,0 +1,148 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: crypticstorage-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crypticstorage
+      POSTGRES_USER: cryptic
+      POSTGRES_PASSWORD: crypticsecure
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/prisma/schema.prisma:/docker-entrypoint-initdb.d/schema.prisma
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cryptic -d crypticstorage"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crypticstorage-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: crypticstorage-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass crypticredis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crypticstorage-network
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: crypticstorage-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - crypticstorage-network
+
+  # Backend API Server
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: crypticstorage-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://cryptic:crypticsecure@postgres:5432/crypticstorage
+      REDIS_URL: redis://:crypticredis@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_EXPIRES_IN: 7d
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: false
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: crypticstorage
+      CLIENT_URL: http://localhost:3000
+      API_URL: http://localhost:4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    networks:
+      - crypticstorage-network
+
+  # Frontend Client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4000
+    container_name: crypticstorage-client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - crypticstorage-network
+
+  # Nginx Reverse Proxy (Optional - for production)
+  nginx:
+    image: nginx:alpine
+    container_name: crypticstorage-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - client
+      - api
+    networks:
+      - crypticstorage-network
+    profiles:
+      - production
+
+networks:
+  crypticstorage-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local

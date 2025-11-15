@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary Meta Tags -->
+    <title>CrypticStorage - Zero-Knowledge Encrypted File Storage</title>
+    <meta name="title" content="CrypticStorage - Zero-Knowledge Encrypted File Storage" />
+    <meta name="description" content="Secure, private, and encrypted cloud storage with zero-knowledge architecture. Your files are encrypted on your device before upload, ensuring complete privacy." />
+    <meta name="keywords" content="encrypted storage, zero-knowledge, secure cloud, private storage, file encryption, end-to-end encryption" />
+    <meta name="author" content="CrypticStorage" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111827" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://crypticstorage.com/" />
+    <meta property="og:title" content="CrypticStorage - Zero-Knowledge Encrypted File Storage" />
+    <meta property="og:description" content="Secure, private, and encrypted cloud storage with zero-knowledge architecture. Your files are encrypted on your device before upload, ensuring complete privacy." />
+    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://crypticstorage.com/" />
+    <meta property="twitter:title" content="CrypticStorage - Zero-Knowledge Encrypted File Storage" />
+    <meta property="twitter:description" content="Secure, private, and encrypted cloud storage with zero-knowledge architecture. Your files are encrypted on your device before upload, ensuring complete privacy." />
+    <meta property="twitter:image" content="/og-image.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Preconnect to API domain for better performance -->
+    <link rel="preconnect" href="https://api.crypticstorage.com" />
+    <link rel="dns-prefetch" href="https://api.crypticstorage.com" />
+
+    <!-- Security Headers -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.crypticstorage.com; frame-ancestors 'none';" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()" />
+
+    <!-- Web Application Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://crypticstorage.com/" />
+
+    <!-- Styles will be injected by Vite -->
+  </head>
+  <body>
+    <!-- App Root -->
+    <div id="root"></div>
+
+    <!-- Fallback for users without JavaScript -->
+    <noscript>
+      <div style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 2rem;
+        text-align: center;
+        font-family: system-ui, -apple-system, sans-serif;
+      ">
+        <h1 style="font-size: 2rem; margin-bottom: 1rem; color: #111827;">
+          JavaScript Required
+        </h1>
+        <p style="font-size: 1.125rem; color: #6b7280; max-width: 600px;">
+          CrypticStorage requires JavaScript to run the encryption and decryption operations
+          on your device. Please enable JavaScript in your browser settings to use this application.
+        </p>
+        <p style="margin-top: 2rem; font-size: 0.875rem; color: #9ca3af;">
+          Your privacy and security are our top priority. All encryption happens locally
+          on your device before any data is sent to our servers.
+        </p>
+      </div>
+    </noscript>
+
+    <!-- Main application script - injected by Vite -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

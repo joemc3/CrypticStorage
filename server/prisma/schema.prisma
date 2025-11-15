@@ -1,0 +1,190 @@
+// Prisma Schema for CrypticStorage
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  username              String    @unique
+  passwordHash          String    @map("password_hash")
+  salt                  String
+  masterKeyEncrypted    String    @map("master_key_encrypted")
+  publicKey             String    @map("public_key")
+  privateKeyEncrypted   String    @map("private_key_encrypted")
+  totpSecretEncrypted   String?   @map("totp_secret_encrypted")
+  storageQuota          BigInt    @default(10737418240) @map("storage_quota")
+  storageUsed           BigInt    @default(0) @map("storage_used")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  lastLogin             DateTime? @map("last_login")
+  isActive              Boolean   @default(true) @map("is_active")
+  emailVerified         Boolean   @default(false) @map("email_verified")
+
+  files                 File[]
+  folders               Folder[]
+  sessions              Session[]
+  auditLogs             AuditLog[]
+  ownedShares           Share[]
+  sharedFiles           UserShare[] @relation("SharedWith")
+  sharedByMe            UserShare[] @relation("SharedBy")
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model File {
+  id                    String    @id @default(uuid())
+  userId                String    @map("user_id")
+  parentFolderId        String?   @map("parent_folder_id")
+  filenameEncrypted     String    @map("filename_encrypted")
+  filenameIv            String    @map("filename_iv")
+  fileKeyEncrypted      String    @map("file_key_encrypted")
+  fileSize              BigInt    @map("file_size")
+  encryptedSize         BigInt    @map("encrypted_size")
+  mimeType              String?   @map("mime_type")
+  storagePath           String    @map("storage_path")
+  fileHash              String    @map("file_hash")
+  encryptionAlgorithm   String    @default("AES-256-GCM") @map("encryption_algorithm")
+  thumbnailPath         String?   @map("thumbnail_path")
+  version               Int       @default(1)
+  isDeleted             Boolean   @default(false) @map("is_deleted")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentFolder          Folder?   @relation(fields: [parentFolderId], references: [id], onDelete: Cascade)
+  versions              FileVersion[]
+  shares                Share[]
+  userShares            UserShare[]
+
+  @@index([userId])
+  @@index([parentFolderId])
+  @@index([fileHash])
+  @@index([isDeleted])
+  @@map("files")
+}
+
+model Folder {
+  id                    String    @id @default(uuid())
+  userId                String    @map("user_id")
+  parentFolderId        String?   @map("parent_folder_id")
+  nameEncrypted         String    @map("name_encrypted")
+  nameIv                String    @map("name_iv")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  isDeleted             Boolean   @default(false) @map("is_deleted")
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentFolder          Folder?   @relation("FolderHierarchy", fields: [parentFolderId], references: [id], onDelete: Cascade)
+  subFolders            Folder[]  @relation("FolderHierarchy")
+  files                 File[]
+
+  @@index([userId])
+  @@index([parentFolderId])
+  @@map("folders")
+}
+
+model FileVersion {
+  id                    String    @id @default(uuid())
+  fileId                String    @map("file_id")
+  versionNumber         Int       @map("version_number")
+  storagePath           String    @map("storage_path")
+  fileSize              BigInt    @map("file_size")
+  fileKeyEncrypted      String    @map("file_key_encrypted")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  file                  File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, versionNumber])
+  @@index([fileId])
+  @@map("file_versions")
+}
+
+model Share {
+  id                    String    @id @default(uuid())
+  fileId                String    @map("file_id")
+  ownerId               String    @map("owner_id")
+  shareToken            String    @unique @map("share_token")
+  fileKeyEncrypted      String    @map("file_key_encrypted")
+  passwordHash          String?   @map("password_hash")
+  expiresAt             DateTime? @map("expires_at")
+  maxDownloads          Int?      @map("max_downloads")
+  downloadCount         Int       @default(0) @map("download_count")
+  isActive              Boolean   @default(true) @map("is_active")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  lastAccessed          DateTime? @map("last_accessed")
+
+  file                  File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  owner                 User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([shareToken])
+  @@index([fileId])
+  @@index([expiresAt])
+  @@map("shares")
+}
+
+model UserShare {
+  id                    String    @id @default(uuid())
+  fileId                String    @map("file_id")
+  ownerId               String    @map("owner_id")
+  sharedWithUserId      String    @map("shared_with_user_id")
+  fileKeyEncrypted      String    @map("file_key_encrypted")
+  permission            String    @default("read")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  file                  File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  owner                 User      @relation("SharedBy", fields: [ownerId], references: [id], onDelete: Cascade)
+  sharedWithUser        User      @relation("SharedWith", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, sharedWithUserId])
+  @@index([fileId])
+  @@index([sharedWithUserId])
+  @@map("user_shares")
+}
+
+model Session {
+  id                    String    @id @default(uuid())
+  userId                String    @map("user_id")
+  tokenHash             String    @unique @map("token_hash")
+  expiresAt             DateTime  @map("expires_at")
+  ipAddress             String?   @map("ip_address")
+  userAgent             String?   @map("user_agent")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  lastActivity          DateTime  @default(now()) @map("last_activity")
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model AuditLog {
+  id                    String    @id @default(uuid())
+  userId                String?   @map("user_id")
+  action                String
+  resourceType          String?   @map("resource_type")
+  resourceId            String?   @map("resource_id")
+  ipAddress             String?   @map("ip_address")
+  userAgent             String?   @map("user_agent")
+  success               Boolean   @default(true)
+  errorMessage          String?   @map("error_message")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

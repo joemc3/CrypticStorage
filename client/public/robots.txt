@@ -1,0 +1,8 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /files
+Disallow: /settings
+
+Sitemap: https://crypticstorage.com/sitemap.xml

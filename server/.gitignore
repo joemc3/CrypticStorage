@@ -1,0 +1,17 @@
+node_modules
+dist
+*.log
+.env
+.env.local
+.env.*.local
+coverage
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache
+.node_repl_history
+*.tgz
+.yarn-integrity
+.cache
+prisma/migrations

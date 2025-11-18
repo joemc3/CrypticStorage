@@ -6,7 +6,7 @@ import {
   UnauthorizedError,
   ConflictError,
 } from '../middleware/error.middleware';
-import { PrismaClient } from '@prisma/client';
+// PrismaClient singleton imported from database config
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import speakeasy from 'speakeasy';
@@ -15,8 +15,51 @@ import {
   generateAccessToken,
   generateRefreshToken,
 } from '../middleware/auth.middleware';
+import { prisma } from '../config/database';
+import crypto from 'crypto';
 
-const prisma = new PrismaClient();
+// Encryption key for TOTP secrets (in production, use a secure key management system)
+const TOTP_ENCRYPTION_KEY = process.env.TOTP_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+const TOTP_ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+
+/**
+ * Encrypt TOTP secret for secure storage
+ */
+function encryptTotpSecret(secret: string): string {
+  const iv = crypto.randomBytes(16);
+  const key = Buffer.from(TOTP_ENCRYPTION_KEY, 'hex');
+  const cipher = crypto.createCipheriv(TOTP_ENCRYPTION_ALGORITHM, key, iv);
+
+  let encrypted = cipher.update(secret, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+
+  // Return IV + AuthTag + Encrypted data
+  return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+}
+
+/**
+ * Decrypt TOTP secret for verification
+ */
+function decryptTotpSecret(encryptedSecret: string): string {
+  const parts = encryptedSecret.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted TOTP secret format');
+  }
+
+  const iv = Buffer.from(parts[0], 'hex');
+  const authTag = Buffer.from(parts[1], 'hex');
+  const encrypted = parts[2];
+  const key = Buffer.from(TOTP_ENCRYPTION_KEY, 'hex');
+
+  const decipher = crypto.createDecipheriv(TOTP_ENCRYPTION_ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
+
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
+}
 
 /**
  * Register a new user
@@ -391,11 +434,12 @@ export const verify2FA = asyncHandler(
       throw new BadRequestError('Invalid verification code');
     }
 
-    // Save the encrypted secret (in production, encrypt this with user's master key)
+    // Save the encrypted secret
+    const encryptedSecret = encryptTotpSecret(secret);
     await prisma.user.update({
       where: { id: userId },
       data: {
-        totpSecretEncrypted: secret, // Should be encrypted in production
+        totpSecretEncrypted: encryptedSecret,
       },
     });
 
@@ -453,9 +497,10 @@ export const disable2FA = asyncHandler(
       throw new BadRequestError('2FA is not enabled');
     }
 
-    // Verify the TOTP token
+    // Decrypt and verify the TOTP token
+    const decryptedSecret = decryptTotpSecret(user.totpSecretEncrypted);
     const verified = speakeasy.totp.verify({
-      secret: user.totpSecretEncrypted, // Should be decrypted in production
+      secret: decryptedSecret,
       encoding: 'base32',
       token,
       window: 2,

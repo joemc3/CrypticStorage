@@ -13,7 +13,7 @@ import {
   validateParams,
   commonSchemas,
 } from '../middleware/validation.middleware';
-import { standardLimiter, fileLimiter } from '../middleware/rateLimit.middleware';
+import { standardLimiter, publicShareLimiter } from '../middleware/rateLimit.middleware';
 import { z } from 'zod';
 
 const router = Router();
@@ -114,7 +114,7 @@ router.delete(
  */
 router.get(
   '/public/:token',
-  fileLimiter,
+  publicShareLimiter, // Stricter rate limiting to prevent token brute force
   validateParams(shareTokenSchema),
   validateQuery(getShareQuerySchema),
   getShare
@@ -127,7 +127,7 @@ router.get(
  */
 router.get(
   '/public/:token/download',
-  fileLimiter,
+  publicShareLimiter, // Stricter rate limiting to prevent token brute force
   validateParams(shareTokenSchema),
   validateQuery(getShareQuerySchema),
   downloadSharedFile

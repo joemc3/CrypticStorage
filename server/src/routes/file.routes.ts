@@ -6,6 +6,8 @@ import {
   downloadFile,
   updateFile,
   deleteFile,
+  getFileVersions,
+  restoreFileVersion,
 } from '../controllers/file.controller';
 import { authenticateToken } from '../middleware/auth.middleware';
 import {
@@ -65,6 +67,11 @@ const updateFileSchema = z.object({
 
 const deleteFileSchema = z.object({
   permanent: z.enum(['true', 'false']).optional().default('false'),
+});
+
+const versionParamsSchema = z.object({
+  id: commonSchemas.fileId,
+  versionNumber: z.string().regex(/^\d+$/, 'Version number must be a number'),
 });
 
 /**
@@ -150,6 +157,32 @@ router.delete(
   validateParams(fileIdSchema),
   validateQuery(deleteFileSchema),
   deleteFile
+);
+
+/**
+ * @route   GET /api/files/:id/versions
+ * @desc    Get all versions of a file
+ * @access  Private
+ */
+router.get(
+  '/:id/versions',
+  authenticateToken,
+  fileLimiter,
+  validateParams(fileIdSchema),
+  getFileVersions
+);
+
+/**
+ * @route   POST /api/files/:id/versions/:versionNumber/restore
+ * @desc    Restore a file to a specific version
+ * @access  Private
+ */
+router.post(
+  '/:id/versions/:versionNumber/restore',
+  authenticateToken,
+  fileLimiter,
+  validateParams(versionParamsSchema),
+  restoreFileVersion
 );
 
 export default router;

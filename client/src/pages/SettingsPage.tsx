@@ -1,23 +1,17 @@
 /**
  * CrypticStorage - Settings Page
- * User settings including profile, security, and 2FA
+ * Cipher-styled settings and configuration
  */
 
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { TwoFactorSetup } from '../components/auth/TwoFactorSetup';
-import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { useAuth } from '../hooks/useAuth';
 import { useEncryption } from '../hooks/useEncryption';
 import { useToast } from '../hooks/useToast';
-import {
-  UserCircleIcon,
-  ShieldCheckIcon,
-  KeyIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline';
 
 type SettingsTab = 'profile' | 'security' | '2fa' | 'storage';
 
@@ -33,10 +27,43 @@ export const SettingsPage: React.FC = () => {
   const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
 
   const tabs = [
-    { id: 'profile', name: 'Profile', icon: UserCircleIcon },
-    { id: 'security', name: 'Security', icon: ShieldCheckIcon },
-    { id: '2fa', name: 'Two-Factor Auth', icon: KeyIcon },
-    { id: 'storage', name: 'Storage', icon: TrashIcon },
+    {
+      id: 'profile',
+      name: 'PROFILE',
+      icon: (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      ),
+    },
+    {
+      id: 'security',
+      name: 'SECURITY',
+      icon: (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+      ),
+    },
+    {
+      id: '2fa',
+      name: '2FA',
+      icon: (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+        </svg>
+      ),
+    },
+    {
+      id: 'storage',
+      name: 'STORAGE',
+      icon: (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        </svg>
+      ),
+    },
   ];
 
   const handleChangePassword = async () => {
@@ -73,174 +100,190 @@ export const SettingsPage: React.FC = () => {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Manage your account settings and preferences
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <h1 className="font-display text-3xl text-text-primary mb-2">Settings</h1>
+          <p className="font-mono text-xs tracking-wider text-text-muted">
+            CONFIGURE YOUR VAULT
           </p>
-        </div>
+        </motion.div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="flex space-x-8">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as SettingsTab)}
-                  className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                    isActive
-                      ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  {tab.name}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="flex gap-2 p-1 bg-cipher-obsidian border border-cipher-slate/30 rounded-lg w-fit"
+        >
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as SettingsTab)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md font-mono text-xs tracking-wider transition-all ${
+                  isActive
+                    ? 'bg-cipher-phosphor/10 text-cipher-phosphor border border-cipher-phosphor/30'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                {tab.icon}
+                {tab.name}
+              </button>
+            );
+          })}
+        </motion.div>
 
         {/* Tab Content */}
-        <div className="max-w-2xl">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="max-w-2xl"
+        >
           {/* Profile Tab */}
           {activeTab === 'profile' && (
-            <Card>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Profile Information
+            <div className="bg-cipher-obsidian border border-cipher-slate/30 rounded-xl p-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cipher-phosphor/50 to-transparent" />
+              <h2 className="font-mono text-xs tracking-wider text-text-muted mb-6">
+                PROFILE INFORMATION
               </h2>
               <div className="space-y-4">
                 <Input
-                  label="Email"
+                  label="EMAIL"
                   type="email"
                   value={user?.email || ''}
                   disabled
                   helperText="Email cannot be changed"
                 />
                 <Input
-                  label="Username"
+                  label="USERNAME"
                   value={user?.username || ''}
                   disabled
                   helperText="Username is derived from your email"
                 />
-                <div className="pt-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Account created: {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                <div className="pt-4 border-t border-cipher-slate/30">
+                  <p className="font-mono text-xs text-text-muted">
+                    ACCOUNT CREATED: {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
               </div>
-            </Card>
+            </div>
           )}
 
           {/* Security Tab */}
           {activeTab === 'security' && (
             <div className="space-y-6">
-              <Card>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                  Change Password
+              <div className="bg-cipher-obsidian border border-cipher-slate/30 rounded-xl p-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cipher-phosphor/50 to-transparent" />
+                <h2 className="font-mono text-xs tracking-wider text-text-muted mb-6">
+                  CHANGE PASSPHRASE
                 </h2>
                 <div className="space-y-4">
                   <Input
-                    label="Current Password"
+                    label="CURRENT PASSPHRASE"
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Enter current password"
+                    placeholder="Enter current passphrase"
                   />
                   <Input
-                    label="New Password"
+                    label="NEW PASSPHRASE"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password"
+                    placeholder="Enter new passphrase"
                   />
                   <Input
-                    label="Confirm New Password"
+                    label="CONFIRM PASSPHRASE"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
+                    placeholder="Confirm new passphrase"
                   />
-                  <div className="flex gap-2">
-                    <Button onClick={handleChangePassword}>Change Password</Button>
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={handleChangePassword}>UPDATE</Button>
                     <Button variant="secondary" onClick={handleGeneratePassword}>
-                      Generate Strong Password
+                      GENERATE STRONG
                     </Button>
                   </div>
                 </div>
-              </Card>
+              </div>
 
-              <Card>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                  Master Key Fingerprint
+              <div className="bg-cipher-obsidian border border-cipher-slate/30 rounded-xl p-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cipher-amber/50 to-transparent" />
+                <h2 className="font-mono text-xs tracking-wider text-text-muted mb-4">
+                  MASTER KEY FINGERPRINT
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <p className="font-mono text-xs text-text-muted mb-4">
                   Use this fingerprint to verify your encryption key on different devices
                 </p>
                 <Button variant="secondary" onClick={handleShowFingerprint}>
-                  Show Fingerprint
+                  SHOW FINGERPRINT
                 </Button>
                 {keyFingerprint && (
-                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg font-mono text-sm">
+                  <div className="mt-4 p-4 bg-cipher-charcoal rounded-lg font-mono text-xs text-cipher-phosphor break-all">
                     {keyFingerprint}
                   </div>
                 )}
-              </Card>
+              </div>
             </div>
           )}
 
           {/* 2FA Tab */}
           {activeTab === '2fa' && (
-            <Card>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Two-Factor Authentication
+            <div className="bg-cipher-obsidian border border-cipher-slate/30 rounded-xl p-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cipher-phosphor/50 to-transparent" />
+              <h2 className="font-mono text-xs tracking-wider text-text-muted mb-4">
+                TWO-FACTOR AUTHENTICATION
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                Add an extra layer of security to your account with two-factor authentication
+              <p className="font-mono text-xs text-text-muted mb-6">
+                Add an extra layer of security to your vault
               </p>
               <TwoFactorSetup />
-            </Card>
+            </div>
           )}
 
           {/* Storage Tab */}
           {activeTab === 'storage' && (
-            <Card>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Storage Management
+            <div className="bg-cipher-obsidian border border-cipher-slate/30 rounded-xl p-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cipher-phosphor/50 to-transparent" />
+              <h2 className="font-mono text-xs tracking-wider text-text-muted mb-6">
+                STORAGE MANAGEMENT
               </h2>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Storage Usage
-                  </label>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <p className="font-mono text-xs text-text-muted mb-3">STORAGE USAGE</p>
+                  <div className="h-3 bg-cipher-charcoal rounded-full overflow-hidden">
                     <div
-                      className="bg-indigo-600 h-2 rounded-full"
+                      className="h-full bg-gradient-to-r from-cipher-phosphor to-cipher-cyan"
                       style={{ width: '45%' }}
                     />
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  <p className="font-mono text-xs text-text-muted mt-2">
                     4.5 GB of 10 GB used
                   </p>
                 </div>
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                    Danger Zone
+                <div className="pt-6 border-t border-cipher-slate/30">
+                  <h3 className="font-mono text-xs tracking-wider text-cipher-crimson mb-3">
+                    DANGER ZONE
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Once you delete your account, there is no going back. All your files will be
-                    permanently deleted.
+                  <p className="font-mono text-xs text-text-muted mb-4">
+                    Once you delete your account, there is no going back. All files will be permanently deleted.
                   </p>
-                  <Button variant="danger">Delete Account</Button>
+                  <Button variant="danger">DELETE ACCOUNT</Button>
                 </div>
               </div>
-            </Card>
+            </div>
           )}
-        </div>
+        </motion.div>
       </div>
     </DashboardLayout>
   );
 };
+
+export default SettingsPage;

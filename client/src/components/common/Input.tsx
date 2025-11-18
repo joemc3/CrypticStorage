@@ -1,5 +1,4 @@
 import React from 'react';
-import { ExclamationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -16,58 +15,72 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const hasError = !!error;
     const hasSuccess = !!success;
 
-    const inputClasses = `
-      block w-full rounded-lg border px-4 py-2.5 transition-colors
-      ${leftIcon ? 'pl-10' : ''}
-      ${rightIcon || hasError || hasSuccess ? 'pr-10' : ''}
-      ${
-        hasError
-          ? 'border-red-300 text-red-900 placeholder-red-300 focus:border-red-500 focus:ring-red-500 dark:border-red-700 dark:text-red-100'
-          : hasSuccess
-          ? 'border-green-300 text-green-900 placeholder-green-300 focus:border-green-500 focus:ring-green-500 dark:border-green-700 dark:text-green-100'
-          : 'border-gray-300 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400'
-      }
-      focus:outline-none focus:ring-2 focus:ring-offset-0
-      disabled:opacity-50 disabled:cursor-not-allowed
-      ${className || ''}
-    `;
-
     return (
       <div className="w-full">
         {label && (
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block font-mono text-xs tracking-wider text-text-secondary mb-2 uppercase">
             {label}
           </label>
         )}
         <div className="relative">
           {leftIcon && (
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-gray-400 dark:text-gray-500">{leftIcon}</span>
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <span className={`${hasError ? 'text-cipher-crimson' : 'text-text-muted'} transition-colors`}>
+                {leftIcon}
+              </span>
             </div>
           )}
-          <input ref={ref} className={inputClasses} {...props} />
+          <input
+            ref={ref}
+            className={`
+              block w-full px-4 py-3 font-mono text-sm
+              bg-cipher-charcoal border rounded-lg
+              text-text-primary placeholder-text-muted
+              transition-all duration-200
+              ${leftIcon ? 'pl-12' : ''}
+              ${rightIcon || hasError || hasSuccess ? 'pr-12' : ''}
+              ${
+                hasError
+                  ? 'border-cipher-crimson focus:border-cipher-crimson focus:ring-cipher-crimson/20'
+                  : hasSuccess
+                  ? 'border-cipher-phosphor focus:border-cipher-phosphor focus:ring-cipher-phosphor/20'
+                  : 'border-cipher-slate/50 focus:border-cipher-phosphor focus:ring-cipher-phosphor/20'
+              }
+              focus:outline-none focus:ring-2 focus:shadow-glow-sm
+              disabled:opacity-50 disabled:cursor-not-allowed
+              ${className || ''}
+            `}
+            {...props}
+          />
           {(rightIcon || hasError || hasSuccess) && (
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
               {hasError ? (
-                <ExclamationCircleIcon className="h-5 w-5 text-red-500" />
+                <svg className="w-5 h-5 text-cipher-crimson" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
               ) : hasSuccess ? (
-                <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                <svg className="w-5 h-5 text-cipher-phosphor" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
               ) : (
-                rightIcon && <span className="text-gray-400 dark:text-gray-500">{rightIcon}</span>
+                rightIcon && <span className="text-text-muted">{rightIcon}</span>
               )}
             </div>
           )}
         </div>
         {(error || success || helperText) && (
           <motion.p
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`mt-1 text-sm ${
+            className={`mt-2 font-mono text-xs ${
               hasError
-                ? 'text-red-600 dark:text-red-400'
+                ? 'text-cipher-crimson'
                 : hasSuccess
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-gray-500 dark:text-gray-400'
+                ? 'text-cipher-phosphor'
+                : 'text-text-muted'
             }`}
           >
             {error || success || helperText}

@@ -368,36 +368,74 @@ export async function decryptString(
 
 /**
  * Encrypt a file with chunked processing for large files
+ * SECURITY: Each chunk uses a unique IV for AES-GCM security
  * @param file - File or Blob to encrypt
  * @param key - Encryption key
  * @param onProgress - Progress callback (0-100)
- * @returns Encrypted file blob and IV
+ * @returns Encrypted file blob and IV marker
  */
 export async function encryptFile(
   file: File | Blob,
   key: CryptoKey,
   onProgress?: (progress: number) => void
 ): Promise<{ encryptedBlob: Blob; iv: string }> {
-  const iv = generateRandomBytes(IV_LENGTH);
   const fileSize = file.size;
   const chunks: Blob[] = [];
 
+  // For small files (less than chunk size), use single encryption for efficiency
+  if (fileSize <= CHUNK_SIZE) {
+    const iv = generateRandomBytes(IV_LENGTH);
+    const fileBuffer = await file.arrayBuffer();
+
+    const encryptedData = await crypto.subtle.encrypt(
+      {
+        name: AES_ALGORITHM,
+        iv,
+      },
+      key,
+      fileBuffer
+    );
+
+    // Prepend IV to encrypted data for self-contained decryption
+    const result = new Uint8Array(IV_LENGTH + encryptedData.byteLength);
+    result.set(iv, 0);
+    result.set(new Uint8Array(encryptedData), IV_LENGTH);
+
+    if (onProgress) {
+      onProgress(100);
+    }
+
+    return {
+      encryptedBlob: new Blob([result]),
+      iv: 'embedded', // Marker indicating IV is embedded in data
+    };
+  }
+
+  // For large files, encrypt each chunk with a unique IV
   let offset = 0;
 
   while (offset < fileSize) {
+    // Generate unique IV for this chunk - CRITICAL for AES-GCM security
+    const chunkIv = generateRandomBytes(IV_LENGTH);
+
     const chunk = file.slice(offset, offset + CHUNK_SIZE);
     const chunkBuffer = await chunk.arrayBuffer();
 
     const encryptedChunk = await crypto.subtle.encrypt(
       {
         name: AES_ALGORITHM,
-        iv,
+        iv: chunkIv,
       },
       key,
       chunkBuffer
     );
 
-    chunks.push(new Blob([encryptedChunk]));
+    // Prepend IV to each encrypted chunk (IV + ciphertext + authTag)
+    const chunkWithIv = new Uint8Array(IV_LENGTH + encryptedChunk.byteLength);
+    chunkWithIv.set(chunkIv, 0);
+    chunkWithIv.set(new Uint8Array(encryptedChunk), IV_LENGTH);
+
+    chunks.push(new Blob([chunkWithIv]));
     offset += CHUNK_SIZE;
 
     if (onProgress) {
@@ -410,14 +448,15 @@ export async function encryptFile(
 
   return {
     encryptedBlob,
-    iv: arrayBufferToBase64(iv),
+    iv: 'chunked', // Marker indicating IVs are embedded in each chunk
   };
 }
 
 /**
  * Decrypt a file with chunked processing for large files
+ * SECURITY: Handles embedded IVs per chunk for proper AES-GCM decryption
  * @param encryptedBlob - Encrypted file blob
- * @param iv - Initialization vector (base64)
+ * @param iv - IV marker ('embedded', 'chunked', or base64 for legacy)
  * @param key - Decryption key
  * @param onProgress - Progress callback (0-100)
  * @returns Decrypted file blob
@@ -428,38 +467,67 @@ export async function decryptFile(
   key: CryptoKey,
   onProgress?: (progress: number) => void
 ): Promise<Blob> {
-  const ivBuffer = base64ToArrayBuffer(iv);
   const fileSize = encryptedBlob.size;
   const chunks: Blob[] = [];
 
-  let offset = 0;
+  // Handle new format with embedded IVs
+  if (iv === 'embedded' || iv === 'chunked') {
+    // AES-GCM adds 16 bytes authentication tag
+    // Each chunk format: IV (12 bytes) + ciphertext + authTag (16 bytes)
+    const encryptedChunkSize = IV_LENGTH + CHUNK_SIZE + 16;
 
-  // AES-GCM adds 16 bytes authentication tag
-  const encryptedChunkSize = CHUNK_SIZE + 16;
+    let offset = 0;
 
-  while (offset < fileSize) {
-    const chunk = encryptedBlob.slice(offset, offset + encryptedChunkSize);
-    const chunkBuffer = await chunk.arrayBuffer();
+    while (offset < fileSize) {
+      // Calculate chunk end - may be smaller for last chunk
+      const chunkEnd = Math.min(offset + encryptedChunkSize, fileSize);
+      const chunk = encryptedBlob.slice(offset, chunkEnd);
+      const chunkBuffer = await chunk.arrayBuffer();
 
-    const decryptedChunk = await crypto.subtle.decrypt(
-      {
-        name: AES_ALGORITHM,
-        iv: ivBuffer,
-      },
-      key,
-      chunkBuffer
-    );
+      // Extract IV from the beginning of the chunk
+      const chunkArray = new Uint8Array(chunkBuffer);
+      const chunkIv = chunkArray.slice(0, IV_LENGTH);
+      const encryptedData = chunkArray.slice(IV_LENGTH);
 
-    chunks.push(new Blob([decryptedChunk]));
-    offset += encryptedChunkSize;
+      const decryptedChunk = await crypto.subtle.decrypt(
+        {
+          name: AES_ALGORITHM,
+          iv: chunkIv,
+        },
+        key,
+        encryptedData
+      );
 
-    if (onProgress) {
-      const progress = Math.min(100, (offset / fileSize) * 100);
-      onProgress(progress);
+      chunks.push(new Blob([decryptedChunk]));
+      offset = chunkEnd;
+
+      if (onProgress) {
+        const progress = Math.min(100, (offset / fileSize) * 100);
+        onProgress(progress);
+      }
     }
+
+    return new Blob(chunks);
   }
 
-  return new Blob(chunks);
+  // Legacy format: single IV for backward compatibility
+  const ivBuffer = base64ToArrayBuffer(iv);
+  const encryptedBuffer = await encryptedBlob.arrayBuffer();
+
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    {
+      name: AES_ALGORITHM,
+      iv: ivBuffer,
+    },
+    key,
+    encryptedBuffer
+  );
+
+  if (onProgress) {
+    onProgress(100);
+  }
+
+  return new Blob([decryptedBuffer]);
 }
 
 /**

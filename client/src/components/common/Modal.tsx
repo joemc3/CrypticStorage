@@ -1,6 +1,5 @@
 import React, { Fragment } from 'react';
-import { Dialog, Transition } from '@headlessui/ui';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { Dialog, Transition } from '@headlessui/react';
 import { motion } from 'framer-motion';
 
 export interface ModalProps {
@@ -42,7 +41,7 @@ export const Modal: React.FC<ModalProps> = ({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" />
+          <div className="fixed inset-0 bg-cipher-black/80 backdrop-blur-sm" />
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
@@ -57,28 +56,34 @@ export const Modal: React.FC<ModalProps> = ({
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel
-                className={`w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all`}
+                className={`w-full ${sizeClasses[size]} transform overflow-hidden rounded-xl bg-cipher-obsidian border border-cipher-slate/40 p-6 text-left align-middle shadow-deep transition-all relative`}
               >
+                {/* Top accent line */}
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cipher-phosphor to-transparent" />
+
                 {showCloseButton && (
                   <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                    className="absolute top-4 right-4 text-text-muted hover:text-cipher-phosphor transition-colors"
                   >
-                    <XMarkIcon className="h-6 w-6" />
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                   </button>
                 )}
 
                 {title && (
                   <Dialog.Title
                     as="h3"
-                    className="text-xl font-semibold leading-6 text-gray-900 dark:text-gray-100 mb-2"
+                    className="font-mono text-sm tracking-wider text-text-primary mb-2"
                   >
                     {title}
                   </Dialog.Title>
                 )}
 
                 {description && (
-                  <Dialog.Description className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  <Dialog.Description className="font-mono text-xs text-text-muted mb-4">
                     {description}
                   </Dialog.Description>
                 )}

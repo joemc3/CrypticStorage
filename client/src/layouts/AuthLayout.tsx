@@ -1,11 +1,11 @@
 /**
  * CrypticStorage - Auth Layout
- * Layout for authentication pages (login, register)
+ * Cipher-aesthetic layout for authentication pages
  */
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
 
 export interface AuthLayoutProps {
   children: React.ReactNode;
@@ -13,37 +13,83 @@ export interface AuthLayoutProps {
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-900">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+    <div className="min-h-screen bg-cipher-black relative overflow-hidden">
+      {/* Grid Background */}
+      <div className="absolute inset-0 bg-grid-cipher bg-[size:40px_40px] opacity-20" />
+
+      {/* Diagonal Scan Line */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
+          className="absolute w-[200%] h-1 bg-gradient-to-r from-transparent via-cipher-phosphor/20 to-transparent -rotate-45"
+          initial={{ x: '-100%', y: '-100%' }}
+          animate={{ x: '100%', y: '100%' }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
+
+      {/* Ambient Glow */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-cipher-phosphor/5 rounded-full blur-[100px]" />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-cipher-amber/5 rounded-full blur-[80px]" />
+
+      <div className="relative z-10 container mx-auto px-4 py-8 min-h-screen flex flex-col">
+        {/* Header */}
+        <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-12"
+          className="flex items-center justify-between"
         >
-          <div className="flex items-center justify-center mb-4">
-            <ShieldCheckIcon className="h-12 w-12 text-indigo-600 dark:text-indigo-400 mr-3" />
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-              CrypticStorage
-            </h1>
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 rounded-lg bg-cipher-phosphor/20 border border-cipher-phosphor/50 flex items-center justify-center group-hover:shadow-glow-sm transition-shadow">
+              <svg className="w-6 h-6 text-cipher-phosphor" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+            </div>
+            <span className="font-mono text-lg tracking-wider text-text-primary">CRYPTIC</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-cipher-phosphor animate-pulse" />
+            <span className="font-mono text-xs tracking-wider text-text-muted">SECURE CONNECTION</span>
           </div>
-          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Secure, encrypted cloud storage with client-side encryption.
-            Your files, your keys, your privacy.
-          </p>
-        </motion.div>
+        </motion.header>
 
         {/* Main Content */}
-        <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex-1 flex items-center justify-center py-12">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="w-full max-w-md"
           >
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
-              {children}
+            {/* Card Container */}
+            <div className="relative">
+              {/* Glow Effect */}
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-cipher-phosphor/20 to-cipher-amber/20 rounded-xl blur opacity-50" />
+
+              {/* Card */}
+              <div className="relative bg-cipher-obsidian border border-cipher-slate/40 rounded-xl overflow-hidden">
+                {/* Top Accent Line */}
+                <div className="h-1 bg-gradient-to-r from-transparent via-cipher-phosphor to-transparent" />
+
+                {/* Content */}
+                <div className="p-8">
+                  {children}
+                </div>
+
+                {/* Bottom Pattern */}
+                <div className="px-8 pb-6">
+                  <div className="flex items-center gap-2 justify-center">
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent to-cipher-slate/30" />
+                    <svg className="w-4 h-4 text-cipher-slate" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <div className="h-px flex-1 bg-gradient-to-l from-transparent to-cipher-slate/30" />
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -53,39 +99,22 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="mt-12 text-center"
+          className="text-center"
         >
-          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
-            <div className="flex items-center justify-center gap-6">
+          <div className="flex items-center justify-center gap-6 mb-4">
+            {['PRIVACY', 'TERMS', 'HELP'].map((link) => (
               <a
-                href="/about"
-                className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                key={link}
+                href={`/${link.toLowerCase()}`}
+                className="font-mono text-xs text-text-muted hover:text-cipher-phosphor transition-colors"
               >
-                About
+                {link}
               </a>
-              <a
-                href="/privacy"
-                className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-              >
-                Privacy
-              </a>
-              <a
-                href="/terms"
-                className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-              >
-                Terms
-              </a>
-              <a
-                href="/help"
-                className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-              >
-                Help
-              </a>
-            </div>
-            <p className="text-xs">
-              &copy; {new Date().getFullYear()} CrypticStorage. All rights reserved.
-            </p>
+            ))}
           </div>
+          <p className="font-mono text-xs text-text-muted">
+            {new Date().getFullYear()} CRYPTICSTORAGE
+          </p>
         </motion.footer>
       </div>
     </div>

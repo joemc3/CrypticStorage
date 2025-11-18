@@ -7,13 +7,11 @@ import {
   ForbiddenError,
   PayloadTooLargeError,
 } from '../middleware/error.middleware';
-import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import path from 'path';
 import { formatBytes } from '../middleware/upload.middleware';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 /**
  * Upload a new file
@@ -525,5 +523,165 @@ export const deleteFile = asyncHandler(
         message: 'File moved to trash',
       });
     }
+  }
+);
+
+/**
+ * Get file versions
+ * GET /api/files/:id/versions
+ */
+export const getFileVersions = asyncHandler(
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+
+    // Find file and verify ownership
+    const file = await prisma.file.findFirst({
+      where: {
+        id,
+        userId,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        filenameEncrypted: true,
+        filenameIv: true,
+        version: true,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundError('File');
+    }
+
+    // Get all versions for this file
+    const versions = await prisma.fileVersion.findMany({
+      where: {
+        fileId: id,
+      },
+      orderBy: {
+        versionNumber: 'desc',
+      },
+      select: {
+        id: true,
+        versionNumber: true,
+        fileSize: true,
+        storagePath: true,
+        createdAt: true,
+      },
+    });
+
+    // Log version access
+    await prisma.auditLog.create({
+      data: {
+        id: uuidv4(),
+        userId,
+        action: 'FILE_VERSIONS_VIEWED',
+        resourceType: 'File',
+        resourceId: id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        success: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'File versions retrieved successfully',
+      data: {
+        file: {
+          id: file.id,
+          filenameEncrypted: file.filenameEncrypted,
+          filenameIv: file.filenameIv,
+          currentVersion: file.version,
+        },
+        versions: versions.map((v) => ({
+          id: v.id,
+          versionNumber: v.versionNumber,
+          fileSize: v.fileSize.toString(),
+          createdAt: v.createdAt,
+        })),
+        totalVersions: versions.length,
+      },
+    });
+  }
+);
+
+/**
+ * Restore a specific file version
+ * POST /api/files/:id/versions/:versionNumber/restore
+ */
+export const restoreFileVersion = asyncHandler(
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const userId = req.user!.userId;
+    const { id, versionNumber } = req.params;
+
+    // Find file and verify ownership
+    const file = await prisma.file.findFirst({
+      where: {
+        id,
+        userId,
+        isDeleted: false,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundError('File');
+    }
+
+    // Find the version to restore
+    const version = await prisma.fileVersion.findFirst({
+      where: {
+        fileId: id,
+        versionNumber: parseInt(versionNumber, 10),
+      },
+    });
+
+    if (!version) {
+      throw new NotFoundError('Version');
+    }
+
+    // Update the file with the version's data
+    const restoredFile = await prisma.file.update({
+      where: { id },
+      data: {
+        storagePath: version.storagePath,
+        fileSize: version.fileSize,
+        fileKeyEncrypted: version.fileKeyEncrypted,
+        version: file.version + 1,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Log version restore
+    await prisma.auditLog.create({
+      data: {
+        id: uuidv4(),
+        userId,
+        action: 'FILE_VERSION_RESTORED',
+        resourceType: 'File',
+        resourceId: id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        success: true,
+        details: JSON.stringify({
+          restoredFromVersion: versionNumber,
+          newVersion: restoredFile.version,
+        }),
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `File restored to version ${versionNumber}`,
+      data: {
+        file: {
+          id: restoredFile.id,
+          version: restoredFile.version,
+          fileSize: restoredFile.fileSize.toString(),
+          updatedAt: restoredFile.updatedAt,
+        },
+      },
+    });
   }
 );

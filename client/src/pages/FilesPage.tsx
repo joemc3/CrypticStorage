@@ -1,9 +1,10 @@
 /**
  * CrypticStorage - Files Page
- * File manager with upload, download, and folder navigation
+ * Encrypted file browser with cipher aesthetic
  */
 
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { FileList } from '../components/files/FileList';
 import { FileUpload } from '../components/files/FileUpload';
@@ -12,12 +13,6 @@ import { useUIStore } from '../stores/ui.store';
 import { Modal } from '../components/common/Modal';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import {
-  FolderPlusIcon,
-  ArrowUpTrayIcon,
-  HomeIcon,
-  ChevronRightIcon,
-} from '@heroicons/react/24/outline';
 
 export const FilesPage: React.FC = () => {
   const {
@@ -39,11 +34,10 @@ export const FilesPage: React.FC = () => {
   // Get current folder and breadcrumb path
   const currentFolder = folders.find((f) => f.id === currentFolderId);
   const breadcrumbs: Array<{ id: string | null; name: string }> = [
-    { id: null, name: 'Home' },
+    { id: null, name: 'Root' },
   ];
 
   if (currentFolder) {
-    // Build breadcrumb path (simplified - in real app would traverse parent chain)
     breadcrumbs.push({ id: currentFolder.id, name: currentFolder.name });
   }
 
@@ -84,80 +78,120 @@ export const FilesPage: React.FC = () => {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex items-center justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        >
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Files</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Manage your encrypted files and folders
+            <h1 className="font-display text-3xl text-text-primary mb-2">File Vault</h1>
+            <p className="font-mono text-xs tracking-wider text-text-muted">
+              ENCRYPTED FILE STORAGE
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <Button
               onClick={() => openModal('createFolder')}
               variant="secondary"
-              leftIcon={<FolderPlusIcon className="h-5 w-5" />}
+              size="sm"
+              leftIcon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  <line x1="12" y1="11" x2="12" y2="17" />
+                  <line x1="9" y1="14" x2="15" y2="14" />
+                </svg>
+              }
             >
-              New Folder
+              NEW FOLDER
             </Button>
             <Button
               onClick={() => setShowUpload(true)}
-              leftIcon={<ArrowUpTrayIcon className="h-5 w-5" />}
+              size="sm"
+              leftIcon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              }
             >
-              Upload Files
+              UPLOAD
             </Button>
           </div>
-        </div>
+        </motion.div>
 
         {/* Breadcrumbs */}
-        <nav className="flex items-center space-x-2 text-sm">
+        <motion.nav
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="flex items-center gap-2 p-3 bg-cipher-obsidian border border-cipher-slate/30 rounded-lg"
+        >
           {breadcrumbs.map((crumb, index) => (
             <React.Fragment key={crumb.id || 'root'}>
               {index > 0 && (
-                <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+                <svg className="w-4 h-4 text-cipher-slate" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
               )}
               <button
                 onClick={() => navigateToFolder(crumb.id)}
-                className={`flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors ${
+                className={`flex items-center gap-2 font-mono text-xs tracking-wider transition-colors ${
                   index === breadcrumbs.length - 1
-                    ? 'text-gray-900 dark:text-white font-medium'
-                    : 'text-gray-600 dark:text-gray-400'
+                    ? 'text-cipher-phosphor'
+                    : 'text-text-muted hover:text-text-primary'
                 }`}
               >
-                {index === 0 && <HomeIcon className="h-4 w-4" />}
-                {crumb.name}
+                {index === 0 && (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  </svg>
+                )}
+                {crumb.name.toUpperCase()}
               </button>
             </React.Fragment>
           ))}
-        </nav>
+        </motion.nav>
 
-        {/* Actions Bar */}
+        {/* Selection Actions Bar */}
         {selectedFileIds.size > 0 && (
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 flex items-center justify-between">
-            <span className="text-sm text-indigo-900 dark:text-indigo-100">
-              {selectedFileIds.size} item(s) selected
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between p-4 bg-cipher-phosphor/10 border border-cipher-phosphor/30 rounded-lg"
+          >
+            <span className="font-mono text-xs text-cipher-phosphor">
+              {selectedFileIds.size} ITEM{selectedFileIds.size > 1 ? 'S' : ''} SELECTED
             </span>
             <div className="flex gap-2">
               <Button variant="danger" size="sm" onClick={handleDeleteSelected}>
-                Delete
+                DELETE
               </Button>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* File List */}
-        <FileList
-          files={files}
-          folders={folders}
-          onFolderClick={handleFolderClick}
-          isLoading={isLoading}
-        />
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <FileList
+            files={files}
+            folders={folders}
+            onFolderClick={handleFolderClick}
+            isLoading={isLoading}
+          />
+        </motion.div>
 
         {/* Upload Modal */}
         {showUpload && (
           <Modal
             isOpen={showUpload}
             onClose={() => setShowUpload(false)}
-            title="Upload Files"
+            title="UPLOAD FILES"
           >
             <FileUpload
               onUpload={handleFileUpload}
@@ -170,11 +204,11 @@ export const FilesPage: React.FC = () => {
         <Modal
           isOpen={modal.type === 'createFolder'}
           onClose={closeModal}
-          title="Create New Folder"
+          title="CREATE NEW FOLDER"
         >
           <div className="space-y-4">
             <Input
-              label="Folder Name"
+              label="FOLDER NAME"
               placeholder="Enter folder name"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
@@ -185,12 +219,12 @@ export const FilesPage: React.FC = () => {
                 }
               }}
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={closeModal}>
-                Cancel
+                CANCEL
               </Button>
               <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
-                Create
+                CREATE
               </Button>
             </div>
           </div>

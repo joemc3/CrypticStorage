@@ -219,6 +219,30 @@ export const sensitiveOperationLimiter = rateLimit({
 });
 
 /**
+ * Public share access rate limiter
+ * Stricter limits to prevent brute force token enumeration
+ * 10 requests per 15 minutes per IP
+ */
+export const publicShareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many share access attempts',
+    message: 'Too many share access attempts from this IP, please try again later.',
+    retryAfter: '15 minutes',
+    code: 'SHARE_RATE_LIMIT',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: process.env.REDIS_URL ? new RedisStore('rl:share:') as any : undefined,
+  keyGenerator: (req) => {
+    // Use IP for public endpoints to prevent token brute forcing
+    return req.ip || 'unknown';
+  },
+});
+
+/**
  * API key rate limiter for API integrations
  * 1000 requests per hour
  */

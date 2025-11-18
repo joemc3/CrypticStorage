@@ -6,10 +6,8 @@ import {
   NotFoundError,
   ForbiddenError,
 } from '../middleware/error.middleware';
-import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 /**
  * Create a new folder

@@ -3,19 +3,20 @@ import { motion } from 'framer-motion';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed',
+  'inline-flex items-center justify-center font-mono text-sm tracking-wider uppercase transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden',
   {
     variants: {
       variant: {
-        primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
-        secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600',
-        danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-        ghost: 'bg-transparent hover:bg-gray-100 text-gray-700 focus:ring-gray-500 dark:hover:bg-gray-800 dark:text-gray-300',
+        primary: 'bg-cipher-phosphor text-cipher-black shadow-glow-sm hover:shadow-glow-md hover:-translate-y-0.5',
+        secondary: 'bg-cipher-charcoal text-text-primary border border-cipher-slate hover:bg-cipher-slate hover:border-cipher-phosphor/50',
+        danger: 'bg-cipher-crimson text-white hover:shadow-[0_0_20px_rgb(255_51_102/0.5)] hover:-translate-y-0.5',
+        ghost: 'bg-transparent text-text-secondary border border-transparent hover:bg-cipher-charcoal hover:text-cipher-phosphor',
+        outline: 'bg-transparent text-cipher-phosphor border-2 border-cipher-phosphor hover:bg-cipher-phosphor/10 hover:shadow-glow-sm',
       },
       size: {
-        sm: 'text-sm px-3 py-1.5',
-        md: 'text-base px-4 py-2',
-        lg: 'text-lg px-6 py-3',
+        sm: 'text-xs px-3 py-1.5 rounded-md',
+        md: 'text-sm px-5 py-2.5 rounded-lg',
+        lg: 'text-base px-7 py-3.5 rounded-lg',
       },
     },
     defaultVariants: {
@@ -41,14 +42,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={buttonVariants({ variant, size, className })}
         disabled={disabled || isLoading}
         whileTap={{ scale: 0.98 }}
-        whileHover={{ scale: 1.02 }}
         transition={{ duration: 0.1 }}
         {...props}
       >
+        {/* Shine effect on hover */}
+        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 hover:opacity-100 transition-opacity -skew-x-12" />
+
         {isLoading ? (
-          <>
+          <span className="flex items-center gap-2">
             <svg
-              className="animate-spin -ml-1 mr-2 h-4 w-4"
+              className="animate-spin h-4 w-4"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -67,14 +70,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            Loading...
-          </>
+            PROCESSING...
+          </span>
         ) : (
-          <>
-            {leftIcon && <span className="mr-2">{leftIcon}</span>}
+          <span className="flex items-center gap-2 relative z-10">
+            {leftIcon && <span className="flex-shrink-0">{leftIcon}</span>}
             {children}
-            {rightIcon && <span className="ml-2">{rightIcon}</span>}
-          </>
+            {rightIcon && <span className="flex-shrink-0">{rightIcon}</span>}
+          </span>
         )}
       </motion.button>
     );

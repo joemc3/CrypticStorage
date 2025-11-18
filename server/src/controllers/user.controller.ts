@@ -6,12 +6,10 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from '../middleware/error.middleware';
-import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { formatBytes } from '../middleware/upload.middleware';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 /**
  * Get user profile
@@ -152,13 +150,25 @@ export const updateProfile = asyncHandler(
       updateData.passwordHash = passwordHash;
       updateData.salt = salt;
 
-      // Invalidate all sessions except current one
+      // SECURITY: Invalidate ALL sessions when password changes
+      // This ensures any compromised sessions are terminated
       await prisma.session.deleteMany({
         where: {
           userId,
-          expiresAt: {
-            lt: new Date(),
-          },
+        },
+      });
+
+      // Log password change for audit
+      await prisma.auditLog.create({
+        data: {
+          id: uuidv4(),
+          userId,
+          action: 'PASSWORD_CHANGED',
+          resourceType: 'User',
+          resourceId: userId,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          success: true,
         },
       });
     }

@@ -23,8 +23,9 @@ export default async function globalSetup(): Promise<void> {
 
   if (!databaseUrl) {
     // ESM-only package; keep the specifier dynamic so the CommonJS test build does not try to resolve its types.
-    const specifier = 'embedded-postgres';
-    const mod = (await import(specifier)) as { default: new (opts: Record<string, unknown>) => EmbeddedPg };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const dynamicImport = new Function('s', 'return import(s)') as (s: string) => Promise<{ default: new (opts: Record<string, unknown>) => EmbeddedPg }>;
+    const mod = await dynamicImport('embedded-postgres');
     const EmbeddedPostgres = mod.default;
     port = 54300 + Math.floor(Math.random() * 200);
     dataDir = mkdtempSync(path.join('/tmp', 'cs-pg-'));

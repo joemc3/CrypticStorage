@@ -48,3 +48,7 @@ temp/
 tmp/
 *.tgz
 .yarn-integrity
+
+# Local storage driver data
+data/
+*/data/

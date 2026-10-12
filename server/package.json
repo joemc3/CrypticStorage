@@ -14,9 +14,15 @@
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "lint": "eslint src tests --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "db:embedded": "node scripts/embedded-db.mjs"
   },
-  "keywords": ["encryption", "storage", "zero-knowledge", "privacy"],
+  "keywords": [
+    "encryption",
+    "storage",
+    "zero-knowledge",
+    "privacy"
+  ],
   "license": "MIT",
   "dependencies": {
     "@prisma/client": "^5.22.0",

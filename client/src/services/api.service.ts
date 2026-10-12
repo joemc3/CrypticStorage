@@ -339,12 +339,13 @@ class ApiService {
     return this.get(`/files/${fileId}/download-url`);
   }
   async downloadContent(downloadUrl: string, onProgress?: ProgressHandler): Promise<Blob> {
-    const res = await axios.get<Blob>(downloadUrl, {
-      responseType: 'blob',
+    // arraybuffer works in browsers and Node alike; 'blob' is browser-only.
+    const res = await axios.get<ArrayBuffer>(downloadUrl, {
+      responseType: 'arraybuffer',
       timeout: 0,
       onDownloadProgress: (e) => onProgress?.(e.loaded, e.total ?? e.loaded),
     });
-    return res.data;
+    return new Blob([res.data], { type: 'application/octet-stream' });
   }
   updateFile(fileId: string, data: { encryptedName?: string; encryptedNameIV?: string; folderId?: string | null }): Promise<FileMetadata> {
     return this.patch(`/files/${fileId}`, data);

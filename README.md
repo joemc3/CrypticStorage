@@ -1,263 +1,108 @@
 # CrypticStorage
 
-A zero-knowledge, end-to-end encrypted cloud storage platform that prioritizes user privacy and security. All encryption and decryption happens client-side, ensuring that the server never has access to unencrypted data or encryption keys.
+Zero-knowledge, end-to-end encrypted file storage. Files, file names and folder names are encrypted in the browser with keys that never leave it. The server stores ciphertext, wrapped keys and metadata it cannot read.
 
-## Features
+**Status:** working alpha. Both halves compile, the API has an integration suite against a real Postgres, the crypto has unit tests, and an end-to-end run exercises the real client against the real server. It has not had an external security review. See [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) for what exists, what is missing and the roadmap, and [SECURITY.md](SECURITY.md) for the threat model.
 
-### Security & Privacy
-- **Zero-Knowledge Architecture**: Server never sees encryption keys or unencrypted data
-- **End-to-End Encryption**: AES-256-GCM encryption performed client-side
-- **Secure Key Derivation**: PBKDF2 with 100,000 iterations
-- **RSA-4096 Key Pairs**: For secure file sharing between users
-- **Two-Factor Authentication**: TOTP-based 2FA for enhanced account security
+## What it does
 
-### File Management
-- **Drag-and-Drop Upload**: Easy file uploads with visual feedback
-- **Folder Organization**: Create folders and organize your files
-- **File Versioning**: Keep track of file versions (last 10 versions)
-- **Large File Support**: Upload files up to 5GB with chunked uploading
-- **File Sharing**: Share files securely with password protection and expiration dates
+- **Accounts without a password on the server.** The password feeds a PBKDF2-SHA256 derivation (600k iterations) whose output is split into a wrapping key that stays on the device and an authentication hash that is the only credential the server ever sees (and bcrypts).
+- **Per-file keys.** Every file gets a random AES-256 key, wrapped with the account's master key. File content is sealed in 1 MiB AES-GCM chunks with a per-chunk nonce and the chunk index and count in the authenticated data, so chunks cannot be reordered, dropped or duplicated.
+- **Sharing that stays zero-knowledge.** Anonymous links carry the file key in the URL fragment, which browsers never send to the server; the server can still enforce passwords, expiry and download caps. User-to-user shares wrap the file key with the recipient's RSA-OAEP public key.
+- **Two-factor authentication** with TOTP and single-use backup codes, a locked-vault screen after reload that unlocks offline, password change by re-wrapping the master key, refresh-token rotation, quotas, an audit log.
+- **Storage drivers.** Local filesystem for development, tests and single-node deployments; any S3-compatible store (MinIO, S3, R2) for production, with optional presigned URLs straight from the browser.
 
-### User Experience
-- **Modern UI**: Clean, responsive interface built with React and TailwindCSS
-- **Dark Mode**: Beautiful dark mode support
-- **Real-time Progress**: Live upload/download progress tracking
-- **Storage Analytics**: Detailed storage usage statistics and charts
-- **Cross-Platform**: Works on desktop and mobile browsers
+## Run it
 
-## Tech Stack
-
-### Frontend
-- **React 18** with TypeScript
-- **Vite** for fast builds
-- **TailwindCSS** for styling
-- **Zustand** for state management
-- **React Router** for routing
-- **Web Crypto API** for encryption
-- **Recharts** for data visualization
-- **Framer Motion** for animations
-
-### Backend
-- **Node.js** with TypeScript
-- **Express.js** web framework
-- **Prisma** ORM with PostgreSQL
-- **Redis** for caching and sessions
-- **MinIO** (S3-compatible) for object storage
-- **JWT** for authentication
-- **bcrypt** for password hashing
-
-### Infrastructure
-- **Docker** & Docker Compose
-- **PostgreSQL 16** database
-- **Redis 7** cache
-- **MinIO** object storage
-- **Nginx** reverse proxy
-
-## Quick Start
-
-### Prerequisites
-- Docker and Docker Compose
-- Node.js 20+ (for local development)
-- npm or yarn
-
-### Using Docker (Recommended)
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/crypticstorage.git
-   cd crypticstorage
-   ```
-
-2. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env and set JWT_SECRET and other variables
-   ```
-
-3. **Start all services**
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Run database migrations**
-   ```bash
-   docker-compose exec api npx prisma migrate deploy
-   ```
-
-5. **Access the application**
-   - Frontend: http://localhost:3000
-   - API: http://localhost:4000
-   - MinIO Console: http://localhost:9001
-
-### Local Development
-
-#### Backend Setup
+### Docker (recommended)
 
 ```bash
-cd server
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-
-# Run database migrations
-npx prisma migrate dev
-
-# Start development server
-npm run dev
+cp .env.example .env            # fill in JWT_SECRET, POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD
+docker compose up -d --build
+open http://localhost:3000
 ```
 
-The API will be available at http://localhost:4000
+The stack refuses to start with empty or placeholder secrets. MinIO's console is on http://localhost:9001.
 
-#### Frontend Setup
+### Without Docker
+
+Node 22 is required.
 
 ```bash
-cd client
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-
-# Start development server
-npm run dev
+make install
+make dev-db        # terminal 1: embedded Postgres, prints a DATABASE_URL
 ```
 
-The client will be available at http://localhost:3000
-
-## Available Commands
-
-### Using Make
+Create `server/.env` from `server/.env.example`, paste that `DATABASE_URL`, set a `JWT_SECRET` (at least 32 characters), keep `STORAGE_DRIVER=local`. Then:
 
 ```bash
-make build          # Build all Docker images
-make up             # Start all services
-make down           # Stop all services
-make logs           # View logs from all services
-make clean          # Remove all containers and volumes
-make test           # Run tests
-make migrate        # Run database migrations
-make dev-server     # Start server in dev mode
-make dev-client     # Start client in dev mode
-make health         # Check service health
+make dev-api       # terminal 2: API on :4000
+make dev-web       # terminal 3: web app on :3000, proxies /api to :4000
 ```
 
-### Using npm
+## Test it
 
-#### Server Commands
 ```bash
-npm run dev         # Start development server
-npm run build       # Build for production
-npm run start       # Start production server
-npm test            # Run tests
-npm run migrate     # Run migrations
+make test          # server integration suite (boots an embedded Postgres) + client crypto unit tests
+make test-e2e      # starts a real API and drives the real client services through register → upload → share
+make typecheck
 ```
 
-#### Client Commands
+CI runs all three on every push (`.github/workflows/ci.yml`), using a Postgres service container.
+
+## Layout
+
+```
+server/   Express + Prisma API. src/modules/{auth,users,files,folders,shares}, src/storage/{local,s3}.
+          tests/api are HTTP-level integration tests; tests/lib are unit tests.
+client/   React + Vite app. src/services/crypto.service.ts is the whole cryptographic design;
+          auth/file/share services sit on top of it. e2e/ drives those services against a live API.
+scripts/  e2e.sh (no-Docker end-to-end run), count-loc.sh
+```
+
+### API in one screen
+
+All routes live under `/api` and return `{ success, data }` or `{ success: false, message, code, errors? }`.
+
+| Area | Routes |
+|---|---|
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/verify-2fa`, `/auth/refresh`, `/auth/logout` |
+| Users | `GET/PATCH/DELETE /users/profile`, `GET /users/public-key?email=`, `POST /users/2fa/{setup,enable,disable,backup-codes}`, `GET /storage/stats`, `GET /activity` |
+| Files | `GET /files`, `POST /files/upload-url` → `PUT <uploadUrl>` → `POST /files/:id/confirm`, `GET /files/:id`, `GET /files/:id/download-url`, `PATCH /files/:id`, `POST /files/:id/{move,copy}`, `DELETE /files/:id` |
+| Folders | `GET/POST /folders`, `GET/PATCH/DELETE /folders/:id`, `POST /folders/:id/move` |
+| Sharing | `POST/GET /shares/links`, `DELETE /shares/links/:id`, `GET /files/:id/links`, `GET /shares/public/:token`, `POST /shares/public/:token/download-url`, `POST /shares`, `GET /shares/with-me`, `GET /files/:id/shares`, `DELETE /shares/:id` |
+
+Uploads are a three-step reservation so the server can verify size and quota before a file becomes visible. When the storage driver can presign (S3 with `S3_PUBLIC_ENDPOINT`), the upload and download URLs point straight at object storage; otherwise they point at `/api/files/:id/content` with a short-lived token and the API streams the bytes.
+
+## Configuration
+
+Everything is read from the environment and validated at startup (`server/src/config/env.ts`). The important ones:
+
+| Variable | Meaning |
+|---|---|
+| `DATABASE_URL` | Postgres connection string |
+| `JWT_SECRET` | ≥32 chars; placeholders are rejected in production |
+| `STORAGE_DRIVER` | `local` or `s3` |
+| `STORAGE_LOCAL_PATH` | directory for the local driver |
+| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | S3 driver |
+| `S3_PUBLIC_ENDPOINT` | endpoint browsers can reach; enables presigned URLs |
+| `APP_URL` | web app origin, used for share links and CORS |
+| `API_PUBLIC_URL` | leave empty when `/api` is proxied on the app's origin |
+| `DEFAULT_STORAGE_QUOTA_BYTES`, `MAX_FILE_SIZE_BYTES` | limits |
+
+## Repository cleanup still pending
+
+The original generated server sources are still present under `server/src/{controllers,routes,services,utils}`, `server/src/config/{database,redis,storage}.ts`, `server/src/middleware/*.middleware.ts` and `server/tests/{unit,integration,setup.ts}`. They are excluded from the build, the tests and the Docker image. Delete them with:
+
 ```bash
-npm run dev         # Start development server
-npm run build       # Build for production
-npm run preview     # Preview production build
-npm test            # Run tests
+git rm -r server/src/controllers server/src/routes server/src/services server/src/utils \
+  server/src/config/database.ts server/src/config/redis.ts server/src/config/storage.ts \
+  server/src/middleware/*.middleware.ts server/src/middleware/index.ts \
+  server/tests/unit server/tests/integration server/tests/setup.ts server/tests/README.md
 ```
 
-## Project Structure
-
-```
-crypticstorage/
-├── client/                 # Frontend React application
-│   ├── public/            # Static assets
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── pages/         # Page components
-│   │   ├── services/      # API and crypto services
-│   │   ├── stores/        # Zustand state stores
-│   │   ├── hooks/         # Custom React hooks
-│   │   ├── types/         # TypeScript types
-│   │   └── utils/         # Utility functions
-│   ├── Dockerfile         # Client Docker configuration
-│   └── package.json
-├── server/                # Backend Node.js application
-│   ├── src/
-│   │   ├── controllers/   # Request handlers
-│   │   ├── services/      # Business logic
-│   │   ├── routes/        # API routes
-│   │   ├── middleware/    # Express middleware
-│   │   ├── config/        # Configuration files
-│   │   └── utils/         # Utility functions
-│   ├── prisma/            # Database schema and migrations
-│   ├── tests/             # Test files
-│   ├── Dockerfile         # Server Docker configuration
-│   └── package.json
-├── project_standards/     # Project documentation
-│   ├── PRD.md            # Product Requirements Document
-│   └── SPECIFICATION.md  # Technical Specification
-├── docker-compose.yml    # Docker Compose configuration
-├── Makefile              # Build automation
-└── README.md             # This file
-```
-
-## Security Considerations
-
-### Client-Side Encryption
-
-All files are encrypted on the client side before being uploaded to the server:
-
-1. User enters password
-2. Password is hashed using PBKDF2 (100,000 iterations) to derive encryption key
-3. Master key is generated and encrypted with derived key
-4. Files are encrypted with AES-256-GCM using unique file keys
-5. File keys are encrypted with master key
-6. Only encrypted data is sent to server
-
-### Key Management
-
-- Master keys are never transmitted to or stored on the server
-- Private keys are encrypted with master key
-- File keys are encrypted with master key
-- Shared files use RSA key exchange
-
-### Zero-Knowledge Architecture
-
-The server has:
-- ✅ Encrypted files
-- ✅ Encrypted filenames
-- ✅ Encrypted file keys
-- ✅ User public keys (for sharing)
-
-The server NEVER has:
-- ❌ Unencrypted files
-- ❌ Master keys
-- ❌ Private keys (unencrypted)
-- ❌ File encryption keys (unencrypted)
-
-## Testing
-
-### Run all tests
-```bash
-# Server tests
-cd server && npm test
-
-# Client tests
-cd client && npm test
-```
-
-### Test Coverage
-```bash
-# Server coverage
-cd server && npm test -- --coverage
-
-# Client coverage
-cd client && npm test -- --coverage
-```
+and drop the matching `exclude` entries from `server/tsconfig.json`, `server/tsconfig.test.json` and `server/.dockerignore`.
 
 ## License
 
-MIT License - see LICENSE file for details
-
----
-
-**CrypticStorage** - Your files, your keys, your privacy.
+MIT

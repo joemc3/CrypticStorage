@@ -1,33 +1,30 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../stores/auth.store';
-import { Spinner } from './common';
+import { useAuth } from '../hooks/useAuth';
+import { AuthLayout } from '../layouts/AuthLayout';
+import { UnlockForm } from './auth/UnlockForm';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+/**
+ * anonymous → login page; locked → unlock screen (offline); unlocked → page.
+ */
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, isLoading, checkAuth } = useAuthStore();
+  const { status, user, isLoading, unlock, logoutUser } = useAuth();
   const location = useLocation();
 
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <Spinner size="lg" />
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
+  if (status === 'anonymous') {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  if (status === 'locked') {
+    return (
+      <AuthLayout>
+        <UnlockForm email={user?.email ?? ''} onUnlock={unlock} onSignOut={() => void logoutUser()} isLoading={isLoading} />
+      </AuthLayout>
+    );
   }
 
   return <>{children}</>;

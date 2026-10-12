@@ -1,670 +1,304 @@
 /**
  * CrypticStorage - Authentication Service
- * Handles user registration, login, and authentication operations
+ * Registration, login, 2FA and vault unlock. The password never leaves this module.
  */
 
 import CryptoService from './crypto.service';
-import ApiService from './api.service';
-import StorageService from './storage.service';
-import type { UserData } from './storage.service';
+import ApiService, { toApiError, type AuthResponse, type Tokens, type VaultUser } from './api.service';
+import StorageService, { type UserData } from './storage.service';
 
-// ============================================================================
-// Types and Interfaces
-// ============================================================================
+export interface AuthUser extends UserData {}
 
-export interface RegisterData {
-  email: string;
-  password: string;
+export interface LoginResult {
+  user: AuthUser;
+  requiresTwoFactor: boolean;
 }
 
-export interface LoginData {
-  email: string;
-  password: string;
-  rememberMe?: boolean;
+/** Wrapping key held between password login and 2FA completion. */
+let pendingWrappingKey: CryptoKey | null = null;
+
+function toUserData(user: VaultUser): UserData {
+  return {
+    id: user.id,
+    email: user.email,
+    publicKey: user.publicKey,
+    storageUsed: user.storageUsed,
+    storageLimit: user.storageLimit,
+    twoFactorEnabled: user.twoFactorEnabled,
+    createdAt: user.createdAt,
+  };
 }
 
-export interface TwoFactorData {
-  token: string;
-  backupCode?: string;
+function persistTokens(tokens: Tokens): void {
+  StorageService.setTokens({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, expiresAt: Date.now() + tokens.expiresIn * 1000 });
 }
 
-export interface ChangePasswordData {
-  currentPassword: string;
-  newPassword: string;
-}
+/** Unwrap the vault with the wrapping key and load the secrets into memory. */
+async function openVault(user: VaultUser, wrappingKey: CryptoKey): Promise<void> {
+  let masterKey: CryptoKey;
+  try {
+    masterKey = await CryptoService.unwrapKey(JSON.parse(user.wrappedMasterKey), wrappingKey);
+  } catch {
+    throw new Error('Incorrect password');
+  }
+  const privateKeyBytes = await CryptoService.decryptBytes(JSON.parse(user.encryptedPrivateKey), masterKey);
+  const privateKey = await CryptoService.importPrivateKey(privateKeyBytes);
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  publicKey: string;
-  storageUsed: number;
-  storageLimit: number;
-  twoFactorEnabled: boolean;
-  createdAt: string;
-}
-
-export interface TwoFactorSetup {
-  secret: string;
-  qrCode: string;
-  backupCodes: string[];
+  StorageService.setVault({
+    wrappedMasterKey: user.wrappedMasterKey,
+    encryptedPrivateKey: user.encryptedPrivateKey,
+    publicKey: user.publicKey,
+    salt: user.salt,
+    kdfIterations: user.kdfIterations,
+  });
+  StorageService.setUserData(toUserData(user));
+  StorageService.setMasterKey(masterKey);
+  StorageService.setPrivateKey(privateKey);
 }
 
 // ============================================================================
 // Registration
 // ============================================================================
 
-/**
- * Register a new user with client-side key generation
- * @param data - Registration data (email and password)
- * @returns Authenticated user
- */
-export async function register(data: RegisterData): Promise<AuthUser> {
+export async function register(email: string, password: string): Promise<AuthUser> {
+  const normalizedEmail = email.trim().toLowerCase();
+  const salt = await CryptoService.saltForEmail(normalizedEmail);
+  const derived = await CryptoService.deriveKeys(password, salt);
+
+  const masterKey = await CryptoService.generateMasterKey();
+  const rsa = await CryptoService.generateRSAKeyPair();
+  const publicKey = await CryptoService.exportPublicKey(rsa.publicKey);
+  const wrappedMasterKey = await CryptoService.wrapKey(masterKey, derived.wrappingKey);
+  const encryptedPrivateKey = await CryptoService.encryptBytes(await CryptoService.exportPrivateKey(rsa.privateKey), masterKey);
+
+  let response: AuthResponse;
   try {
-    const { email, password } = data;
-
-    // 1. Derive key from password
-    const { key: passwordDerivedKey, salt } = await CryptoService.deriveKeyFromPassword(password);
-
-    // 2. Generate master encryption key
-    const masterKey = await CryptoService.generateMasterKey();
-
-    // 3. Generate RSA key pair
-    const rsaKeyPair = await CryptoService.generateRSAKeyPair();
-
-    // 4. Export keys
-    const publicKey = await CryptoService.exportPublicKey(rsaKeyPair.publicKey);
-    const privateKeyRaw = await CryptoService.exportPrivateKey(rsaKeyPair.privateKey);
-    const masterKeyRaw = await CryptoService.exportMasterKey(masterKey);
-
-    // 5. Wrap (encrypt) master key with password-derived key
-    const wrappedMasterKey = await CryptoService.wrapKey(masterKey, passwordDerivedKey);
-
-    // 6. Encrypt private key with master key
-    const encryptedPrivateKey = await CryptoService.encryptString(
-      CryptoService.arrayBufferToBase64(privateKeyRaw),
-      masterKey
-    );
-
-    // 7. Create password hash for server authentication
-    const passwordHash = await CryptoService.sha256(password + email.toLowerCase());
-
-    // 8. Register with server
-    const response = await ApiService.register({
-      email,
-      passwordHash,
+    response = await ApiService.register({
+      email: normalizedEmail,
+      passwordHash: derived.authHash,
       publicKey,
       encryptedPrivateKey: JSON.stringify(encryptedPrivateKey),
       wrappedMasterKey: JSON.stringify(wrappedMasterKey),
-      salt: CryptoService.arrayBufferToBase64(salt),
+      salt,
+      kdfIterations: derived.iterations,
     });
-
-    // 9. Store tokens
-    StorageService.setTokens({
-      accessToken: response.tokens.accessToken,
-      refreshToken: response.tokens.refreshToken,
-      expiresAt: Date.now() + response.tokens.expiresIn * 1000,
-    });
-
-    // 10. Store user data
-    const userData: UserData = {
-      id: response.user.id,
-      email: response.user.email,
-      publicKey: response.user.publicKey,
-      storageUsed: 0,
-      storageLimit: 10 * 1024 * 1024 * 1024, // 10GB default
-      twoFactorEnabled: false,
-      createdAt: response.user.createdAt,
-    };
-    StorageService.setUserData(userData);
-
-    // 11. Store wrapped master key and encrypted private key
-    StorageService.setWrappedMasterKey(JSON.stringify(wrappedMasterKey));
-    StorageService.setEncryptedPrivateKey(JSON.stringify(encryptedPrivateKey));
-    StorageService.setPublicKey(publicKey);
-
-    // 12. Store master key and private key in memory
-    StorageService.setMasterKey(masterKey);
-    StorageService.setPrivateKey(rsaKeyPair.privateKey);
-
-    return {
-      id: response.user.id,
-      email: response.user.email,
-      publicKey: response.user.publicKey,
-      storageUsed: 0,
-      storageLimit: 10 * 1024 * 1024 * 1024,
-      twoFactorEnabled: false,
-      createdAt: response.user.createdAt,
-    };
-  } catch (error: any) {
-    console.error('Registration failed:', error);
-    throw new Error(error.message || 'Registration failed');
+  } catch (error) {
+    throw new Error(toApiError(error).message);
   }
+
+  persistTokens(response.tokens);
+  await openVault(response.user, derived.wrappingKey);
+  return toUserData(response.user);
 }
 
 // ============================================================================
 // Login
 // ============================================================================
 
-/**
- * Login user and decrypt keys
- * @param data - Login data (email, password, rememberMe)
- * @returns Authenticated user or requires 2FA
- */
-export async function login(
-  data: LoginData
-): Promise<{ user: AuthUser; requiresTwoFactor: boolean }> {
+export async function login(email: string, password: string): Promise<LoginResult> {
+  const normalizedEmail = email.trim().toLowerCase();
+  const salt = await CryptoService.saltForEmail(normalizedEmail);
+  const derived = await CryptoService.deriveKeys(password, salt);
+
+  let response: AuthResponse;
   try {
-    const { email, password, rememberMe = false } = data;
-
-    // 1. Create password hash for server authentication
-    const passwordHash = await CryptoService.sha256(password + email.toLowerCase());
-
-    // 2. Login with server
-    const response = await ApiService.login({
-      email,
-      passwordHash,
-    });
-
-    // 3. Check if 2FA is required
-    if (response.requiresTwoFactor) {
-      // Store temporary data for 2FA verification
-      StorageService.setTokens({
-        accessToken: response.tokens.accessToken,
-        refreshToken: response.tokens.refreshToken,
-        expiresAt: Date.now() + response.tokens.expiresIn * 1000,
-      });
-
-      return {
-        user: {
-          id: response.user.id,
-          email: response.user.email,
-          publicKey: response.user.publicKey,
-          storageUsed: response.user.storageUsed,
-          storageLimit: response.user.storageLimit,
-          twoFactorEnabled: response.user.twoFactorEnabled,
-          createdAt: response.user.createdAt,
-        },
-        requiresTwoFactor: true,
-      };
-    }
-
-    // 4. Store tokens
-    StorageService.setTokens({
-      accessToken: response.tokens.accessToken,
-      refreshToken: response.tokens.refreshToken,
-      expiresAt: Date.now() + response.tokens.expiresIn * 1000,
-    });
-
-    // 5. Store user data
-    const userData: UserData = {
-      id: response.user.id,
-      email: response.user.email,
-      publicKey: response.user.publicKey,
-      storageUsed: response.user.storageUsed,
-      storageLimit: response.user.storageLimit,
-      twoFactorEnabled: response.user.twoFactorEnabled,
-      createdAt: response.user.createdAt,
-    };
-    StorageService.setUserData(userData);
-
-    // 6. Store wrapped master key and encrypted private key
-    StorageService.setWrappedMasterKey(response.user.wrappedMasterKey);
-    StorageService.setEncryptedPrivateKey(response.user.encryptedPrivateKey);
-    StorageService.setPublicKey(response.user.publicKey);
-
-    // 7. Derive key from password
-    const salt = CryptoService.base64ToArrayBuffer(response.user.salt);
-    const { key: passwordDerivedKey } = await CryptoService.deriveKeyFromPassword(password, new Uint8Array(salt));
-
-    // 8. Unwrap master key
-    const wrappedMasterKey = JSON.parse(response.user.wrappedMasterKey);
-    const masterKey = await CryptoService.unwrapKey(wrappedMasterKey, passwordDerivedKey);
-
-    // 9. Decrypt private key
-    const encryptedPrivateKey = JSON.parse(response.user.encryptedPrivateKey);
-    const privateKeyBase64 = await CryptoService.decryptString(encryptedPrivateKey, masterKey);
-    const privateKeyRaw = CryptoService.base64ToArrayBuffer(privateKeyBase64);
-    const privateKey = await CryptoService.importPrivateKey(privateKeyRaw);
-
-    // 10. Store keys in memory
-    StorageService.setMasterKey(masterKey);
-    StorageService.setPrivateKey(privateKey);
-
-    // 11. Store remember me preference
-    StorageService.setRememberMe(rememberMe);
-
-    return {
-      user: {
-        id: response.user.id,
-        email: response.user.email,
-        publicKey: response.user.publicKey,
-        storageUsed: response.user.storageUsed,
-        storageLimit: response.user.storageLimit,
-        twoFactorEnabled: response.user.twoFactorEnabled,
-        createdAt: response.user.createdAt,
-      },
-      requiresTwoFactor: false,
-    };
-  } catch (error: any) {
-    console.error('Login failed:', error);
-    throw new Error(error.message || 'Login failed');
+    response = await ApiService.login(normalizedEmail, derived.authHash);
+  } catch (error) {
+    const apiError = toApiError(error);
+    throw new Error(apiError.statusCode === 401 ? 'Invalid email or password' : apiError.message);
   }
+
+  if (response.requiresTwoFactor) {
+    pendingWrappingKey = derived.wrappingKey;
+    persistTokens(response.tokens); // short-lived challenge token
+    return { user: toUserData(response.user), requiresTwoFactor: true };
+  }
+
+  persistTokens(response.tokens);
+  await openVault(response.user, derived.wrappingKey);
+  return { user: toUserData(response.user), requiresTwoFactor: false };
+}
+
+export async function completeTwoFactor(code: string): Promise<AuthUser> {
+  if (!pendingWrappingKey) throw new Error('Start by signing in with your password');
+  const trimmed = code.trim();
+  const payload = /^\d{6}$/.test(trimmed) ? { token: trimmed } : { backupCode: trimmed };
+
+  let response: AuthResponse;
+  try {
+    response = await ApiService.verifyTwoFactor(payload);
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
+
+  persistTokens(response.tokens);
+  await openVault(response.user, pendingWrappingKey);
+  pendingWrappingKey = null;
+  return toUserData(response.user);
+}
+
+export function cancelTwoFactor(): void {
+  pendingWrappingKey = null;
+  StorageService.clearTokens();
 }
 
 // ============================================================================
-// Two-Factor Authentication
+// Lock / unlock (page reload keeps the session but drops the keys)
 // ============================================================================
 
-/**
- * Verify two-factor authentication code
- * @param data - 2FA token or backup code
- * @param loginData - Original login data for key derivation
- * @returns Authenticated user
- */
-export async function verifyTwoFactor(
-  data: TwoFactorData,
-  loginData: LoginData
-): Promise<AuthUser> {
-  try {
-    // 1. Verify with server
-    const response = await ApiService.verifyTwoFactor({
-      token: data.token,
-      backupCode: data.backupCode,
-    });
-
-    // 2. Update tokens
-    StorageService.setTokens({
-      accessToken: response.tokens.accessToken,
-      refreshToken: response.tokens.refreshToken,
-      expiresAt: Date.now() + response.tokens.expiresIn * 1000,
-    });
-
-    // 3. Derive key from password and decrypt keys (same as login)
-    const { email, password, rememberMe = false } = loginData;
-    const salt = CryptoService.base64ToArrayBuffer(response.user.salt);
-    const { key: passwordDerivedKey } = await CryptoService.deriveKeyFromPassword(
-      password,
-      new Uint8Array(salt)
-    );
-
-    // 4. Unwrap master key
-    const wrappedMasterKey = JSON.parse(response.user.wrappedMasterKey);
-    const masterKey = await CryptoService.unwrapKey(wrappedMasterKey, passwordDerivedKey);
-
-    // 5. Decrypt private key
-    const encryptedPrivateKey = JSON.parse(response.user.encryptedPrivateKey);
-    const privateKeyBase64 = await CryptoService.decryptString(encryptedPrivateKey, masterKey);
-    const privateKeyRaw = CryptoService.base64ToArrayBuffer(privateKeyBase64);
-    const privateKey = await CryptoService.importPrivateKey(privateKeyRaw);
-
-    // 6. Store keys in memory
-    StorageService.setMasterKey(masterKey);
-    StorageService.setPrivateKey(privateKey);
-
-    // 7. Store remember me preference
-    StorageService.setRememberMe(rememberMe);
-
-    return {
-      id: response.user.id,
-      email: response.user.email,
-      publicKey: response.user.publicKey,
-      storageUsed: response.user.storageUsed,
-      storageLimit: response.user.storageLimit,
-      twoFactorEnabled: response.user.twoFactorEnabled,
-      createdAt: response.user.createdAt,
-    };
-  } catch (error: any) {
-    console.error('2FA verification failed:', error);
-    throw new Error(error.message || '2FA verification failed');
-  }
+export function lock(): void {
+  StorageService.clearInMemoryData();
 }
 
-/**
- * Setup two-factor authentication
- * @returns Setup data with QR code and backup codes
- */
-export async function setupTwoFactor(): Promise<TwoFactorSetup> {
-  try {
-    const response = await ApiService.setupTwoFactor();
-    return response;
-  } catch (error: any) {
-    console.error('2FA setup failed:', error);
-    throw new Error(error.message || '2FA setup failed');
-  }
-}
+/** Unlock offline with the stored vault; no network round trip needed. */
+export async function unlock(password: string): Promise<AuthUser> {
+  const user = StorageService.getUserData();
+  const vault = StorageService.getVault();
+  if (!user || !vault) throw new Error('No saved session. Please sign in again.');
 
-/**
- * Enable two-factor authentication
- * @param token - TOTP token from authenticator app
- * @returns Backup codes
- */
-export async function enableTwoFactor(token: string): Promise<string[]> {
-  try {
-    const response = await ApiService.enableTwoFactor(token);
-
-    // Update user data
-    StorageService.updateUserData({ twoFactorEnabled: true });
-
-    return response.backupCodes;
-  } catch (error: any) {
-    console.error('2FA enable failed:', error);
-    throw new Error(error.message || 'Failed to enable 2FA');
-  }
-}
-
-/**
- * Disable two-factor authentication
- * @param token - TOTP token from authenticator app
- * @param password - User password for verification
- */
-export async function disableTwoFactor(token: string, password: string): Promise<void> {
-  try {
-    const userData = StorageService.getUserData();
-    if (!userData) {
-      throw new Error('User not authenticated');
-    }
-
-    const passwordHash = await CryptoService.sha256(password + userData.email.toLowerCase());
-
-    await ApiService.disableTwoFactor(token, passwordHash);
-
-    // Update user data
-    StorageService.updateUserData({ twoFactorEnabled: false });
-  } catch (error: any) {
-    console.error('2FA disable failed:', error);
-    throw new Error(error.message || 'Failed to disable 2FA');
-  }
-}
-
-/**
- * Regenerate backup codes
- * @param password - User password for verification
- * @returns New backup codes
- */
-export async function regenerateBackupCodes(password: string): Promise<string[]> {
-  try {
-    const userData = StorageService.getUserData();
-    if (!userData) {
-      throw new Error('User not authenticated');
-    }
-
-    const passwordHash = await CryptoService.sha256(password + userData.email.toLowerCase());
-
-    const response = await ApiService.regenerateBackupCodes(passwordHash);
-    return response.backupCodes;
-  } catch (error: any) {
-    console.error('Backup codes regeneration failed:', error);
-    throw new Error(error.message || 'Failed to regenerate backup codes');
-  }
+  const derived = await CryptoService.deriveKeys(password, vault.salt, vault.kdfIterations);
+  await openVault({ ...user, ...vault, updatedAt: user.createdAt }, derived.wrappingKey);
+  return user;
 }
 
 // ============================================================================
 // Logout
 // ============================================================================
 
-/**
- * Logout user and clear all data
- */
 export async function logout(): Promise<void> {
   try {
-    // Call logout endpoint
-    await ApiService.logout();
-  } catch (error) {
-    console.error('Logout API call failed:', error);
+    if (StorageService.getAccessToken()) await ApiService.logout();
+  } catch {
+    // The local session is cleared regardless.
   } finally {
-    // Clear all stored data regardless of API call result
+    pendingWrappingKey = null;
     StorageService.clearAllData();
   }
 }
 
-/**
- * Lock session (clear in-memory keys but keep tokens)
- */
-export function lockSession(): void {
-  StorageService.clearInMemoryData();
-}
-
-/**
- * Unlock session with password
- * @param password - User password
- */
-export async function unlockSession(password: string): Promise<AuthUser> {
-  try {
-    const userData = StorageService.getUserData();
-    const wrappedMasterKeyData = StorageService.getWrappedMasterKey();
-    const encryptedPrivateKeyData = StorageService.getEncryptedPrivateKey();
-
-    if (!userData || !wrappedMasterKeyData || !encryptedPrivateKeyData) {
-      throw new Error('Session data not found. Please login again.');
-    }
-
-    // Get user profile from server to get salt
-    const profile = await ApiService.getProfile();
-
-    // Derive key from password using stored salt
-    // Note: In production, the salt should be stored with the wrapped key
-    const passwordHash = await CryptoService.sha256(password + userData.email.toLowerCase());
-
-    // For now, we'll need to get the salt from somewhere - ideally it should be stored
-    // Let's assume we can derive it or it's stored separately
-    // This is a simplified version - in production you'd need proper salt storage
-
-    // Attempt to unwrap the master key
-    // If this fails, the password is incorrect
-    const response = await ApiService.login({
-      email: userData.email,
-      passwordHash,
-    });
-
-    const salt = CryptoService.base64ToArrayBuffer(response.user.salt);
-    const { key: passwordDerivedKey } = await CryptoService.deriveKeyFromPassword(
-      password,
-      new Uint8Array(salt)
-    );
-
-    const wrappedMasterKey = JSON.parse(wrappedMasterKeyData);
-    const masterKey = await CryptoService.unwrapKey(wrappedMasterKey, passwordDerivedKey);
-
-    const encryptedPrivateKey = JSON.parse(encryptedPrivateKeyData);
-    const privateKeyBase64 = await CryptoService.decryptString(encryptedPrivateKey, masterKey);
-    const privateKeyRaw = CryptoService.base64ToArrayBuffer(privateKeyBase64);
-    const privateKey = await CryptoService.importPrivateKey(privateKeyRaw);
-
-    // Store keys in memory
-    StorageService.setMasterKey(masterKey);
-    StorageService.setPrivateKey(privateKey);
-
-    return {
-      id: userData.id,
-      email: userData.email,
-      publicKey: userData.publicKey,
-      storageUsed: userData.storageUsed,
-      storageLimit: userData.storageLimit,
-      twoFactorEnabled: userData.twoFactorEnabled,
-      createdAt: userData.createdAt,
-    };
-  } catch (error: any) {
-    console.error('Unlock session failed:', error);
-    throw new Error(error.message || 'Failed to unlock session');
-  }
-}
-
 // ============================================================================
-// User Profile
+// Profile and credentials
 // ============================================================================
 
-/**
- * Get current user profile
- */
-export async function getProfile(): Promise<AuthUser> {
-  try {
-    const profile = await ApiService.getProfile();
-
-    // Update local storage
-    StorageService.updateUserData({
-      storageUsed: profile.storageUsed,
-      storageLimit: profile.storageLimit,
-      twoFactorEnabled: profile.twoFactorEnabled,
-    });
-
-    return profile;
-  } catch (error: any) {
-    console.error('Get profile failed:', error);
-    throw new Error(error.message || 'Failed to get profile');
-  }
+export async function refreshProfile(): Promise<AuthUser> {
+  const profile = await ApiService.getProfile();
+  StorageService.updateUserData({
+    email: profile.email,
+    storageUsed: profile.storageUsed,
+    storageLimit: profile.storageLimit,
+    twoFactorEnabled: profile.twoFactorEnabled,
+  });
+  return StorageService.getUserData()!;
 }
 
-/**
- * Update user email
- * @param newEmail - New email address
- * @param password - Current password for verification
- */
-export async function updateEmail(newEmail: string, password: string): Promise<AuthUser> {
+/** Re-derive the current credential; used by actions that require password confirmation. */
+export async function currentAuthHash(password: string): Promise<string> {
+  const vault = StorageService.getVault();
+  if (!vault) throw new Error('No saved session');
+  const derived = await CryptoService.deriveKeys(password, vault.salt, vault.kdfIterations);
+  // Confirm locally before sending anything.
   try {
-    const userData = StorageService.getUserData();
-    if (!userData) {
-      throw new Error('User not authenticated');
-    }
-
-    const passwordHash = await CryptoService.sha256(password + userData.email.toLowerCase());
-
-    const profile = await ApiService.updateProfile({
-      email: newEmail,
-      currentPasswordHash: passwordHash,
-    });
-
-    // Update local storage
-    StorageService.updateUserData({ email: newEmail });
-
-    return profile;
-  } catch (error: any) {
-    console.error('Update email failed:', error);
-    throw new Error(error.message || 'Failed to update email');
+    await CryptoService.unwrapKey(JSON.parse(vault.wrappedMasterKey), derived.wrappingKey);
+  } catch {
+    throw new Error('Incorrect password');
   }
+  return derived.authHash;
 }
 
-/**
- * Change password and re-encrypt keys
- * @param data - Current and new password
- */
-export async function changePassword(data: ChangePasswordData): Promise<void> {
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const vault = StorageService.getVault();
+  const masterKey = StorageService.getMasterKey();
+  const user = StorageService.getUserData();
+  if (!vault || !masterKey || !user) throw new Error('Unlock your vault first');
+
+  const currentPasswordHash = await currentAuthHash(currentPassword);
+  const next = await CryptoService.deriveKeys(newPassword, vault.salt);
+  const wrappedMasterKey = await CryptoService.wrapKey(masterKey, next.wrappingKey);
+
   try {
-    const userData = StorageService.getUserData();
-    const masterKey = StorageService.getMasterKey();
-    const privateKey = StorageService.getPrivateKey();
-
-    if (!userData || !masterKey || !privateKey) {
-      throw new Error('User not authenticated or keys not available');
-    }
-
-    // 1. Derive new key from new password
-    const { key: newPasswordDerivedKey, salt: newSalt } =
-      await CryptoService.deriveKeyFromPassword(data.newPassword);
-
-    // 2. Re-wrap master key with new password-derived key
-    const newWrappedMasterKey = await CryptoService.wrapKey(masterKey, newPasswordDerivedKey);
-
-    // 3. Create password hashes
-    const currentPasswordHash = await CryptoService.sha256(
-      data.currentPassword + userData.email.toLowerCase()
-    );
-    const newPasswordHash = await CryptoService.sha256(
-      data.newPassword + userData.email.toLowerCase()
-    );
-
-    // 4. Update on server
     await ApiService.updateProfile({
       currentPasswordHash,
-      newPasswordHash,
-      salt: CryptoService.arrayBufferToBase64(newSalt),
-      wrappedMasterKey: JSON.stringify(newWrappedMasterKey),
+      newPasswordHash: next.authHash,
+      salt: next.salt,
+      kdfIterations: next.iterations,
+      wrappedMasterKey: JSON.stringify(wrappedMasterKey),
     });
-
-    // 5. Update local storage
-    StorageService.setWrappedMasterKey(JSON.stringify(newWrappedMasterKey));
-  } catch (error: any) {
-    console.error('Change password failed:', error);
-    throw new Error(error.message || 'Failed to change password');
+  } catch (error) {
+    throw new Error(toApiError(error).message);
   }
+  StorageService.setVault({ ...vault, wrappedMasterKey: JSON.stringify(wrappedMasterKey), kdfIterations: next.iterations });
 }
 
-/**
- * Delete user account
- * @param password - User password for verification
- */
 export async function deleteAccount(password: string): Promise<void> {
+  const passwordHash = await currentAuthHash(password);
   try {
-    const userData = StorageService.getUserData();
-    if (!userData) {
-      throw new Error('User not authenticated');
-    }
-
-    const passwordHash = await CryptoService.sha256(password + userData.email.toLowerCase());
-
     await ApiService.deleteAccount(passwordHash);
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
+  StorageService.clearAllData();
+}
 
-    // Clear all data
-    StorageService.clearAllData();
-  } catch (error: any) {
-    console.error('Delete account failed:', error);
-    throw new Error(error.message || 'Failed to delete account');
+// ============================================================================
+// Two-factor management
+// ============================================================================
+
+export async function setupTwoFactor(): Promise<{ secret: string; qrCode: string }> {
+  try {
+    return await ApiService.setupTwoFactor();
+  } catch (error) {
+    throw new Error(toApiError(error).message);
   }
 }
 
-// ============================================================================
-// Session Management
-// ============================================================================
-
-/**
- * Check if user is authenticated
- */
-export function isAuthenticated(): boolean {
-  return StorageService.isAuthenticated();
+export async function enableTwoFactor(token: string): Promise<string[]> {
+  try {
+    const { backupCodes } = await ApiService.enableTwoFactor(token);
+    StorageService.updateUserData({ twoFactorEnabled: true });
+    return backupCodes;
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
 }
 
-/**
- * Check if user has valid session
- */
-export function hasValidSession(): boolean {
-  return StorageService.hasValidSession();
+export async function disableTwoFactor(token: string, password: string): Promise<void> {
+  const passwordHash = await currentAuthHash(password);
+  try {
+    await ApiService.disableTwoFactor(token, passwordHash);
+    StorageService.updateUserData({ twoFactorEnabled: false });
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
 }
 
-/**
- * Get current user from storage
- */
+export async function regenerateBackupCodes(password: string): Promise<string[]> {
+  const passwordHash = await currentAuthHash(password);
+  try {
+    return (await ApiService.regenerateBackupCodes(passwordHash)).backupCodes;
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
+}
+
 export function getCurrentUser(): AuthUser | null {
-  const userData = StorageService.getUserData();
-  if (!userData) return null;
-
-  return {
-    id: userData.id,
-    email: userData.email,
-    publicKey: userData.publicKey,
-    storageUsed: userData.storageUsed,
-    storageLimit: userData.storageLimit,
-    twoFactorEnabled: userData.twoFactorEnabled,
-    createdAt: userData.createdAt,
-  };
+  return StorageService.getUserData();
 }
 
-// Export the service as a default object
 const AuthService = {
   register,
   login,
-  verifyTwoFactor,
+  completeTwoFactor,
+  cancelTwoFactor,
+  lock,
+  unlock,
+  logout,
+  refreshProfile,
+  changePassword,
+  deleteAccount,
   setupTwoFactor,
   enableTwoFactor,
   disableTwoFactor,
   regenerateBackupCodes,
-  logout,
-  lockSession,
-  unlockSession,
-  getProfile,
-  updateEmail,
-  changePassword,
-  deleteAccount,
-  isAuthenticated,
-  hasValidSession,
   getCurrentUser,
 };
 

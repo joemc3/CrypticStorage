@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QrCodeIcon, ShieldCheckIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
+import { ShieldCheckIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -25,7 +25,6 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({
   const [isVerified, setIsVerified] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [step, setStep] = useState<'setup' | 'verify'>('setup');
 
   const handleCopySecret = async () => {
     try {

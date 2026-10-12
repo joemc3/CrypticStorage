@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 interface Props {
@@ -57,7 +57,7 @@ class ErrorBoundary extends Component<Props, State> {
                 We're sorry for the inconvenience. An unexpected error has occurred.
               </p>
 
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <div className="mb-6 text-left">
                   <details className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                     <summary className="font-semibold text-red-800 dark:text-red-200 cursor-pointer mb-2">

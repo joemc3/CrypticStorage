@@ -1,28 +1,34 @@
 /**
  * CrypticStorage - Settings Page
- * User settings including profile, security, and 2FA
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { UserCircleIcon, ShieldCheckIcon, KeyIcon, CircleStackIcon } from '@heroicons/react/24/outline';
 import { DashboardLayout } from '../layouts/DashboardLayout';
-import { TwoFactorSetup } from '../components/auth/TwoFactorSetup';
+import { TwoFactorSettings } from '../components/auth/TwoFactorSettings';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
+import { Modal } from '../components/common/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { useEncryption } from '../hooks/useEncryption';
 import { useToast } from '../hooks/useToast';
-import {
-  UserCircleIcon,
-  ShieldCheckIcon,
-  KeyIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline';
+import ApiService, { type StorageStats } from '../services/api.service';
+import { formatFileSize } from '../services/file.service';
 
 type SettingsTab = 'profile' | 'security' | '2fa' | 'storage';
 
+const tabs: { id: SettingsTab; name: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'profile', name: 'Profile', icon: UserCircleIcon },
+  { id: 'security', name: 'Security', icon: ShieldCheckIcon },
+  { id: '2fa', name: 'Two-factor', icon: KeyIcon },
+  { id: 'storage', name: 'Storage', icon: CircleStackIcon },
+];
+
 export const SettingsPage: React.FC = () => {
-  const { user, changePassword } = useAuth();
+  const navigate = useNavigate();
+  const { user, isLoading, changePassword, deleteAccount, lock } = useAuth();
   const { generatePassword, generateFingerprint } = useEncryption();
   const { success, error } = useToast();
 
@@ -30,70 +36,69 @@ export const SettingsPage: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
+  const [fingerprint, setFingerprint] = useState<string | null>(null);
+  const [stats, setStats] = useState<StorageStats | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
 
-  const tabs = [
-    { id: 'profile', name: 'Profile', icon: UserCircleIcon },
-    { id: 'security', name: 'Security', icon: ShieldCheckIcon },
-    { id: '2fa', name: 'Two-Factor Auth', icon: KeyIcon },
-    { id: 'storage', name: 'Storage', icon: TrashIcon },
-  ];
+  useEffect(() => {
+    ApiService.getStorageStats()
+      .then(setStats)
+      .catch(() => undefined);
+  }, []);
 
   const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      error('Passwords do not match');
-      return;
-    }
-
+    if (newPassword.length < 8) return error('New password must be at least 8 characters');
+    if (newPassword !== confirmPassword) return error('Passwords do not match');
     try {
       await changePassword(currentPassword, newPassword);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err) {
-      // Error is handled by useAuth hook
+    } catch {
+      // toast shown by hook
     }
   };
 
   const handleGeneratePassword = () => {
-    const generated = generatePassword(16);
+    const generated = generatePassword(20);
     setNewPassword(generated);
     setConfirmPassword(generated);
-    success('Password generated', 'Please save this password securely');
+    success('Password generated', 'Save it in a password manager before continuing.');
   };
 
-  const handleShowFingerprint = async () => {
-    const fingerprint = await generateFingerprint();
-    if (fingerprint) {
-      setKeyFingerprint(fingerprint);
+  const handleDelete = async () => {
+    try {
+      await deleteAccount(deletePassword);
+      navigate('/', { replace: true });
+    } catch {
+      // toast shown by hook
     }
   };
+
+  const used = stats?.used ?? user?.storageUsed ?? 0;
+  const limit = stats?.limit ?? user?.storageLimit ?? 1;
+  const percent = Math.min(100, (used / limit) * 100);
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Page Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Manage your account settings and preferences
-          </p>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Account, security and storage</p>
         </div>
 
-        {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="flex space-x-8">
+          <nav className="flex space-x-8 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+              const active = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as SettingsTab)}
-                  className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                    isActive
-                      ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                    active ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                   }`}
                 >
                   <Icon className="h-5 w-5" />
@@ -104,143 +109,100 @@ export const SettingsPage: React.FC = () => {
           </nav>
         </div>
 
-        {/* Tab Content */}
         <div className="max-w-2xl">
-          {/* Profile Tab */}
           {activeTab === 'profile' && (
-            <Card>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Profile Information
-              </h2>
+            <Card variant="bordered" padding="lg">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Profile</h2>
               <div className="space-y-4">
-                <Input
-                  label="Email"
-                  type="email"
-                  value={user?.email || ''}
-                  disabled
-                  helperText="Email cannot be changed"
-                />
-                <Input
-                  label="Username"
-                  value={user?.username || ''}
-                  disabled
-                  helperText="Username is derived from your email"
-                />
-                <div className="pt-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Account created: {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                  </p>
-                </div>
+                <Input label="Email" type="email" value={user?.email ?? ''} disabled helperText="Your email is also the salt for your key derivation, so it cannot be changed here." />
+                <p className="text-sm text-gray-600 dark:text-gray-400">Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</p>
+                <Button variant="secondary" onClick={lock}>
+                  Lock vault
+                </Button>
               </div>
             </Card>
           )}
 
-          {/* Security Tab */}
           {activeTab === 'security' && (
             <div className="space-y-6">
-              <Card>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                  Change Password
-                </h2>
+              <Card variant="bordered" padding="lg">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">Change password</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Your master key is re-wrapped locally; no files need to be re-encrypted. Other sessions are signed out.</p>
                 <div className="space-y-4">
-                  <Input
-                    label="Current Password"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Enter current password"
-                  />
-                  <Input
-                    label="New Password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password"
-                  />
-                  <Input
-                    label="Confirm New Password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
-                  />
-                  <div className="flex gap-2">
-                    <Button onClick={handleChangePassword}>Change Password</Button>
+                  <Input label="Current password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" />
+                  <Input label="New password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+                  <Input label="Confirm new password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => void handleChangePassword()} isLoading={isLoading} disabled={!currentPassword || !newPassword}>
+                      Change password
+                    </Button>
                     <Button variant="secondary" onClick={handleGeneratePassword}>
-                      Generate Strong Password
+                      Generate a strong password
                     </Button>
                   </div>
                 </div>
               </Card>
 
-              <Card>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                  Master Key Fingerprint
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Use this fingerprint to verify your encryption key on different devices
-                </p>
-                <Button variant="secondary" onClick={handleShowFingerprint}>
-                  Show Fingerprint
+              <Card variant="bordered" padding="lg">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">Master key fingerprint</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Compare this on two devices to confirm they hold the same key.</p>
+                <Button variant="secondary" onClick={async () => setFingerprint(await generateFingerprint())}>
+                  Show fingerprint
                 </Button>
-                {keyFingerprint && (
-                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg font-mono text-sm">
-                    {keyFingerprint}
-                  </div>
-                )}
+                {fingerprint && <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg font-mono text-sm break-all">{fingerprint}</div>}
               </Card>
             </div>
           )}
 
-          {/* 2FA Tab */}
           {activeTab === '2fa' && (
-            <Card>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Two-Factor Authentication
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                Add an extra layer of security to your account with two-factor authentication
-              </p>
-              <TwoFactorSetup />
+            <Card variant="bordered" padding="lg">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Two-factor authentication</h2>
+              <TwoFactorSettings />
             </Card>
           )}
 
-          {/* Storage Tab */}
           {activeTab === 'storage' && (
-            <Card>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Storage Management
-              </h2>
-              <div className="space-y-4">
+            <Card variant="bordered" padding="lg">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Storage</h2>
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Storage Usage
-                  </label>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-indigo-600 h-2 rounded-full"
-                      style={{ width: '45%' }}
-                    />
+                    <div className={`h-2 rounded-full ${percent > 90 ? 'bg-red-500' : percent > 75 ? 'bg-yellow-500' : 'bg-indigo-600'}`} style={{ width: `${percent}%` }} />
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    4.5 GB of 10 GB used
+                    {formatFileSize(used)} of {formatFileSize(limit)} used
+                    {stats && ` · ${stats.fileCount} files in ${stats.folderCount} folders`}
                   </p>
                 </div>
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                    Danger Zone
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Once you delete your account, there is no going back. All your files will be
-                    permanently deleted.
-                  </p>
-                  <Button variant="danger">Delete Account</Button>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Danger zone</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Deleting your account permanently removes every file and share. There is no recovery.</p>
+                  <Button variant="danger" onClick={() => setShowDelete(true)}>
+                    Delete account
+                  </Button>
                 </div>
               </div>
             </Card>
           )}
         </div>
+
+        <Modal isOpen={showDelete} onClose={() => setShowDelete(false)} title="Delete your account?" size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">Type your password to confirm. All encrypted files are destroyed immediately.</p>
+            <Input type="password" label="Password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} autoComplete="current-password" />
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowDelete(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => void handleDelete()} isLoading={isLoading} disabled={!deletePassword}>
+                Delete everything
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </DashboardLayout>
   );
 };
+
+export default SettingsPage;

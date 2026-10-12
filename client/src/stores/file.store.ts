@@ -30,7 +30,7 @@ export interface UploadProgress {
   error?: string;
 }
 
-interface FileState {
+export interface FileState {
   // State
   files: FileItem[];
   folders: Folder[];
@@ -67,7 +67,7 @@ interface FileState {
   reset: () => void;
 }
 
-export const useFileStore = create<FileState>((set, get) => ({
+export const useFileStore = create<FileState>((set) => ({
   // Initial state
   files: [],
   folders: [],

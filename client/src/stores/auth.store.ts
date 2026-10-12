@@ -1,59 +1,57 @@
 import { create } from 'zustand';
+import StorageService from '../services/storage.service';
+import type { AuthUser } from '../services/auth.service';
 
-interface User {
-  id: string;
-  email: string;
-  username: string;
-  createdAt: string;
-  updatedAt: string;
-}
+/**
+ * - anonymous: no session
+ * - locked:    session and vault stored, but keys are not in memory (page reload)
+ * - unlocked:  ready to use
+ */
+export type AuthStatus = 'anonymous' | 'locked' | 'unlocked';
 
-interface AuthState {
-  // State
-  user: User | null;
-  isAuthenticated: boolean;
-  masterKey: string | null; // In memory only, never persisted
+export interface AuthState {
+  user: AuthUser | null;
+  status: AuthStatus;
   isLoading: boolean;
+  /** Email of the account awaiting a 2FA code after password login. */
+  pendingTwoFactorEmail: string | null;
 
-  // Actions
-  login: (user: User, masterKey: string) => void;
-  logout: () => void;
-  updateUser: (user: Partial<User>) => void;
-  setMasterKey: (masterKey: string | null) => void;
+  hydrate: () => void;
+  setUnlocked: (user: AuthUser) => void;
+  setLocked: () => void;
+  setAnonymous: () => void;
+  setPendingTwoFactor: (email: string | null) => void;
+  updateUser: (patch: Partial<AuthUser>) => void;
   setLoading: (isLoading: boolean) => void;
 }
 
+function currentStatus(): AuthStatus {
+  if (!StorageService.hasSession()) return 'anonymous';
+  return StorageService.hasMasterKey() ? 'unlocked' : 'locked';
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
-  // Initial state
-  user: null,
-  isAuthenticated: false,
-  masterKey: null, // NEVER persist this - kept in memory only
+  user: StorageService.getUserData(),
+  status: currentStatus(),
   isLoading: false,
+  pendingTwoFactorEmail: null,
 
-  // Actions
-  login: (user, masterKey) =>
-    set({
-      user,
-      isAuthenticated: true,
-      masterKey, // Stored in memory only during session
+  hydrate: () => set({ user: StorageService.getUserData(), status: currentStatus() }),
+  setUnlocked: (user) => set({ user, status: 'unlocked', pendingTwoFactorEmail: null }),
+  setLocked: () => set({ status: 'locked' }),
+  setAnonymous: () => set({ user: null, status: 'anonymous', pendingTwoFactorEmail: null }),
+  setPendingTwoFactor: (email) => set({ pendingTwoFactorEmail: email }),
+  updateUser: (patch) =>
+    set((state) => {
+      if (!state.user) return {};
+      const user = { ...state.user, ...patch };
+      StorageService.setUserData(user);
+      return { user };
     }),
-
-  logout: () =>
-    set({
-      user: null,
-      isAuthenticated: false,
-      masterKey: null, // Clear from memory on logout
-      isLoading: false,
-    }),
-
-  updateUser: (userData) =>
-    set((state) => ({
-      user: state.user ? { ...state.user, ...userData } : null,
-    })),
-
-  setMasterKey: (masterKey) =>
-    set({ masterKey }),
-
-  setLoading: (isLoading) =>
-    set({ isLoading }),
+  setLoading: (isLoading) => set({ isLoading }),
 }));
+
+// A failed token refresh anywhere in the app drops the session.
+if (typeof window !== 'undefined') {
+  window.addEventListener('cs:session-expired', () => useAuthStore.getState().setAnonymous());
+}

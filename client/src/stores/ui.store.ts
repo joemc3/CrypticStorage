@@ -26,7 +26,7 @@ interface ModalState {
   data?: any; // Modal-specific data (e.g., file to delete, folder to create in)
 }
 
-interface UIState {
+export interface UIState {
   // State
   theme: Theme;
   sidebarOpen: boolean;
@@ -52,7 +52,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // Initial state
       theme: 'system',
       sidebarOpen: true,

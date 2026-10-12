@@ -1,47 +1,21 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
-// Initialize app
 const root = document.getElementById('root');
+if (!root) throw new Error('Root element not found');
 
-if (!root) {
-  throw new Error(
-    'Root element not found. Make sure your index.html has a <div id="root"></div> element.'
+if (!window.isSecureContext || !crypto?.subtle) {
+  root.innerHTML =
+    '<div style="font-family:system-ui;padding:2rem;text-align:center"><h1>Secure context required</h1><p>CrypticStorage encrypts files in your browser and needs HTTPS (or localhost) to access the Web Crypto API.</p></div>';
+} else {
+  ReactDOM.createRoot(root).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
   );
-}
-
-// Performance monitoring (optional)
-if (import.meta.env.PROD) {
-  // Log when the app is fully loaded
-  window.addEventListener('load', () => {
-    console.info('CrypticStorage loaded successfully');
-  });
-}
-
-// Render app
-ReactDOM.createRoot(root).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
-
-// Service Worker registration (for PWA support)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        console.info('Service Worker registered:', registration);
-      })
-      .catch((error) => {
-        console.error('Service Worker registration failed:', error);
-      });
-  });
-}
-
-// Hot Module Replacement (HMR) for development
-if (import.meta.hot) {
-  import.meta.hot.accept();
 }

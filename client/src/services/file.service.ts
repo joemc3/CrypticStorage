@@ -1,16 +1,18 @@
 /**
  * CrypticStorage - File Service
- * Handles file operations with client-side encryption
+ * Upload, download and metadata operations with per-file keys.
  */
 
 import CryptoService from './crypto.service';
-import ApiService from './api.service';
+import ApiService, { toApiError, type FileMetadata, type FolderMetadata, type SharedFileMetadata } from './api.service';
 import StorageService from './storage.service';
-import type { FileMetadata, FolderMetadata } from './api.service';
 
 // ============================================================================
-// Types and Interfaces
+// Types
 // ============================================================================
+
+export type UploadStatus = 'preparing' | 'encrypting' | 'uploading' | 'confirming' | 'completed' | 'failed';
+export type DownloadStatus = 'downloading' | 'decrypting' | 'completed' | 'failed';
 
 export interface UploadProgress {
   fileId?: string;
@@ -18,7 +20,7 @@ export interface UploadProgress {
   totalSize: number;
   uploadedSize: number;
   percentage: number;
-  status: 'preparing' | 'encrypting' | 'uploading' | 'confirming' | 'completed' | 'failed';
+  status: UploadStatus;
   error?: string;
 }
 
@@ -28,27 +30,8 @@ export interface DownloadProgress {
   totalSize: number;
   downloadedSize: number;
   percentage: number;
-  status: 'downloading' | 'decrypting' | 'completed' | 'failed';
+  status: DownloadStatus;
   error?: string;
-}
-
-export interface DecryptedFile {
-  id: string;
-  name: string;
-  size: number;
-  mimeType: string;
-  blob: Blob;
-  folderId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DecryptedFolder {
-  id: string;
-  name: string;
-  parentId?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface FileListItem {
@@ -61,6 +44,13 @@ export interface FileListItem {
   updatedAt: string;
 }
 
+export interface SharedFileListItem extends FileListItem {
+  shareId: string;
+  permissions: string;
+  sharedBy: string;
+  expiresAt?: string;
+}
+
 export interface FolderListItem {
   id: string;
   name: string;
@@ -69,739 +59,323 @@ export interface FolderListItem {
   updatedAt: string;
 }
 
+export interface DecryptedFile extends FileListItem {
+  blob: Blob;
+}
+
 // ============================================================================
-// File Upload
+// Keys
 // ============================================================================
 
-/**
- * Upload a file with client-side encryption
- * @param file - File to upload
- * @param folderId - Optional folder ID
- * @param onProgress - Progress callback
- * @returns Uploaded file metadata
- */
-export async function uploadFile(
-  file: File,
-  folderId?: string,
-  onProgress?: (progress: UploadProgress) => void
-): Promise<FileListItem> {
+function requireMasterKey(): CryptoKey {
+  const key = StorageService.getMasterKey();
+  if (!key) throw new Error('Your vault is locked. Unlock it to continue.');
+  return key;
+}
+
+/** Unwrap (and cache) the per-file key for a file the current user owns. */
+export async function fileKeyFor(file: Pick<FileMetadata, 'id' | 'encryptedFileKey' | 'fileKeyIV'>): Promise<CryptoKey> {
+  const cached = StorageService.getCachedFileKey(file.id);
+  if (cached) return cached;
+  const key = await CryptoService.unwrapKey({ data: file.encryptedFileKey, iv: file.fileKeyIV }, requireMasterKey());
+  StorageService.cacheFileKey(file.id, key);
+  return key;
+}
+
+/** Unwrap a key that another user wrapped for us with our RSA public key. */
+async function sharedFileKeyFor(file: SharedFileMetadata): Promise<CryptoKey> {
+  const cached = StorageService.getCachedFileKey(file.id);
+  if (cached) return cached;
+  const privateKey = StorageService.getPrivateKey();
+  if (!privateKey) throw new Error('Your vault is locked. Unlock it to continue.');
+  const key = await CryptoService.unwrapKeyFromSender(file.encryptedFileKey, privateKey);
+  StorageService.cacheFileKey(file.id, key);
+  return key;
+}
+
+async function toListItem(file: FileMetadata, key: CryptoKey): Promise<FileListItem> {
+  const name = await CryptoService.decryptString({ data: file.encryptedName, iv: file.encryptedNameIV }, key);
+  return {
+    id: file.id,
+    name,
+    size: CryptoService.plaintextSize(file.encryptedSize),
+    mimeType: file.mimeType,
+    folderId: file.folderId,
+    createdAt: file.createdAt,
+    updatedAt: file.updatedAt,
+  };
+}
+
+function undecryptable(file: FileMetadata): FileListItem {
+  return {
+    id: file.id,
+    name: '(cannot decrypt)',
+    size: CryptoService.plaintextSize(file.encryptedSize),
+    mimeType: file.mimeType,
+    folderId: file.folderId,
+    createdAt: file.createdAt,
+    updatedAt: file.updatedAt,
+  };
+}
+
+// ============================================================================
+// Upload
+// ============================================================================
+
+export async function uploadFile(file: File, folderId?: string, onProgress?: (p: UploadProgress) => void): Promise<FileListItem> {
+  const masterKey = requireMasterKey();
+  const progress: UploadProgress = { fileName: file.name, totalSize: file.size, uploadedSize: 0, percentage: 0, status: 'preparing' };
+  const report = (patch: Partial<UploadProgress>) => onProgress?.(Object.assign(progress, patch));
+
   try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
+    report({ status: 'encrypting' });
+    const fileKey = await CryptoService.generateAesKey();
+    const encryptedName = await CryptoService.encryptString(file.name, fileKey);
+    const wrappedFileKey = await CryptoService.wrapKey(fileKey, masterKey);
+    const { encryptedBlob, iv } = await CryptoService.encryptFile(file, fileKey, (pct) => report({ percentage: Math.round(pct * 0.3) }));
 
-    // Initialize progress
-    const progress: UploadProgress = {
-      fileName: file.name,
-      totalSize: file.size,
-      uploadedSize: 0,
-      percentage: 0,
-      status: 'preparing',
-    };
-    onProgress?.(progress);
-
-    // 1. Encrypt file name
-    progress.status = 'encrypting';
-    onProgress?.(progress);
-
-    const encryptedFileName = await CryptoService.encryptString(file.name, masterKey);
-
-    // 2. Encrypt file content
-    const { encryptedBlob, iv } = await CryptoService.encryptFile(
-      file,
-      masterKey,
-      (encryptionProgress) => {
-        progress.percentage = encryptionProgress * 0.3; // 0-30% for encryption
-        onProgress?.(progress);
-      }
-    );
-
-    // 3. Create upload URL
-    progress.status = 'uploading';
-    progress.percentage = 30;
-    onProgress?.(progress);
-
-    const uploadData = await ApiService.createUploadUrl({
-      encryptedName: encryptedFileName.data,
-      encryptedNameIV: encryptedFileName.iv,
+    report({ status: 'uploading', percentage: 30 });
+    const reservation = await ApiService.createUploadUrl({
+      encryptedName: encryptedName.data,
+      encryptedNameIV: encryptedName.iv,
+      encryptedFileKey: wrappedFileKey.data,
+      fileKeyIV: wrappedFileKey.iv,
+      iv,
       encryptedSize: encryptedBlob.size,
       mimeType: file.type || 'application/octet-stream',
-      iv,
       folderId,
     });
+    report({ fileId: reservation.fileId });
 
-    progress.fileId = uploadData.fileId;
+    await ApiService.uploadContent(reservation.uploadUrl, encryptedBlob, (loaded, total) => {
+      report({ uploadedSize: Math.min(file.size, Math.round((loaded / Math.max(1, total)) * file.size)), percentage: 30 + Math.round((loaded / Math.max(1, total)) * 65) });
+    });
 
-    // 4. Upload encrypted file
-    await ApiService.uploadFile(uploadData.uploadUrl, encryptedBlob);
+    report({ status: 'confirming', percentage: 95 });
+    const metadata = await ApiService.confirmUpload(reservation.fileId);
+    StorageService.cacheFileKey(metadata.id, fileKey);
 
-    progress.percentage = 90;
-    progress.status = 'confirming';
-    onProgress?.(progress);
-
-    // 5. Confirm upload
-    const metadata = await ApiService.confirmUpload(uploadData.fileId);
-
-    // 6. Complete
-    progress.percentage = 100;
-    progress.status = 'completed';
-    progress.uploadedSize = file.size;
-    onProgress?.(progress);
-
-    return {
-      id: metadata.id,
-      name: file.name,
-      size: file.size,
-      mimeType: file.type || 'application/octet-stream',
-      folderId: metadata.folderId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('File upload failed:', error);
-
-    if (onProgress) {
-      onProgress({
-        fileName: file.name,
-        totalSize: file.size,
-        uploadedSize: 0,
-        percentage: 0,
-        status: 'failed',
-        error: error.message || 'Upload failed',
-      });
-    }
-
-    throw new Error(error.message || 'Failed to upload file');
+    report({ status: 'completed', percentage: 100, uploadedSize: file.size });
+    return { id: metadata.id, name: file.name, size: file.size, mimeType: metadata.mimeType, folderId: metadata.folderId, createdAt: metadata.createdAt, updatedAt: metadata.updatedAt };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : toApiError(error).message;
+    report({ status: 'failed', error: message });
+    throw new Error(message);
   }
 }
 
-/**
- * Upload multiple files
- * @param files - Files to upload
- * @param folderId - Optional folder ID
- * @param onProgress - Progress callback for each file
- * @returns Array of uploaded file metadata
- */
-export async function uploadMultipleFiles(
-  files: File[],
-  folderId?: string,
-  onProgress?: (fileIndex: number, progress: UploadProgress) => void
-): Promise<FileListItem[]> {
-  const results: FileListItem[] = [];
+// ============================================================================
+// Download
+// ============================================================================
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    try {
-      const result = await uploadFile(file, folderId, (progress) => {
-        onProgress?.(i, progress);
-      });
-      results.push(result);
-    } catch (error) {
-      console.error(`Failed to upload file ${file.name}:`, error);
-      // Continue with next file
-    }
-  }
+async function downloadWithKey(metadata: FileMetadata, key: CryptoKey, onProgress?: (p: DownloadProgress) => void): Promise<DecryptedFile> {
+  const item = await toListItem(metadata, key);
+  const progress: DownloadProgress = { fileId: metadata.id, fileName: item.name, totalSize: item.size, downloadedSize: 0, percentage: 0, status: 'downloading' };
+  const report = (patch: Partial<DownloadProgress>) => onProgress?.(Object.assign(progress, patch));
 
-  return results;
+  report({});
+  const { downloadUrl } = await ApiService.getDownloadUrl(metadata.id);
+  const encryptedBlob = await ApiService.downloadContent(downloadUrl, (loaded, total) => {
+    report({ downloadedSize: loaded, percentage: Math.round((loaded / Math.max(1, total)) * 60) });
+  });
+  if (encryptedBlob.size !== metadata.encryptedSize) throw new Error('Downloaded size does not match the stored file');
+
+  report({ status: 'decrypting', percentage: 60 });
+  const blob = await CryptoService.decryptFile(encryptedBlob, metadata.iv, key, (pct) => report({ percentage: 60 + Math.round(pct * 0.4) }));
+  report({ status: 'completed', percentage: 100, downloadedSize: item.size });
+  return { ...item, blob: new Blob([blob], { type: metadata.mimeType }) };
 }
 
-// ============================================================================
-// File Download
-// ============================================================================
-
-/**
- * Download and decrypt a file
- * @param fileId - File ID to download
- * @param onProgress - Progress callback
- * @returns Decrypted file
- */
-export async function downloadFile(
-  fileId: string,
-  onProgress?: (progress: DownloadProgress) => void
-): Promise<DecryptedFile> {
+export async function downloadFile(fileId: string, onProgress?: (p: DownloadProgress) => void): Promise<DecryptedFile> {
   try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    // 1. Get file metadata
     const metadata = await ApiService.getFile(fileId);
-
-    // Initialize progress
-    const progress: DownloadProgress = {
-      fileId,
-      fileName: '(encrypted)',
-      totalSize: metadata.encryptedSize,
-      downloadedSize: 0,
-      percentage: 0,
-      status: 'downloading',
-    };
-    onProgress?.(progress);
-
-    // 2. Decrypt file name
-    const fileName = await CryptoService.decryptString(
-      {
-        data: metadata.encryptedName,
-        iv: metadata.encryptedNameIV,
-      },
-      masterKey
-    );
-
-    progress.fileName = fileName;
-    onProgress?.(progress);
-
-    // 3. Get download URL
-    const { downloadUrl } = await ApiService.getDownloadUrl(fileId);
-
-    // 4. Download encrypted file
-    const encryptedBlob = await ApiService.downloadFile(downloadUrl);
-
-    progress.percentage = 50;
-    progress.downloadedSize = encryptedBlob.size;
-    onProgress?.(progress);
-
-    // 5. Decrypt file
-    progress.status = 'decrypting';
-    onProgress?.(progress);
-
-    const decryptedBlob = await CryptoService.decryptFile(
-      encryptedBlob,
-      metadata.iv,
-      masterKey,
-      (decryptionProgress) => {
-        progress.percentage = 50 + decryptionProgress * 0.5; // 50-100%
-        onProgress?.(progress);
-      }
-    );
-
-    // 6. Calculate actual file size (encrypted size - GCM tag)
-    const actualSize = decryptedBlob.size;
-
-    // 7. Complete
-    progress.percentage = 100;
-    progress.status = 'completed';
-    onProgress?.(progress);
-
-    return {
-      id: metadata.id,
-      name: fileName,
-      size: actualSize,
-      mimeType: metadata.mimeType,
-      blob: decryptedBlob,
-      folderId: metadata.folderId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('File download failed:', error);
-
-    if (onProgress) {
-      onProgress({
-        fileId,
-        fileName: '(encrypted)',
-        totalSize: 0,
-        downloadedSize: 0,
-        percentage: 0,
-        status: 'failed',
-        error: error.message || 'Download failed',
-      });
-    }
-
-    throw new Error(error.message || 'Failed to download file');
+    return await downloadWithKey(metadata, await fileKeyFor(metadata), onProgress);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : toApiError(error).message;
+    onProgress?.({ fileId, fileName: '', totalSize: 0, downloadedSize: 0, percentage: 0, status: 'failed', error: message });
+    throw new Error(message);
   }
 }
 
-/**
- * Download file and trigger browser download
- * @param fileId - File ID to download
- * @param onProgress - Progress callback
- */
-export async function downloadFileToDevice(
-  fileId: string,
-  onProgress?: (progress: DownloadProgress) => void
-): Promise<void> {
-  const file = await downloadFile(fileId, onProgress);
+export async function downloadSharedFile(file: SharedFileMetadata, onProgress?: (p: DownloadProgress) => void): Promise<DecryptedFile> {
+  return downloadWithKey(file, await sharedFileKeyFor(file), onProgress);
+}
 
-  // Create download link
-  const url = URL.createObjectURL(file.blob);
+export function saveBlob(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = file.name;
+  link.download = name;
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
 
-  // Clean up
-  URL.revokeObjectURL(url);
+export async function downloadFileToDevice(fileId: string, onProgress?: (p: DownloadProgress) => void): Promise<void> {
+  const file = await downloadFile(fileId, onProgress);
+  saveBlob(file.blob, file.name);
 }
 
 // ============================================================================
-// File Listing
+// Listing and metadata
 // ============================================================================
 
-/**
- * List files in a folder
- * @param folderId - Optional folder ID (null for root)
- * @returns Array of decrypted file metadata
- */
 export async function listFiles(folderId?: string): Promise<FileListItem[]> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    const files = await ApiService.getFiles(folderId);
-
-    // Decrypt file names
-    const decryptedFiles = await Promise.all(
-      files.map(async (file) => {
-        try {
-          const name = await CryptoService.decryptString(
-            {
-              data: file.encryptedName,
-              iv: file.encryptedNameIV,
-            },
-            masterKey
-          );
-
-          // Calculate approximate original size (subtract GCM tag size)
-          const approximateSize = Math.max(0, file.encryptedSize - 16);
-
-          return {
-            id: file.id,
-            name,
-            size: approximateSize,
-            mimeType: file.mimeType,
-            folderId: file.folderId,
-            createdAt: file.createdAt,
-            updatedAt: file.updatedAt,
-          };
-        } catch (error) {
-          console.error('Failed to decrypt file metadata:', error);
-          return {
-            id: file.id,
-            name: '(decryption failed)',
-            size: 0,
-            mimeType: file.mimeType,
-            folderId: file.folderId,
-            createdAt: file.createdAt,
-            updatedAt: file.updatedAt,
-          };
-        }
-      })
-    );
-
-    return decryptedFiles;
-  } catch (error: any) {
-    console.error('Failed to list files:', error);
-    throw new Error(error.message || 'Failed to list files');
-  }
+  requireMasterKey();
+  const files = await ApiService.getFiles(folderId);
+  return Promise.all(
+    files.map(async (file) => {
+      try {
+        return await toListItem(file, await fileKeyFor(file));
+      } catch {
+        return undecryptable(file);
+      }
+    })
+  );
 }
 
-// ============================================================================
-// File Operations
-// ============================================================================
-
-/**
- * Delete a file
- * @param fileId - File ID to delete
- */
-export async function deleteFile(fileId: string): Promise<void> {
-  try {
-    await ApiService.deleteFile(fileId);
-  } catch (error: any) {
-    console.error('Failed to delete file:', error);
-    throw new Error(error.message || 'Failed to delete file');
-  }
+export async function listSharedWithMe(): Promise<SharedFileListItem[]> {
+  const files = await ApiService.getSharedWithMe();
+  return Promise.all(
+    files.map(async (file) => {
+      let item: FileListItem;
+      try {
+        item = await toListItem(file, await sharedFileKeyFor(file));
+      } catch {
+        item = undecryptable(file);
+      }
+      return { ...item, shareId: file.shareId, permissions: file.permissions, sharedBy: file.sharedBy.email, expiresAt: file.expiresAt };
+    })
+  );
 }
 
-/**
- * Rename a file
- * @param fileId - File ID
- * @param newName - New file name
- */
+export async function getFileMetadata(fileId: string): Promise<FileMetadata> {
+  return ApiService.getFile(fileId);
+}
+
 export async function renameFile(fileId: string, newName: string): Promise<FileListItem> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    // Encrypt new name
-    const encryptedName = await CryptoService.encryptString(newName, masterKey);
-
-    // Update metadata
-    const metadata = await ApiService.updateFileMetadata(fileId, {
-      encryptedName: encryptedName.data,
-      encryptedNameIV: encryptedName.iv,
-    });
-
-    return {
-      id: metadata.id,
-      name: newName,
-      size: Math.max(0, metadata.encryptedSize - 16),
-      mimeType: metadata.mimeType,
-      folderId: metadata.folderId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('Failed to rename file:', error);
-    throw new Error(error.message || 'Failed to rename file');
-  }
+  const metadata = await ApiService.getFile(fileId);
+  const key = await fileKeyFor(metadata);
+  const encryptedName = await CryptoService.encryptString(newName, key);
+  const updated = await ApiService.updateFile(fileId, { encryptedName: encryptedName.data, encryptedNameIV: encryptedName.iv });
+  return toListItem(updated, key);
 }
 
-/**
- * Move a file to a different folder
- * @param fileId - File ID
- * @param folderId - Target folder ID (undefined for root)
- */
-export async function moveFile(fileId: string, folderId?: string): Promise<FileListItem> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    const metadata = await ApiService.moveFile(fileId, folderId);
-
-    // Decrypt file name
-    const name = await CryptoService.decryptString(
-      {
-        data: metadata.encryptedName,
-        iv: metadata.encryptedNameIV,
-      },
-      masterKey
-    );
-
-    return {
-      id: metadata.id,
-      name,
-      size: Math.max(0, metadata.encryptedSize - 16),
-      mimeType: metadata.mimeType,
-      folderId: metadata.folderId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('Failed to move file:', error);
-    throw new Error(error.message || 'Failed to move file');
-  }
+export async function moveFile(fileId: string, folderId: string | null): Promise<FileListItem> {
+  const updated = await ApiService.moveFile(fileId, folderId);
+  return toListItem(updated, await fileKeyFor(updated));
 }
 
-/**
- * Copy a file
- * @param fileId - File ID
- * @param folderId - Target folder ID (undefined for root)
- */
-export async function copyFile(fileId: string, folderId?: string): Promise<FileListItem> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
+export async function copyFile(fileId: string, folderId?: string | null): Promise<FileListItem> {
+  const copy = await ApiService.copyFile(fileId, folderId);
+  return toListItem(copy, await fileKeyFor(copy));
+}
 
-    const metadata = await ApiService.copyFile(fileId, folderId);
-
-    // Decrypt file name
-    const name = await CryptoService.decryptString(
-      {
-        data: metadata.encryptedName,
-        iv: metadata.encryptedNameIV,
-      },
-      masterKey
-    );
-
-    return {
-      id: metadata.id,
-      name,
-      size: Math.max(0, metadata.encryptedSize - 16),
-      mimeType: metadata.mimeType,
-      folderId: metadata.folderId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('Failed to copy file:', error);
-    throw new Error(error.message || 'Failed to copy file');
-  }
+export async function deleteFile(fileId: string): Promise<void> {
+  await ApiService.deleteFile(fileId);
+  StorageService.forgetFileKey(fileId);
 }
 
 // ============================================================================
-// Folder Operations
+// Folders (names are encrypted with the master key)
 // ============================================================================
 
-/**
- * List folders
- * @param parentId - Optional parent folder ID (null for root)
- * @returns Array of decrypted folder metadata
- */
+async function toFolderItem(folder: FolderMetadata, masterKey: CryptoKey): Promise<FolderListItem> {
+  let name: string;
+  try {
+    name = await CryptoService.decryptString({ data: folder.encryptedName, iv: folder.encryptedNameIV }, masterKey);
+  } catch {
+    name = '(cannot decrypt)';
+  }
+  return { id: folder.id, name, parentId: folder.parentId, createdAt: folder.createdAt, updatedAt: folder.updatedAt };
+}
+
 export async function listFolders(parentId?: string): Promise<FolderListItem[]> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    const folders = await ApiService.getFolders(parentId);
-
-    // Decrypt folder names
-    const decryptedFolders = await Promise.all(
-      folders.map(async (folder) => {
-        try {
-          const name = await CryptoService.decryptString(
-            {
-              data: folder.encryptedName,
-              iv: folder.encryptedNameIV,
-            },
-            masterKey
-          );
-
-          return {
-            id: folder.id,
-            name,
-            parentId: folder.parentId,
-            createdAt: folder.createdAt,
-            updatedAt: folder.updatedAt,
-          };
-        } catch (error) {
-          console.error('Failed to decrypt folder metadata:', error);
-          return {
-            id: folder.id,
-            name: '(decryption failed)',
-            parentId: folder.parentId,
-            createdAt: folder.createdAt,
-            updatedAt: folder.updatedAt,
-          };
-        }
-      })
-    );
-
-    return decryptedFolders;
-  } catch (error: any) {
-    console.error('Failed to list folders:', error);
-    throw new Error(error.message || 'Failed to list folders');
-  }
+  const masterKey = requireMasterKey();
+  const folders = await ApiService.getFolders(parentId);
+  return Promise.all(folders.map((f) => toFolderItem(f, masterKey)));
 }
 
-/**
- * Create a new folder
- * @param name - Folder name
- * @param parentId - Optional parent folder ID
- * @returns Created folder
- */
+export async function getFolder(folderId: string): Promise<FolderListItem> {
+  return toFolderItem(await ApiService.getFolder(folderId), requireMasterKey());
+}
+
 export async function createFolder(name: string, parentId?: string): Promise<FolderListItem> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    // Encrypt folder name
-    const encryptedName = await CryptoService.encryptString(name, masterKey);
-
-    // Create folder
-    const metadata = await ApiService.createFolder({
-      encryptedName: encryptedName.data,
-      encryptedNameIV: encryptedName.iv,
-      parentId,
-    });
-
-    return {
-      id: metadata.id,
-      name,
-      parentId: metadata.parentId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('Failed to create folder:', error);
-    throw new Error(error.message || 'Failed to create folder');
-  }
+  const masterKey = requireMasterKey();
+  const encryptedName = await CryptoService.encryptString(name, masterKey);
+  const folder = await ApiService.createFolder({ encryptedName: encryptedName.data, encryptedNameIV: encryptedName.iv, parentId });
+  return { id: folder.id, name, parentId: folder.parentId, createdAt: folder.createdAt, updatedAt: folder.updatedAt };
 }
 
-/**
- * Rename a folder
- * @param folderId - Folder ID
- * @param newName - New folder name
- */
 export async function renameFolder(folderId: string, newName: string): Promise<FolderListItem> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    // Encrypt new name
-    const encryptedName = await CryptoService.encryptString(newName, masterKey);
-
-    // Update metadata
-    const metadata = await ApiService.updateFolder(folderId, {
-      encryptedName: encryptedName.data,
-      encryptedNameIV: encryptedName.iv,
-    });
-
-    return {
-      id: metadata.id,
-      name: newName,
-      parentId: metadata.parentId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('Failed to rename folder:', error);
-    throw new Error(error.message || 'Failed to rename folder');
-  }
+  const masterKey = requireMasterKey();
+  const encryptedName = await CryptoService.encryptString(newName, masterKey);
+  const folder = await ApiService.updateFolder(folderId, { encryptedName: encryptedName.data, encryptedNameIV: encryptedName.iv });
+  return toFolderItem(folder, masterKey);
 }
 
-/**
- * Delete a folder
- * @param folderId - Folder ID to delete
- */
+export async function moveFolder(folderId: string, parentId: string | null): Promise<FolderListItem> {
+  return toFolderItem(await ApiService.moveFolder(folderId, parentId), requireMasterKey());
+}
+
 export async function deleteFolder(folderId: string): Promise<void> {
-  try {
-    await ApiService.deleteFolder(folderId);
-  } catch (error: any) {
-    console.error('Failed to delete folder:', error);
-    throw new Error(error.message || 'Failed to delete folder');
-  }
+  await ApiService.deleteFolder(folderId);
 }
 
-/**
- * Move a folder to a different parent
- * @param folderId - Folder ID
- * @param parentId - Target parent folder ID (undefined for root)
- */
-export async function moveFolder(folderId: string, parentId?: string): Promise<FolderListItem> {
-  try {
-    const masterKey = StorageService.getMasterKey();
-    if (!masterKey) {
-      throw new Error('Master key not available. Please login again.');
-    }
-
-    const metadata = await ApiService.moveFolder(folderId, parentId);
-
-    // Decrypt folder name
-    const name = await CryptoService.decryptString(
-      {
-        data: metadata.encryptedName,
-        iv: metadata.encryptedNameIV,
-      },
-      masterKey
-    );
-
-    return {
-      id: metadata.id,
-      name,
-      parentId: metadata.parentId,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-    };
-  } catch (error: any) {
-    console.error('Failed to move folder:', error);
-    throw new Error(error.message || 'Failed to move folder');
+/** Walk parent links to build a breadcrumb trail (root first). */
+export async function folderPath(folderId: string | null): Promise<FolderListItem[]> {
+  const trail: FolderListItem[] = [];
+  let current = folderId;
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const folder = await getFolder(current);
+    trail.unshift(folder);
+    current = folder.parentId ?? null;
   }
+  return trail;
 }
 
 // ============================================================================
-// Utility Functions
+// Utilities
 // ============================================================================
 
-/**
- * Get file extension from filename
- */
-export function getFileExtension(filename: string): string {
-  const lastDot = filename.lastIndexOf('.');
-  if (lastDot === -1) return '';
-  return filename.slice(lastDot + 1).toLowerCase();
-}
-
-/**
- * Get file icon based on mime type
- */
-export function getFileIcon(mimeType: string): string {
-  if (mimeType.startsWith('image/')) return '🖼️';
-  if (mimeType.startsWith('video/')) return '🎥';
-  if (mimeType.startsWith('audio/')) return '🎵';
-  if (mimeType.startsWith('text/')) return '📄';
-  if (mimeType === 'application/pdf') return '📕';
-  if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜️';
-  if (mimeType.includes('word')) return '📘';
-  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
-  if (mimeType.includes('powerpoint') || mimeType.includes('presentation')) return '📽️';
-  return '📎';
-}
-
-/**
- * Format file size for display
- */
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${Math.round((bytes / 1024 ** i) * 100) / 100} ${units[i]}`;
 }
 
-/**
- * Validate file size
- */
-export function validateFileSize(file: File, maxSizeMB: number = 100): boolean {
-  const maxSizeBytes = maxSizeMB * 1024 * 1024;
-  return file.size <= maxSizeBytes;
+export function getFileExtension(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  return dot === -1 ? '' : filename.slice(dot + 1).toLowerCase();
 }
 
-/**
- * Validate file type
- */
-export function validateFileType(file: File, allowedTypes: string[]): boolean {
-  if (allowedTypes.length === 0) return true;
-  return allowedTypes.some((type) => {
-    if (type.endsWith('/*')) {
-      const prefix = type.slice(0, -2);
-      return file.type.startsWith(prefix);
-    }
-    return file.type === type;
-  });
-}
-
-// Export the service as a default object
 const FileService = {
-  // Upload
+  fileKeyFor,
   uploadFile,
-  uploadMultipleFiles,
-
-  // Download
   downloadFile,
+  downloadSharedFile,
   downloadFileToDevice,
-
-  // File listing
+  saveBlob,
   listFiles,
-
-  // File operations
-  deleteFile,
+  listSharedWithMe,
+  getFileMetadata,
   renameFile,
   moveFile,
   copyFile,
-
-  // Folder operations
+  deleteFile,
   listFolders,
+  getFolder,
   createFolder,
   renameFolder,
-  deleteFolder,
   moveFolder,
-
-  // Utilities
-  getFileExtension,
-  getFileIcon,
+  deleteFolder,
+  folderPath,
   formatFileSize,
-  validateFileSize,
-  validateFileType,
+  getFileExtension,
 };
 
 export default FileService;

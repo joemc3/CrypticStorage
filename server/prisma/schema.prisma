@@ -1,4 +1,7 @@
-// Prisma Schema for CrypticStorage
+// CrypticStorage database schema.
+//
+// The server only ever stores ciphertext and wrapped keys. Every column whose
+// name starts with "encrypted" or "wrapped" is opaque to the server.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,181 +13,167 @@ datasource db {
 }
 
 model User {
-  id                    String    @id @default(uuid())
-  email                 String    @unique
-  username              String    @unique
-  passwordHash          String    @map("password_hash")
-  salt                  String
-  masterKeyEncrypted    String    @map("master_key_encrypted")
-  publicKey             String    @map("public_key")
-  privateKeyEncrypted   String    @map("private_key_encrypted")
-  totpSecretEncrypted   String?   @map("totp_secret_encrypted")
-  storageQuota          BigInt    @default(10737418240) @map("storage_quota")
-  storageUsed           BigInt    @default(0) @map("storage_used")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  lastLogin             DateTime? @map("last_login")
-  isActive              Boolean   @default(true) @map("is_active")
-  emailVerified         Boolean   @default(false) @map("email_verified")
+  id                  String   @id @default(uuid())
+  email               String   @unique
+  /// bcrypt hash of the client-derived authentication key (never the password).
+  passwordHash        String   @map("password_hash")
+  /// Base64 salt used by the client KDF. Public, not secret.
+  salt                String
+  kdfIterations       Int      @default(600000) @map("kdf_iterations")
+  /// Master key wrapped with the password-derived wrapping key (client JSON blob).
+  wrappedMasterKey    String   @map("wrapped_master_key")
+  /// RSA-OAEP public key (base64 SPKI) used by other users to share file keys.
+  publicKey           String   @map("public_key")
+  /// RSA private key encrypted with the master key (client JSON blob).
+  encryptedPrivateKey String   @map("encrypted_private_key")
+  storageQuota        BigInt   @default(10737418240) @map("storage_quota")
+  storageUsed         BigInt   @default(0) @map("storage_used")
+  twoFactorEnabled    Boolean  @default(false) @map("two_factor_enabled")
+  /// Active TOTP secret, encrypted at rest with the server key.
+  totpSecretEnc       String?  @map("totp_secret_enc")
+  /// TOTP secret awaiting first successful verification.
+  totpPendingEnc      String?  @map("totp_pending_enc")
+  backupCodeHashes    String[] @default([]) @map("backup_code_hashes")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  lastLoginAt         DateTime? @map("last_login_at")
 
-  files                 File[]
-  folders               Folder[]
-  sessions              Session[]
-  auditLogs             AuditLog[]
-  ownedShares           Share[]
-  sharedFiles           UserShare[] @relation("SharedWith")
-  sharedByMe            UserShare[] @relation("SharedBy")
+  files          File[]
+  folders        Folder[]
+  sessions       Session[]
+  auditLogs      AuditLog[]
+  shareLinks     ShareLink[]
+  sharesGiven    FileShare[] @relation("SharesGiven")
+  sharesReceived FileShare[] @relation("SharesReceived")
 
-  @@index([email])
-  @@index([username])
   @@map("users")
 }
 
-model File {
-  id                    String    @id @default(uuid())
-  userId                String    @map("user_id")
-  parentFolderId        String?   @map("parent_folder_id")
-  filenameEncrypted     String    @map("filename_encrypted")
-  filenameIv            String    @map("filename_iv")
-  fileKeyEncrypted      String    @map("file_key_encrypted")
-  fileSize              BigInt    @map("file_size")
-  encryptedSize         BigInt    @map("encrypted_size")
-  mimeType              String?   @map("mime_type")
-  storagePath           String    @map("storage_path")
-  fileHash              String    @map("file_hash")
-  encryptionAlgorithm   String    @default("AES-256-GCM") @map("encryption_algorithm")
-  thumbnailPath         String?   @map("thumbnail_path")
-  version               Int       @default(1)
-  isDeleted             Boolean   @default(false) @map("is_deleted")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  deletedAt             DateTime? @map("deleted_at")
-
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentFolder          Folder?   @relation(fields: [parentFolderId], references: [id], onDelete: Cascade)
-  versions              FileVersion[]
-  shares                Share[]
-  userShares            UserShare[]
-
-  @@index([userId])
-  @@index([parentFolderId])
-  @@index([fileHash])
-  @@index([isDeleted])
-  @@map("files")
-}
-
 model Folder {
-  id                    String    @id @default(uuid())
-  userId                String    @map("user_id")
-  parentFolderId        String?   @map("parent_folder_id")
-  nameEncrypted         String    @map("name_encrypted")
-  nameIv                String    @map("name_iv")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  isDeleted             Boolean   @default(false) @map("is_deleted")
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  parentId        String?  @map("parent_id")
+  /// Folder name encrypted with the owner's master key.
+  encryptedName   String   @map("encrypted_name")
+  encryptedNameIv String   @map("encrypted_name_iv")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentFolder          Folder?   @relation("FolderHierarchy", fields: [parentFolderId], references: [id], onDelete: Cascade)
-  subFolders            Folder[]  @relation("FolderHierarchy")
-  files                 File[]
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Folder[] @relation("FolderTree")
+  files    File[]
 
-  @@index([userId])
-  @@index([parentFolderId])
+  @@index([userId, parentId])
   @@map("folders")
 }
 
-model FileVersion {
-  id                    String    @id @default(uuid())
-  fileId                String    @map("file_id")
-  versionNumber         Int       @map("version_number")
-  storagePath           String    @map("storage_path")
-  fileSize              BigInt    @map("file_size")
-  fileKeyEncrypted      String    @map("file_key_encrypted")
-  createdAt             DateTime  @default(now()) @map("created_at")
-
-  file                  File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
-
-  @@unique([fileId, versionNumber])
-  @@index([fileId])
-  @@map("file_versions")
+enum FileStatus {
+  PENDING
+  READY
 }
 
-model Share {
-  id                    String    @id @default(uuid())
-  fileId                String    @map("file_id")
-  ownerId               String    @map("owner_id")
-  shareToken            String    @unique @map("share_token")
-  fileKeyEncrypted      String    @map("file_key_encrypted")
-  passwordHash          String?   @map("password_hash")
-  expiresAt             DateTime? @map("expires_at")
-  maxDownloads          Int?      @map("max_downloads")
-  downloadCount         Int       @default(0) @map("download_count")
-  isActive              Boolean   @default(true) @map("is_active")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  lastAccessed          DateTime? @map("last_accessed")
+model File {
+  id               String     @id @default(uuid())
+  userId           String     @map("user_id")
+  folderId         String?    @map("folder_id")
+  /// File name encrypted with the per-file key, so anyone holding the file key can read it.
+  encryptedName    String     @map("encrypted_name")
+  encryptedNameIv  String     @map("encrypted_name_iv")
+  /// Per-file AES key wrapped with the owner's master key.
+  encryptedFileKey String     @map("encrypted_file_key")
+  fileKeyIv        String     @map("file_key_iv")
+  /// Base nonce for the chunked AES-GCM content encryption.
+  contentIv        String     @map("content_iv")
+  /// Size of the ciphertext in bytes, as declared by the client and verified on confirm.
+  encryptedSize    BigInt     @map("encrypted_size")
+  mimeType         String     @default("application/octet-stream") @map("mime_type")
+  storageKey       String     @unique @map("storage_key")
+  status           FileStatus @default(PENDING)
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
-  file                  File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  owner                 User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder     Folder?     @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  shareLinks ShareLink[]
+  shares     FileShare[]
 
-  @@index([shareToken])
-  @@index([fileId])
-  @@index([expiresAt])
-  @@map("shares")
+  @@index([userId, folderId, status])
+  @@map("files")
 }
 
-model UserShare {
-  id                    String    @id @default(uuid())
-  fileId                String    @map("file_id")
-  ownerId               String    @map("owner_id")
-  sharedWithUserId      String    @map("shared_with_user_id")
-  fileKeyEncrypted      String    @map("file_key_encrypted")
-  permission            String    @default("read")
-  createdAt             DateTime  @default(now()) @map("created_at")
+/// Anonymous share link. The file key travels in the URL fragment and never reaches the server.
+model ShareLink {
+  id              String    @id @default(uuid())
+  token           String    @unique
+  fileId          String    @map("file_id")
+  ownerId         String    @map("owner_id")
+  passwordHash    String?   @map("password_hash")
+  expiresAt       DateTime? @map("expires_at")
+  maxDownloads    Int?      @map("max_downloads")
+  downloadCount   Int       @default(0) @map("download_count")
+  revokedAt       DateTime? @map("revoked_at")
+  lastAccessedAt  DateTime? @map("last_accessed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
-  file                  File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  owner                 User      @relation("SharedBy", fields: [ownerId], references: [id], onDelete: Cascade)
-  sharedWithUser        User      @relation("SharedWith", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+  file  File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  @@unique([fileId, sharedWithUserId])
   @@index([fileId])
-  @@index([sharedWithUserId])
-  @@map("user_shares")
+  @@map("share_links")
+}
+
+/// User-to-user share. The file key is wrapped with the recipient's RSA public key.
+model FileShare {
+  id               String    @id @default(uuid())
+  fileId           String    @map("file_id")
+  ownerId          String    @map("owner_id")
+  recipientId      String    @map("recipient_id")
+  encryptedFileKey String    @map("encrypted_file_key")
+  permissions      String    @default("read")
+  expiresAt        DateTime? @map("expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  file      File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  owner     User @relation("SharesGiven", fields: [ownerId], references: [id], onDelete: Cascade)
+  recipient User @relation("SharesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, recipientId])
+  @@index([recipientId])
+  @@map("file_shares")
 }
 
 model Session {
-  id                    String    @id @default(uuid())
-  userId                String    @map("user_id")
-  tokenHash             String    @unique @map("token_hash")
-  expiresAt             DateTime  @map("expires_at")
-  ipAddress             String?   @map("ip_address")
-  userAgent             String?   @map("user_agent")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  lastActivity          DateTime  @default(now()) @map("last_activity")
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  refreshTokenHash String   @unique @map("refresh_token_hash")
+  expiresAt        DateTime @map("expires_at")
+  ipAddress        String?  @map("ip_address")
+  userAgent        String?  @map("user_agent")
+  createdAt        DateTime @default(now()) @map("created_at")
+  lastUsedAt       DateTime @default(now()) @map("last_used_at")
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([tokenHash])
   @@index([expiresAt])
   @@map("sessions")
 }
 
 model AuditLog {
-  id                    String    @id @default(uuid())
-  userId                String?   @map("user_id")
-  action                String
-  resourceType          String?   @map("resource_type")
-  resourceId            String?   @map("resource_id")
-  ipAddress             String?   @map("ip_address")
-  userAgent             String?   @map("user_agent")
-  success               Boolean   @default(true)
-  errorMessage          String?   @map("error_message")
-  createdAt             DateTime  @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id")
+  action       String
+  resourceType String?  @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  success      Boolean  @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@index([userId])
-  @@index([action])
-  @@index([createdAt])
+  @@index([userId, createdAt])
   @@map("audit_logs")
 }

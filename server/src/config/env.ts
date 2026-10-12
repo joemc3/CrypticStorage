@@ -1,0 +1,84 @@
+import dotenv from 'dotenv';
+import { z } from 'zod';
+
+dotenv.config();
+
+const PLACEHOLDER_SECRETS = new Set([
+  'your-super-secret-jwt-key-change-in-production',
+  'changeme',
+  'secret',
+]);
+
+const boolean = z
+  .union([z.boolean(), z.string()])
+  .transform((v) => (typeof v === 'boolean' ? v : ['1', 'true', 'yes'].includes(v.toLowerCase())));
+
+const schema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(4000),
+    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).optional(),
+    TRUST_PROXY: boolean.default(false),
+
+    DATABASE_URL: z.string().min(1),
+
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(15 * 60),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+    CONTENT_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(15 * 60),
+    /** 32-byte key (base64 or hex) used to encrypt TOTP secrets at rest. Derived from JWT_SECRET if absent. */
+    SERVER_ENCRYPTION_KEY: z.string().optional(),
+
+    /** Origin of the web app, used for share links and CORS. */
+    APP_URL: z.string().url().default('http://localhost:3000'),
+    /** Public base URL of this API as seen by browsers. Empty means same-origin "/api". */
+    API_PUBLIC_URL: z.string().default(''),
+    CORS_ORIGINS: z.string().optional(),
+
+    STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+    STORAGE_LOCAL_PATH: z.string().default('./data/storage'),
+    S3_ENDPOINT: z.string().optional(),
+    S3_PORT: z.coerce.number().int().positive().optional(),
+    S3_USE_SSL: boolean.default(false),
+    S3_ACCESS_KEY: z.string().optional(),
+    S3_SECRET_KEY: z.string().optional(),
+    S3_BUCKET: z.string().default('crypticstorage'),
+    S3_REGION: z.string().default('us-east-1'),
+    /** Endpoint browsers can reach. When set, uploads and downloads go straight to S3 with presigned URLs. */
+    S3_PUBLIC_ENDPOINT: z.string().url().optional(),
+
+    DEFAULT_STORAGE_QUOTA_BYTES: z.coerce.number().int().positive().default(10 * 1024 ** 3),
+    MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(5 * 1024 ** 3),
+    PENDING_UPLOAD_TTL_HOURS: z.coerce.number().int().positive().default(24),
+  })
+  .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production' && PLACEHOLDER_SECRETS.has(env.JWT_SECRET)) {
+      ctx.addIssue({ code: 'custom', path: ['JWT_SECRET'], message: 'Placeholder JWT_SECRET is not allowed in production' });
+    }
+    if (env.STORAGE_DRIVER === 's3') {
+      for (const key of ['S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY'] as const) {
+        if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when STORAGE_DRIVER=s3` });
+      }
+    }
+  });
+
+export type Env = z.infer<typeof schema>;
+
+function load(): Env {
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    const lines = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`);
+    throw new Error(`Invalid environment configuration:\n${lines.join('\n')}`);
+  }
+  return parsed.data;
+}
+
+export const env = load();
+
+export const isProd = env.NODE_ENV === 'production';
+export const isTest = env.NODE_ENV === 'test';
+
+export function corsOrigins(): string[] {
+  const configured = env.CORS_ORIGINS?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
+  return Array.from(new Set([env.APP_URL, ...configured]));
+}

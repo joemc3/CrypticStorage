@@ -1,16 +1,15 @@
 # CrypticStorage – working agreements for Claude sessions
 
-## The project journal is mandatory
+## Keep the project journal current
 
-`_PROJECT_JOURNAL.md` at the repo root is the owner's bridge to their Obsidian vault. It is the only record of a cloud session that survives, so:
+`_PROJECT_JOURNAL.md` at the repo root is the record of what happened here. The owner's own agents read it from outside this repo and apply their own rules; this repo does not know or care how. Your only job is to keep it accurate and in the fixed structure described at the top of the file.
 
-1. **Every session that changes anything appends a dated entry** under `## Session log` (newest first) before it ends: what was done, what was verified (test counts, CI result), what is open, and anything the next session would otherwise have to rediscover. Link the session and the commits. Keep it factual.
-2. **Overwrite, do not append, the snapshot sections** `## Current state`, `## Next steps` and `## Decisions` so they always describe now. Tick finished items off the checklist rather than deleting them within the same session; delete them the session after.
-3. **Bump `modified` in the frontmatter** to today's date. Never change `created`.
-4. **Commit the journal with the work**, or as its own commit at the end of the session if the work is already committed. Push it.
-5. **If this session can reach the owner's Obsidian vault** (a local session on their machine), run the sync described under `## How to sync this into the vault` in the journal, then set `vault_synced_through` to the newest synced entry date, commit and push. Cloud sessions cannot reach the vault and must not pretend to.
+Every session that changes anything:
 
-The frontmatter follows the vault's conventions: `status/*` and `type/*` tags, `created`/`modified` as ISO dates, wiki-links allowed.
+1. Appends one dated entry under `## Session log`, newest first, with the heading form `YYYY-MM-DD · <where it ran> · <one-line summary>`. Say what was done, what was verified (test counts, CI result), what is open, and anything the next session would otherwise have to rediscover. Link the session and the commits. Facts only.
+2. Overwrites the snapshot sections `## Current state`, `## Next steps` and `## Decisions` so they describe now. Tick finished items rather than deleting them within the same session; drop them the session after.
+3. Sets `updated` and `last_session` in the frontmatter. Does not add other frontmatter fields or change the section order; agents downstream parse it.
+4. Commits the journal with the work, or as its own commit at the end, and pushes.
 
 ## How to run and verify
 
@@ -21,7 +20,7 @@ The frontmatter follows the vault's conventions: `status/*` and `type/*` tags, `
 
 ## Code conventions that matter here
 
-- The client's API types in `client/src/services/api.service.ts` are the contract. Change the server to match the client, not the reverse, unless the change is discussed in the journal's Decisions table.
+- The client's API types in `client/src/services/api.service.ts` are the contract. Change the server to match the client, not the reverse, unless the change is recorded in the journal's Decisions table.
 - Everything cryptographic lives in `client/src/services/crypto.service.ts`. Changing the content format, the KDF or the key hierarchy needs a new format version, a migration story and a line in `SECURITY.md`.
 - The server never receives plaintext names, content or keys. If a change would send any of those, it is wrong.
 - Server tests share one database; jest runs with `maxWorkers: 1` on purpose.

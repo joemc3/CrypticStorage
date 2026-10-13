@@ -1,23 +1,18 @@
 ---
-title: CrypticStorage
-aliases: [CrypticStorage journal, crypticstorage]
-created: 2026-10-12
-modified: 2026-10-13
-tags: [status/active, type/project, topic/tech/code, topic/tech/devops, topic/work/crypticstorage]
-status: active
-type: project
-project: crypticstorage
-repo: "https://github.com/joemc3/CrypticStorage"
-vault_synced_through: none
+project: CrypticStorage
+repo: https://github.com/joemc3/CrypticStorage
+journal_format: 1
+updated: 2026-10-13
+last_session: 2026-10-12
 ---
 
-# CrypticStorage
+# CrypticStorage · project journal
 
-> **What this file is.** A running project journal kept *in the repo* so that any Claude session, cloud or local, leaves a record of what it did and what comes next. It is written as an Obsidian note: copy it into the vault as-is, or let a local session merge it. The `vault_synced_through` field in the frontmatter records the date of the newest session entry that has been imported into the vault, so nothing is imported twice. The protocol is in [[#How to sync this into the vault]] and in `CLAUDE.md`.
+This file is the record of every working session on this repository, kept here because a cloud session cannot write anywhere else. It is meant to be read by the owner's own agents and notebooks, which apply their own rules to it. It prescribes nothing about where or how it is ingested.
+
+Structure is fixed so it can be parsed: the frontmatter above, then the four sections below in this order. **Current state**, **Next steps** and **Decisions** are snapshots that each session overwrites. **Session log** is append-only, newest first, one `###` heading per session in the form `YYYY-MM-DD · <where it ran> · <one-line summary>`.
 
 ## Current state
-
-*(Overwritten each session. One screen, no history.)*
 
 Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is green on GitHub, and an end-to-end run drives the real client crypto against the real API.
 
@@ -45,33 +40,19 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | Date | Decision | Why |
 |---|---|---|
 | 2026-10-12 | The client's API design is the contract; the server was rewritten to match it | Client, server and tests each targeted a different API; the client's presigned-URL upload flow was the best of the three |
-| 2026-10-12 | Old server sources left in tree under exclude lists instead of deleted | Sandbox refused `rm` and `git mv`; nothing lost, user deletes locally |
+| 2026-10-12 | Old server sources left in tree under exclude lists instead of deleted | Sandbox refused `rm` and `git mv`; nothing lost, owner deletes locally |
 | 2026-10-12 | Email is the KDF salt (Bitwarden style) | No prelogin round trip; cost is that email changes need a re-wrap, so the UI does not offer them |
 | 2026-10-12 | File names encrypted under the per-file key, not the master key | Lets link holders and share recipients read the name without the master key |
 | 2026-10-12 | Share links carry the file key in the URL fragment | Fragment never reaches the server, so the server can gate access without being able to decrypt |
 | 2026-10-12 | Redis dropped from the stack | Nothing needed it; fewer moving parts |
 | 2026-10-12 | Tests run against a real embedded Postgres, not mocks | The previous mocked suite had never executed and could not catch contract drift |
 
-## How to sync this into the vault
-
-For a Claude session running locally with vault access (or for a human doing it by hand):
-
-1. Target note: `Projects/CrypticStorage.md` in the vault (create it if missing; adjust the path to taste and record it here).
-2. Copy the frontmatter, **Current state**, **Next steps** and **Decisions** sections over the vault note's versions. They are snapshots, not history.
-3. Append every entry under **Session log** whose date is newer than `vault_synced_through` to the vault note's own session log.
-4. Set `vault_synced_through` in *this* file to the newest entry date, commit it, and push.
-5. If the vault has a projects MOC or a daily note for today, add a `[[CrypticStorage]]` link there.
-
-Cloud sessions cannot reach the vault. They only append here and bump `modified`.
-
 ## Session log
 
-*(Newest first. Each entry: what was done, what was verified, what is open. Keep entries factual; link commits.)*
-
-### 2026-10-12 · Cloud session · from "never run" to green CI
+### 2026-10-12 · cloud session · from "never run" to green CI
 
 Session: https://claude.ai/code/session_01DRpW3oXX4GMqssrs4CpRTV
-Branch: `ccr-1fec1232-1akfhk` · Commits: `fa66a9f`, `f3b09de`, `341ca35`, `85afed1`
+Branch: `ccr-1fec1232-1akfhk` · Commits: `fa66a9f`, `f3b09de`, `341ca35`, `85afed1`, `08311c3`
 
 **Started with** an assessment: 23k generated lines, neither half compiled (78 + 75 type errors), zero tests had ever run, client and server spoke different APIs, and the file encryption reused one AES-GCM nonce for every chunk. Reported this, then was told to make it run and keep going.
 
@@ -80,6 +61,7 @@ Branch: `ccr-1fec1232-1akfhk` · Commits: `fa66a9f`, `f3b09de`, `341ca35`, `85af
 - Fixed the client build and rewrote its crypto: PBKDF2-SHA256 at 600k iterations split into a device-only wrapping key and a server-side auth hash; random key per file; names encrypted under the file key; 1 MiB AES-GCM chunks with per-chunk nonces and chunk index and count in the AAD. Locked-vault screen with offline unlock, 2FA login step, real upload progress, share dialog and a working public share page.
 - Wrote tests at three levels: server integration (Jest + supertest, embedded Postgres locally, service container in CI), client crypto units (vitest), and an end-to-end script that boots the real API and drives the real client services from Node.
 - Docker Compose rebuilt (refuses placeholder secrets), GitHub Actions with three jobs, README / PROJECT_SUMMARY / SECURITY rewritten honestly.
+- Added this journal and `CLAUDE.md`.
 
 **Verified**: server 43/43, client 10/10, e2e 6/6, GitHub Actions run 1 green on all three jobs.
 
@@ -88,4 +70,4 @@ Branch: `ccr-1fec1232-1akfhk` · Commits: `fa66a9f`, `f3b09de`, `341ca35`, `85af
 - No PR opened; branch is pushed and green.
 - Roadmap items above, recovery key first.
 
-**Worth remembering**: the first `npm install` in the cloud produced two lockfiles that had never been committed; `prisma/migrations` was gitignored; `jest` must run with one worker because every suite shares a database.
+**Worth remembering**: the first `npm install` in the cloud produced two lockfiles that had never been committed; `prisma/migrations` was gitignored; jest must run with one worker because every suite shares a database.

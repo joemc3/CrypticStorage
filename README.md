@@ -2,6 +2,8 @@
 
 Zero-knowledge, end-to-end encrypted file storage. Files, file names and folder names are encrypted in the browser with keys that never leave it. The server stores ciphertext, wrapped keys and metadata it cannot read.
 
+**📓 Journal:** [`_PROJECT_JOURNAL.md`](_PROJECT_JOURNAL.md) is the running log of every working session, written as an Obsidian note. Read it first; append to it last.
+
 **Status:** working alpha. Both halves compile, the API has an integration suite against a real Postgres, the crypto has unit tests, and an end-to-end run exercises the real client against the real server. It has not had an external security review. See [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) for what exists, what is missing and the roadmap, and [SECURITY.md](SECURITY.md) for the threat model.
 
 ## What it does

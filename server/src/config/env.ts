@@ -65,7 +65,10 @@ const schema = z
 export type Env = z.infer<typeof schema>;
 
 function load(): Env {
-  const parsed = schema.safeParse(process.env);
+  // Env files and compose templates leave unset values as empty strings (`S3_PUBLIC_ENDPOINT=`).
+  // Treat those as absent so optional fields fall back to their defaults instead of failing validation.
+  const raw = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ''));
+  const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`);
     throw new Error(`Invalid environment configuration:\n${lines.join('\n')}`);

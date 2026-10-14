@@ -1,5 +1,9 @@
 # ---- build ---------------------------------------------------------------
 FROM node:22-alpine AS build
+# Prisma picks its engine binaries by detecting the OpenSSL version at `prisma generate`.
+# Without the openssl package it cannot detect one, defaults to OpenSSL 1.1 engines, and
+# those fail to load at runtime because Alpine 3.21+ ships only libssl.so.3.
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -14,7 +18,7 @@ RUN npm run build
 
 # ---- runtime -------------------------------------------------------------
 FROM node:22-alpine
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init openssl
 WORKDIR /app
 ENV NODE_ENV=production
 

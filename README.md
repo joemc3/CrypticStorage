@@ -12,21 +12,20 @@ Zero-knowledge, end-to-end encrypted file storage. Files, file names and folder 
 - **Per-file keys.** Every file gets a random AES-256 key, wrapped with the account's master key. File content is sealed in 1 MiB AES-GCM chunks with a per-chunk nonce and the chunk index and count in the authenticated data, so chunks cannot be reordered, dropped or duplicated.
 - **Sharing that stays zero-knowledge.** Anonymous links carry the file key in the URL fragment, which browsers never send to the server; the server can still enforce passwords, expiry and download caps. User-to-user shares wrap the file key with the recipient's RSA-OAEP public key.
 - **Two-factor authentication** with TOTP and single-use backup codes, a locked-vault screen after reload that unlocks offline, password change by re-wrapping the master key, refresh-token rotation, quotas, an audit log.
-- **Storage drivers.** Local filesystem for development, tests and single-node deployments; any S3-compatible store (MinIO, S3, R2) for production, with optional presigned URLs straight from the browser.
+- **Storage drivers.** Local filesystem for development, tests and single-node deployments; any S3-compatible store (AWS S3, R2, Garage, ...) for production, with optional presigned URLs straight from the browser.
 
 ## Run it
 
-Both paths need a one-time setup that creates an env file with generated secrets. After that, starting the app is one command. The two paths use different env files: Docker reads the root `.env`, the no-Docker path reads `server/.env`.
+Both paths need a one-time setup that creates an env file with generated secrets. After that, starting the app is one command. Neither path needs an object store; files go to local disk unless you point the S3 driver at one. The two paths use different env files: Docker reads the root `.env`, the no-Docker path reads `server/.env`.
 
 ### Docker (recommended)
 
-**First time only.** Three values in `.env` are required and have no default; everything else can stay as it is.
+**First time only.** Two values in `.env` are required and have no default; everything else can stay as it is.
 
 ```bash
 cp .env.example .env
 perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|;
-             s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|;
-             s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$(openssl rand -base64 24)|" .env
+             s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|" .env
 ```
 
 **Every time.**
@@ -37,7 +36,7 @@ open http://localhost:3000
 make down          # when finished
 ```
 
-The stack refuses to start with empty or placeholder secrets. MinIO's console is on http://localhost:9001.
+The stack refuses to start with empty or placeholder secrets. Encrypted objects are kept on the `storage_data` volume by the API's local driver; to use an external S3-compatible store instead, set `STORAGE_DRIVER=s3` and the `S3_*` values in `.env` (see the comments there).
 
 ### Without Docker
 

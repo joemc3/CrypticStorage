@@ -22,7 +22,7 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | Client (React, Vite) | builds, 10 crypto unit tests |
 | End-to-end (register → upload → download → share) | 6 tests, runs in CI |
 | Crypto | per-file keys, chunked AES-GCM with per-chunk nonces, KDF-split auth, keys in link fragments |
-| Ops | Docker Compose with MinIO, GitHub Actions, no-Docker path on embedded Postgres |
+| Ops | Docker Compose (Postgres + API on a volume + nginx web), GitHub Actions, no-Docker path on embedded Postgres. Stack verified running locally 2026-10-14 |
 | Branch | `master`; PR #2 merged 2026-10-13. Origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` has one unmerged commit and no PR |
 
 ## Next steps
@@ -30,6 +30,7 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 - [ ] Delete the old generated server sources (command in README under "Repository cleanup still pending"). A sandbox permission blocked it in the cloud session.
 - [x] Open a PR from `ccr-1fec1232-1akfhk` to `master` and merge. (PR #2, merged 2026-10-13)
 - [ ] Review origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` (security fixes, UI redesign, spec compliance); merge or discard.
+- [ ] Add `docker compose build` (or a smoke `up`) to CI; the image had never been built before 2026-10-14 and had two startup bugs.
 - [ ] Recovery key at signup, so a forgotten password is not fatal.
 - [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
 - [ ] Passkeys / WebAuthn.
@@ -47,25 +48,34 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | 2026-10-12 | Share links carry the file key in the URL fragment | Fragment never reaches the server, so the server can gate access without being able to decrypt |
 | 2026-10-12 | Redis dropped from the stack | Nothing needed it; fewer moving parts |
 | 2026-10-12 | Tests run against a real embedded Postgres, not mocks | The previous mocked suite had never executed and could not catch contract drift |
+| 2026-10-14 | MinIO dropped from the Docker stack; the API's local driver on a named volume is the default | MinIO deleted its Docker Hub and Quay images in September 2026 and the last free release carries an auth-bypass CVE. The stack streamed through the API anyway, so MinIO added a service and two secrets for nothing. The S3 driver stays for external stores (S3, R2, Garage) via `STORAGE_DRIVER=s3` in `.env` |
 
 ## Session log
 
-### 2026-10-14 · local (Claude Code) · env setup documented in README and both example env files
+### 2026-10-14 · local (Claude Code) · env setup documented; Docker stack made to actually start (MinIO gone, OpenSSL, empty env values, local Postgres)
 
-Session: Claude Code, local checkout · Branch: `master` · Commits: `10497bb`, plus the follow-up that split first-time from every-time
+Session: Claude Code, local checkout · Branch: `master` · Commits: `10497bb`, `aec80d1`, plus the stack fix below
 
-**Started with** the owner having copied `.env.example` to `.env` and asking what to put in it. The answer was not in one place: the root `.env` is only for Docker Compose, `server/.env` is only for `make dev-api`, and the example's `DATABASE_URL` points at port 5432 while `make dev-db` serves on 54321.
+**Started with** the owner having copied `.env.example` to `.env` and asking what to put in it, then running `docker compose up` and hitting `pull access denied for minio/minio`.
 
 **Did**
-- README "Run it": each path is split into **First time only** (copy the example env file and fill it with a one-shot `perl -pi` + `openssl rand` command; three secrets for Docker, `JWT_SECRET` and the embedded-Postgres `DATABASE_URL` for the no-Docker path) and **Every time** (`make up` / the three `make dev-*` terminals). The first draft mixed the two in one code block and read as if the env file had to be recreated on every start; the owner caught that.
-- Same explanation and command added as a header comment in `.env.example` and `server/.env.example`.
-- Journal: ticked the stale "open a PR" item (PR #2 merged 2026-10-13), fixed the branch row, added the unmerged redesign branch as a next step.
+- README "Run it": each path is split into **First time only** (copy the example env file and fill it with a one-shot `perl -pi` + `openssl rand` command) and **Every time** (`make up` / the three `make dev-*` terminals). The first draft mixed the two and read as if the env file had to be recreated on every start; the owner caught that. Same explanation in the headers of both example env files.
+- Docker stack: removed the MinIO service. MinIO deleted its Docker Hub repositories around 2026-09-11 and the Quay mirror followed, so no tag pulls anywhere. The API now runs the local driver with `/app/data` on a `storage_data` volume; `.env` needs only `JWT_SECRET` and `POSTGRES_PASSWORD`. The S3 driver is still wired through `STORAGE_DRIVER=s3` + `S3_*` in `.env` for an external store.
+- Server image: `apk add openssl` in both Dockerfile stages. Without it Prisma 5.22 cannot detect the OpenSSL version at `prisma generate`, falls back to OpenSSL 1.1 engines, and `prisma migrate deploy` dies on Alpine 3.24 (only `libssl.so.3`) with "Could not parse schema engine response".
+- `server/src/config/env.ts`: empty-string env values are now treated as unset before zod parses. Compose templates like `S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}` pass `""`, which `z.string().url().optional()` rejected, so the API crash-looped with "S3_PUBLIC_ENDPOINT: Invalid url". This would have hit the old MinIO stack too.
+- Embedded Postgres (`server/scripts/embedded-db.mjs`, `server/tests/helpers/globalSetup.ts`): `createPostgresUser` is now `process.getuid?.() === 0`. It was hard-coded `true`, which only works as root (the cloud sandbox); on a normal macOS account `initdb` fails with "Failed to create and initialize a new user on this system", so neither `make dev-db` nor `make test` had ever worked locally.
+- Web image: nginx health check now targets `127.0.0.1` instead of `localhost`. nginx listens on IPv4 only and busybox wget tries `::1` first, so the container sat at "unhealthy" forever even though it served fine.
+- Journal: ticked the stale "open a PR" item (PR #2 merged 2026-10-13), fixed the branch row, recorded the unmerged redesign branch and a "build the image in CI" item.
 
-**Verified**: both fill-in commands run on scratch copies of the example files and produce populated secrets and the right `DATABASE_URL`. No code changed, so the test suites were not run.
+**Verified**
+- `docker compose up -d --build` from a clean state: postgres, api and web all report healthy; `/api/health` through nginx returns `storage: local`.
+- Client e2e suite (`vitest.e2e.config.ts`) run from Node against the live stack on :3000 with the API restarted under `API_PUBLIC_URL=http://localhost:3000/api` (Node's fetch needs absolute content URLs; browsers do not): 6/6, including a multi-chunk upload and byte-for-byte download through the volume.
+- Server suite on the embedded Postgres, locally on macOS for the first time: 43/43. Server and client typecheck clean. Client unit tests 10/10.
+- Both env fill-in commands run on scratch copies of the example files.
 
-**Open**: everything in Next steps; nothing new.
+**Open**: everything in Next steps. The image had never been built before this session; CI does not build it, hence the new next-step item.
 
-**Worth remembering**: `perl -pi` was chosen over `sed -i` because the in-place flag differs between macOS and GNU sed. Within the double-quoted perl expression the `@` in the Postgres URL must be escaped as `\@`.
+**Worth remembering**: `perl -pi` over `sed -i` in docs because the in-place flag differs between macOS and GNU sed; `\@` inside the double-quoted perl expression for the Postgres URL. The old generated sources, `project_standards/` and `server/TESTS_SUMMARY.md` still mention MinIO; they are dead or historical and were left alone.
 
 ### 2026-10-12 · cloud session · from "never run" to green CI
 

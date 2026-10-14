@@ -26,7 +26,7 @@ const pg = new EmbeddedPostgres({
   password: 'postgres',
   port,
   persistent: false,
-  createPostgresUser: true,
+  createPostgresUser: process.getuid?.() === 0, // only root can (and must) create the OS user; a normal account runs as itself
   onLog: () => undefined,
   onError: () => undefined,
 });

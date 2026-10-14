@@ -22,7 +22,7 @@ What is true today, verified by CI:
 
 **Client** (`client/`): React + Vite. The cryptographic design is in one file, `src/services/crypto.service.ts`. Auth, file and share services sit on top. Pages: landing, register, login with 2FA step, locked-vault unlock, dashboard, file manager (folders, breadcrumbs, upload with real progress, preview, share dialog, shared-with-me), settings (password change, fingerprint, 2FA with backup codes, storage, account deletion), public share page.
 
-**Ops**: Docker Compose (Postgres, MinIO, API, nginx-served web app) that refuses placeholder secrets; GitHub Actions running typecheck, tests, build and the end-to-end flow; a no-Docker path using an embedded Postgres.
+**Ops**: Docker Compose (Postgres, API with files on a volume, nginx-served web app) that refuses placeholder secrets; GitHub Actions running typecheck, tests, build and the end-to-end flow; a no-Docker path using an embedded Postgres.
 
 ## Known gaps
 

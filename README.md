@@ -25,7 +25,7 @@ Both paths need a one-time setup that creates an env file with generated secrets
 ```bash
 cp .env.example .env
 perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|;
-             s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|" .env
+             s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 ```
 
 **Every time.**
@@ -108,19 +108,6 @@ Everything is read from the environment and validated at startup (`server/src/co
 | `APP_URL` | web app origin, used for share links and CORS |
 | `API_PUBLIC_URL` | leave empty when `/api` is proxied on the app's origin |
 | `DEFAULT_STORAGE_QUOTA_BYTES`, `MAX_FILE_SIZE_BYTES` | limits |
-
-## Repository cleanup still pending
-
-The original generated server sources are still present under `server/src/{controllers,routes,services,utils}`, `server/src/config/{database,redis,storage}.ts`, `server/src/middleware/*.middleware.ts` and `server/tests/{unit,integration,setup.ts}`. They are excluded from the build, the tests and the Docker image. Delete them with:
-
-```bash
-git rm -r server/src/controllers server/src/routes server/src/services server/src/utils \
-  server/src/config/database.ts server/src/config/redis.ts server/src/config/storage.ts \
-  server/src/middleware/*.middleware.ts server/src/middleware/index.ts \
-  server/tests/unit server/tests/integration server/tests/setup.ts server/tests/README.md
-```
-
-and drop the matching `exclude` entries from `server/tsconfig.json`, `server/tsconfig.test.json` and `server/.dockerignore`.
 
 ## License
 

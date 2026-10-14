@@ -18,21 +18,23 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 
 | Area | State |
 |---|---|
-| Server (Express, Prisma, Postgres) | rebuilt, 43 integration tests on a real Postgres |
+| Server (Express, Prisma, Postgres) | rebuilt, 43 integration tests on a real Postgres; dead generated sources deleted 2026-10-14 |
 | Client (React, Vite) | builds, 10 crypto unit tests |
 | End-to-end (register → upload → download → share) | 6 tests, runs in CI |
 | Crypto | per-file keys, chunked AES-GCM with per-chunk nonces, KDF-split auth, keys in link fragments |
-| Ops | Docker Compose (Postgres + API on a volume + nginx web), GitHub Actions, no-Docker path on embedded Postgres. Stack verified running locally 2026-10-14 |
-| Branch | `main` (renamed from `master` 2026-10-14, protected, PR-only). Origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` has one unmerged commit and no PR |
+| Ops | Docker Compose (Postgres + API on a volume + nginx web), GitHub Actions with four jobs including a Docker build and smoke, no-Docker path on embedded Postgres |
+| Branch | `main` (renamed from `master` 2026-10-14, protected, PR-only). No other branches on origin |
 
 ## Next steps
 
-- [ ] Delete the old generated server sources (command in README under "Repository cleanup still pending"). A sandbox permission blocked it in the cloud session.
+- [x] Delete the old generated server sources. (2026-10-14, stage 1)
 - [x] Open a PR from `ccr-1fec1232-1akfhk` to `master` and merge. (PR #2, merged 2026-10-13)
-- [ ] Review origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` (security fixes, UI redesign, spec compliance); merge or discard.
+- [x] Stale branch `claude/audit-and-redesign-ui-...` reviewed and deleted (2026-10-14).
 - [x] Rename `master` to `main`, protect it, adopt the branch-and-PR convention (this session).
-- [ ] Owner reviews the product core spec (`docs/superpowers/specs/2026-10-14-product-core-design.md`, PR open); then the first stage spec and plan.
-- [ ] Add `docker compose build` (or a smoke `up`) to CI; the image had never been built before 2026-10-14 and had two startup bugs.
+- [x] Product core spec reviewed and merged (PR #4); stage 1 plan merged (PR #5).
+- [x] Add a Docker build and smoke job to CI. (2026-10-14, stage 1)
+- [ ] Owner runs the Claude Design session against `docs/design/brief/` and places the output under `docs/design/output/`; then reconcile here into `docs/design/decisions.md` (spec section 11).
+- [ ] Stage 2: signup as a contract, mandatory email verification, auto-lock; email service enters the stack. Write spec and plan together in one PR.
 - [ ] Recovery key at signup, so a forgotten password is not fatal.
 - [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
 - [ ] Passkeys / WebAuthn.
@@ -54,6 +56,23 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | 2026-10-14 | MinIO dropped from the Docker stack; the API's local driver on a named volume is the default | MinIO deleted its Docker Hub and Quay images in September 2026 and the last free release carries an auth-bypass CVE. The stack streamed through the API anyway, so MinIO added a service and two secrets for nothing. The S3 driver stays for external stores (S3, R2, Garage) via `STORAGE_DRIVER=s3` in `.env` |
 
 ## Session log
+
+### 2026-10-14 · local (Claude Code) · stage 1: dead sources deleted, Docker smoke in CI, design brief written
+
+Session: Claude Code, local checkout · Branch: `chore/stage-1-cleanup-and-brief` · Commits: `593d839`, `3aa6326`, `c08b8d5`, `9a6f3a9`
+
+**Did** (one PR for all of stage 1, per the owner's PR-sizing rule recorded in `CLAUDE.md`)
+- Deleted the generated server sources that the 2026-10-12 rebuild replaced: 40 files under `server/src/{controllers,routes,services,utils}`, `server/src/config/{database,redis,storage}.ts`, five `*.middleware.ts` plus `middleware/index.ts`, `server/tests/{unit,integration,setup.ts,README.md}`, `server/TESTS_SUMMARY.md`. Trimmed the exclude lists in both tsconfigs and `.dockerignore`. Removed the cleanup notes from README, CLAUDE.md and PROJECT_SUMMARY; the summary's roadmap now points at the spec instead of listing a recovery key.
+- CI job `Docker (build + smoke)`: throwaway secrets, `docker compose up --build --wait`, health read through nginx, logs only on failure, teardown always. To be added to branch protection after its first green run.
+- Found and fixed a real setup bug on the way: a base64 `POSTGRES_PASSWORD` can contain `/`, `+` or `=`, which breaks the `postgresql://` URL compose builds (Prisma P1013). README, `.env.example` and CI now generate it with `openssl rand -hex 24`.
+- Design brief under `docs/design/brief/` (README plus five numbered files: product core, principles, screens and flows with 14 verbatim sentences, constraints, current UI inventory), an empty `docs/design/output/`, and `docs/design/decisions.md` for the reconciliation.
+- `CLAUDE.md`: four CI jobs; PR sizing rule; process skills are optional.
+
+**Verified**: server typecheck clean and 43/43 after the deletion; client typecheck clean and 10/10; `git grep` finds no reference to a deleted path outside the journal and history; local rehearsal of the exact CI smoke sequence passes (`status ok`, `storage local`) and tears down to zero containers; workflow YAML parses with four jobs.
+
+**Open**: owner runs Claude Design against the brief; stage 2 spec and plan next, in one PR.
+
+**Worth remembering**: `docker compose up --wait` returns non-zero when a dependency is unhealthy, which is what makes the smoke job honest. The `plan/` and `spec/` branches of this session were too fine-grained; from here, one PR per sitting.
 
 ### 2026-10-14 · local (Claude Code) · env setup documented; Docker stack made to actually start; `main` replaces `master` with the PR convention
 

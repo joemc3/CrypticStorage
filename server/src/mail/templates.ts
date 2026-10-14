@@ -124,11 +124,19 @@ export function releaseCompleted(i: { k: number; time: string; link: string }): 
   };
 }
 
-export function requestCancelled(owner: string, link: string): { subject: string; text: string } {
-  return {
-    subject: `${owner} signed in, so the request is cancelled`,
-    text: `Nothing was released. There is nothing for you to do.\n\n${link}\n`,
-  };
+export type CancelMailReason = 'owner_activity' | 'owner_change' | 'no_release_possible';
+
+export function requestCancelled(owner: string, link: string, reason: CancelMailReason = 'owner_activity'): { subject: string; text: string } {
+  const subject =
+    reason === 'owner_activity'
+      ? `${owner} signed in, so the request is cancelled`
+      : reason === 'owner_change'
+        ? `${owner} changed their safe, so the request is cancelled`
+        : `The release request for ${owner} could not complete`;
+  return { subject, text: `Nothing was released. There is nothing for you to do.
+
+${link}
+` };
 }
 
 /** Recipient copy after a quorum release; emails.md has no separate quorum copy, so this is the timer one. */

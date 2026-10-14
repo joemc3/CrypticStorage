@@ -12,7 +12,7 @@ import { toFileDto } from '../dto';
 import { assertFileOwnership } from '../files/service';
 import { assertFolderOwnership, collectSubtree } from '../folders/service';
 import { RELEASED_STATES_FOR_ACCESS } from './access';
-import { cancelOpenRequests, dropOpenVoteShares } from './requests';
+import { announceCancelled, cancelOpenRequestsTx, dropOpenVoteShares } from './requests';
 import { ruleCoverageGaps } from './coverage';
 import { WARNING_FRACTIONS } from './thresholds';
 import type { addItemsSchema, createRuleSchema, replaceSharesSchema } from './schema';
@@ -193,7 +193,9 @@ export async function createRule(ownerId: string, input: z.infer<typeof createRu
   const target = { fileId: input.fileId ?? null, folderId: input.folderId ?? null };
   assertItemCoverage(await coveredFileIds(ownerId, target), input.items);
 
+  let cancelled: string[] = [];
   const rule = await prisma.$transaction(async (tx) => {
+    cancelled = await cancelOpenRequestsTx(tx, ownerId);
     const created = await tx.handoffRule.create({
       data: { ownerId, ...target, periodDays: input.periodDays, wrappedReleaseKeyOwner: input.wrappedReleaseKeyOwner },
     });
@@ -209,7 +211,7 @@ export async function createRule(ownerId: string, input: z.infer<typeof createRu
     return created;
   });
 
-  await cancelOpenRequests(ownerId, 'owner_change');
+  await announceCancelled(ownerId, cancelled, 'owner_change');
 
   // Mail after the commit. A recipient whose mail failed keeps notifiedAt null; the rule stands.
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: personSelect });
@@ -248,7 +250,9 @@ export function getRule(ownerId: string, id: string) {
 export async function revokeRule(ownerId: string, id: string, req: Request) {
   const rule = await findOwnedRule(ownerId, id);
   assertOpen(rule.state);
+  let cancelled: string[] = [];
   await prisma.$transaction(async (tx) => {
+    cancelled = await cancelOpenRequestsTx(tx, ownerId);
     await lockOpenRule(tx, id);
     await tx.handoffRule.update({ where: { id }, data: { state: 'revoked', revokedAt: new Date(), wrappedReleaseKeyOwner: '' } });
     await tx.handoffRuleRecipient.deleteMany({ where: { ruleId: id } });
@@ -256,7 +260,7 @@ export async function revokeRule(ownerId: string, id: string, req: Request) {
     await tx.handoffRuleShare.deleteMany({ where: { ruleId: id } });
   });
 
-  await cancelOpenRequests(ownerId, 'owner_change');
+  await announceCancelled(ownerId, cancelled, 'owner_change');
 
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: personSelect });
   const link = `${env.APP_URL}/dashboard`;
@@ -281,7 +285,11 @@ export async function replaceShares(ownerId: string, id: string, shares: ShareIn
     witnessIds,
     rule.recipients.map((r) => r.userId)
   );
+  let cancelled: string[] = [];
   await prisma.$transaction(async (tx) => {
+    // First, under the request lock the vote path takes: after this no vote can mix the old split with the new one.
+    cancelled = await cancelOpenRequestsTx(tx, ownerId);
+    await dropOpenVoteShares([id], tx);
     await lockOpenRule(tx, id);
     await tx.handoffRuleShare.deleteMany({ where: { ruleId: id } });
     await tx.handoffRuleShare.createMany({
@@ -289,9 +297,7 @@ export async function replaceShares(ownerId: string, id: string, shares: ShareIn
     });
     await tx.handoffRule.update({ where: { id }, data: { sharesStale: false } });
   });
-  // The old split is gone, and so is anything a witness re-wrapped from it.
-  await dropOpenVoteShares([id]);
-  await cancelOpenRequests(ownerId, 'owner_change');
+  await announceCancelled(ownerId, cancelled, 'owner_change');
   audit(req, { userId: ownerId, action: 'handoff.rule.shares', resourceType: 'handoff_rule', resourceId: id, metadata: { witnesses: shares.length } });
   return detail(ownerId, id);
 }

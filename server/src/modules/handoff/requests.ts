@@ -243,7 +243,7 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
   ]);
   const at = outcome.closedAt ?? new Date();
   if (outcome.cancelled) {
-    await announceCancelled(owner, request.ownerId, requestId, 'no_release_possible');
+    await announceCancelled(request.ownerId, [requestId], 'no_release_possible');
   } else if (outcome.completed) {
     await tryMail(owner.email, releaseCompleted({ k: outcome.count, time: mailTime(at), link: `${env.APP_URL}/dashboard` }), { requestId });
     for (const r of outcome.recipients) {
@@ -275,39 +275,55 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
 
 export type CancelReason = 'owner_activity' | 'owner_change' | 'no_release_possible';
 
-/** Mail every accepted witness that the request is off, and audit it. The one place both happen. */
-async function announceCancelled(owner: { email: string; displayName: string | null }, ownerId: string, requestId: string, reason: CancelReason): Promise<void> {
-  const witnesses = await prisma.witness.findMany({ where: { ownerId, status: 'accepted' }, include: { witness: { select: person } } });
-  for (const w of witnesses) await tryMail(w.witness.email, requestCancelled(name(owner), `${env.APP_URL}/dashboard`), { requestId });
-  audit(undefined, { userId: ownerId, action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: requestId, metadata: { reason } });
-}
+type Tx = Prisma.TransactionClient;
 
 /**
- * Cancel the owner's open request: the owner was seen, or changed something the votes depend on (rules, witnesses,
- * threshold). Each request is cancelled with a conditional update, and only the call that wins it sends the mail and
- * writes the audit record. Nothing was released, so the re-wrapped shares go with it. Never throws.
+ * Cancel the owner's open requests inside the caller's transaction and return the ids it cancelled. It takes the same
+ * row lock the vote path takes, so a vote either finished before this runs or finds the request closed afterwards.
+ * Callers do this BEFORE writing whatever made the votes obsolete, and call `announceCancelled` after they commit.
+ * Nothing was released, so the re-wrapped shares go with the request.
  */
+export async function cancelOpenRequestsTx(tx: Tx, ownerId: string): Promise<string[]> {
+  const open = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM release_requests WHERE owner_id = ${ownerId} AND state = 'open' ORDER BY id FOR UPDATE`;
+  const won: string[] = [];
+  for (const { id } of open) {
+    const res = await tx.releaseRequest.updateMany({ where: { id, state: 'open' }, data: { state: 'cancelled', closedAt: new Date() } });
+    if (res.count === 0) continue;
+    await tx.releaseVoteShare.deleteMany({ where: { requestId: id } });
+    won.push(id);
+  }
+  return won;
+}
+
+/** Mail every accepted witness that each request is off, and audit it. The one place both happen. Never throws. */
+export async function announceCancelled(ownerId: string, requestIds: string[], reason: CancelReason): Promise<void> {
+  if (requestIds.length === 0) return;
+  try {
+    const [owner, witnesses] = await Promise.all([
+      prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: person }),
+      prisma.witness.findMany({ where: { ownerId, status: 'accepted' }, include: { witness: { select: person } } }),
+    ]);
+    for (const requestId of requestIds) {
+      for (const w of witnesses) await tryMail(w.witness.email, requestCancelled(name(owner), `${env.APP_URL}/dashboard`, reason), { requestId });
+      audit(undefined, { userId: ownerId, action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: requestId, metadata: { reason } });
+    }
+  } catch (err) {
+    logger.warn({ err, ownerId }, 'release request cancel notice failed');
+  }
+}
+
+/** Cancel on its own, for callers with no transaction of their own (owner activity, invite). Never throws. */
 export async function cancelOpenRequests(ownerId: string, reason: CancelReason = 'owner_activity'): Promise<void> {
   try {
-    const open = await prisma.releaseRequest.findMany({ where: { ownerId, state: 'open' }, select: { id: true } });
-    if (open.length === 0) return;
-    const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: person });
-    for (const { id } of open) {
-      const won = await prisma.$transaction(async (tx) => {
-        const res = await tx.releaseRequest.updateMany({ where: { id, state: 'open' }, data: { state: 'cancelled', closedAt: new Date() } });
-        if (res.count === 0) return false;
-        await tx.releaseVoteShare.deleteMany({ where: { requestId: id } });
-        return true;
-      });
-      if (won) await announceCancelled(owner, ownerId, id, reason);
-    }
+    const ids = await prisma.$transaction((tx) => cancelOpenRequestsTx(tx, ownerId));
+    await announceCancelled(ownerId, ids, reason);
   } catch (err) {
     logger.warn({ err, ownerId }, 'release request cancel failed');
   }
 }
 
 /** Drop the vote shares that open requests hold for these rules, because the split they came from is gone. */
-export async function dropOpenVoteShares(ruleIds: string[]): Promise<void> {
+export async function dropOpenVoteShares(ruleIds: string[], tx: Tx | typeof prisma = prisma): Promise<void> {
   if (ruleIds.length === 0) return;
-  await prisma.releaseVoteShare.deleteMany({ where: { ruleId: { in: ruleIds }, request: { state: 'open' } } });
+  await tx.releaseVoteShare.deleteMany({ where: { ruleId: { in: ruleIds }, request: { state: 'open' } } });
 }

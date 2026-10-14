@@ -7,7 +7,7 @@ import { audit } from '../../lib/audit';
 import { spkiFingerprint } from '../../lib/crypto';
 import { sendMail } from '../../lib/mail';
 import { witnessInvitation } from '../../mail/templates';
-import { cancelOpenRequests, dropOpenVoteShares } from '../handoff/requests';
+import { announceCancelled, cancelOpenRequestsTx, dropOpenVoteShares } from '../handoff/requests';
 
 interface ActiveRuleRef {
   id: string;
@@ -18,15 +18,24 @@ interface ActiveRuleRef {
  * The accepted set or the threshold changed, so every open rule's shares no longer match it. Flag them and return
  * the list; the owner's client re-splits each release key at next unlock and replaces the shares.
  */
-async function flagOpenRules(ownerId: string): Promise<ActiveRuleRef[]> {
-  await prisma.handoffRule.updateMany({ where: { ownerId, state: { in: ['active', 'warning'] } }, data: { sharesStale: true } });
-  const rules = await prisma.handoffRule.findMany({
-    where: { ownerId, state: { in: ['active', 'warning'] } },
-    select: { id: true, sharesStale: true },
-    orderBy: { createdAt: 'asc' },
+async function flagOpenRules(ownerId: string, cancelRequests = false): Promise<ActiveRuleRef[]> {
+  const { rules, cancelled } = await prisma.$transaction(async (tx) => {
+    // The request lock comes first, so no vote can complete on the old split once the rules read as stale.
+    const cancelled = cancelRequests ? await cancelOpenRequestsTx(tx, ownerId) : [];
+    await tx.handoffRule.updateMany({ where: { ownerId, state: { in: ['active', 'warning'] } }, data: { sharesStale: true } });
+    const rules = await tx.handoffRule.findMany({
+      where: { ownerId, state: { in: ['active', 'warning'] } },
+      select: { id: true, sharesStale: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    // Shares re-wrapped from the old split must not combine with shares from the new one.
+    await dropOpenVoteShares(
+      rules.map((r) => r.id),
+      tx
+    );
+    return { rules, cancelled };
   });
-  // Shares re-wrapped from the old split must not combine with shares from the new one.
-  await dropOpenVoteShares(rules.map((r) => r.id));
+  await announceCancelled(ownerId, cancelled, 'owner_change');
   return rules;
 }
 
@@ -111,8 +120,7 @@ export async function setThreshold(ownerId: string, k: number, req: Request) {
   }
   await prisma.user.update({ where: { id: ownerId }, data: { witnessThreshold: k } });
   audit(req, { userId: ownerId, action: 'witness.threshold', metadata: { k, n } });
-  const activeRules = await flagOpenRules(ownerId);
-  await cancelOpenRequests(ownerId, 'owner_change');
+  const activeRules = await flagOpenRules(ownerId, true);
   return { ...(await getSet(ownerId)), activeRules };
 }
 
@@ -132,18 +140,19 @@ export async function invite(ownerId: string, rawEmail: string, req: Request) {
   if (active >= env.WITNESS_MAX_N) throw new BadRequestError(`You can have at most ${env.WITNESS_MAX_N} witnesses`);
 
   const now = new Date();
-  const row = existing
-    ? await prisma.witness.update({
-        where: { id: existing.id },
-        data: { status: 'invited', invitedAt: now, respondedAt: null },
-        include: withWitness,
-      })
-    : await prisma.witness.create({ data: { ownerId, witnessUserId: target.id, invitedAt: now }, include: withWitness });
+  const { row, cancelled } = await prisma.$transaction(async (tx) => {
+    // The set is changing, so any open request goes first, under the request lock; its mails follow the commit.
+    const cancelled = await cancelOpenRequestsTx(tx, ownerId);
+    const row = existing
+      ? await tx.witness.update({ where: { id: existing.id }, data: { status: 'invited', invitedAt: now, respondedAt: null }, include: withWitness })
+      : await tx.witness.create({ data: { ownerId, witnessUserId: target.id, invitedAt: now }, include: withWitness });
+    return { row, cancelled };
+  });
+  await announceCancelled(ownerId, cancelled, 'owner_change');
 
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: personSelect });
   await sendMail({ to: target.email, ...witnessInvitation(owner.displayName ?? owner.email, `${env.APP_URL}/witness/${row.id}`) });
   audit(req, { userId: ownerId, action: 'witness.invite', resourceType: 'witness', resourceId: row.id });
-  await cancelOpenRequests(ownerId, 'owner_change');
   return entry(row);
 }
 
@@ -154,8 +163,7 @@ export async function remove(ownerId: string, id: string, req: Request) {
 
   const next = await refitThreshold(ownerId);
   audit(req, { userId: ownerId, action: 'witness.remove', resourceType: 'witness', resourceId: id });
-  const activeRules = await flagOpenRules(ownerId);
-  await cancelOpenRequests(ownerId, 'owner_change');
+  const activeRules = await flagOpenRules(ownerId, true);
   return { threshold: next, activeRules };
 }
 

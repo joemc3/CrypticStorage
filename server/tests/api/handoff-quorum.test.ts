@@ -484,9 +484,10 @@ async function sneakRule(s: Setup): Promise<string> {
 }
 
 describe('owner changes and login cancel the request', () => {
-  const cancelledWithMails = async (s: Setup, id: string) => {
+  const cancelledWithMails = async (s: Setup, id: string, wording = 'changed their safe, so the request is cancelled') => {
     expect((await requestRow(id)).state).toBe('cancelled');
-    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in, so the request is cancelled').length).toBeGreaterThanOrEqual(1);
+    for (const wit of s.w.witnesses) expect(mailsTo(wit, wording).length).toBeGreaterThanOrEqual(1);
+    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in')).toHaveLength(0);
     expect(await prisma.releaseVoteShare.count({ where: { requestId: id } })).toBe(0);
   };
 
@@ -495,8 +496,9 @@ describe('owner changes and login cancel the request', () => {
     const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
     clearOutbox();
     await api().post('/api/auth/login').send({ email: s.w.owner.email, passwordHash: s.w.owner.passwordHash }).expect(200);
-    await cancelledWithMails(s, id);
+    expect((await requestRow(id)).state).toBe('cancelled');
     for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in, so the request is cancelled')).toHaveLength(1);
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: id } })).toBe(0);
     expect(await ruleState(s.ruleId)).toBe('active');
   });
 
@@ -580,12 +582,20 @@ describe('vote share lifetime', () => {
     // The one share for rule 2 is gone with the request's completion.
     expect(await prisma.releaseVoteShare.count({ where: { requestId: a, ruleId: rule2 } })).toBe(0);
 
+    // The owner repairs the second rule's shares before the next request.
+    const repaired = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
+    await api().put(`/api/handoff/rules/${rule2}/shares`).set(bearer(s.w.owner)).send({ shares: repaired }).expect(200);
+
     const b = (await open(w0, s.w.owner.id)).body.data.id as string;
     await vote(w0, b, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }])).expect(201);
     const second = await vote(w2, b, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }]));
     expect(second.body.data.state).toBe('completed');
     expect((await prisma.handoffRule.findUniqueOrThrow({ where: { id: rule2 } })).releasedByRequestId).toBe(b);
 
+    // A stray share under the earlier request: only the releasedByRequestId filter keeps it out of the answer.
+    await prisma.releaseVoteShare.create({
+      data: { requestId: a, witnessUserId: w1.id, ruleId: rule2, recipientUserId: s.w.recipient.id, wrappedShare: 'stray' },
+    });
     const forMe = await api().get('/api/handoff/for-me').set(bearer(s.w.recipient)).expect(200);
     const byRule = (id: string) => forMe.body.data.find((r: { id: string }) => r.id === id).voteShares as Array<{ witnessUserId: string }>;
     expect(byRule(rule2).map((x) => x.witnessUserId).sort()).toEqual([w0.id, w2.id].sort());
@@ -605,8 +615,70 @@ describe('vote share lifetime', () => {
     expect(res.body.data.state).toBe('cancelled');
     expect(await ruleState(rule2)).toBe('active');
     expect(await prisma.releaseVoteShare.count({ where: { requestId: id } })).toBe(0);
-    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in, so the request is cancelled')).toHaveLength(1);
+    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'could not complete')).toHaveLength(1);
+    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in')).toHaveLength(0);
     const rows = await auditRows({ action: 'handoff.request.cancel', resourceId: id });
     expect(rows[0]!.metadata).toMatchObject({ reason: 'no_release_possible' });
+  });
+});
+
+/** Wait until `n` backends are blocked on a lock, so the order of the queue is known rather than guessed. */
+async function waitForLockWaiters(n: number): Promise<void> {
+  for (let i = 0; i < 200; i += 1) {
+    const rows = await prisma.$queryRaw<Array<{ c: bigint }>>`SELECT count(*) AS c FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()`;
+    if (Number(rows[0]!.c) >= n) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`fewer than ${n} backends waiting on a lock`);
+}
+
+describe('replacing shares while a vote is in flight', () => {
+  it('serialises behind the request lock: the late vote finds the request cancelled and releases nothing', async () => {
+    const s = await withRule();
+    const [w0, w1] = s.w.witnesses as [TestUser, TestUser];
+    const id = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, id, fullVote(s)).expect(201);
+
+    // Hold the request row lock, start the owner's re-split first, then the vote. Both queue behind the lock in
+    // that order, which is the order that broke when the cancel ran after the share replacement committed.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    const held = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM release_requests WHERE id = ${id} FOR UPDATE`;
+        locked();
+        await gate;
+      },
+      { timeout: 30_000 }
+    );
+    await isLocked;
+    const fresh = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
+    const replacing = api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).set('Connection', 'close').send({ shares: fresh }).then((r) => r);
+    await waitForLockWaiters(1);
+    const voting = vote(w1, id, fullVote(s)).set('Connection', 'close').then((r) => r);
+    await waitForLockWaiters(2);
+    release();
+    await held;
+    const [replaced, voted] = await Promise.all([replacing, voting]);
+
+    expect(replaced.status).toBe(200);
+    expect(voted.status).toBe(409);
+    expect(await ruleState(s.ruleId)).toBe('active');
+    expect((await requestRow(id)).state).toBe('cancelled');
+    expect(await prisma.releaseVoteShare.count({ where: { ruleId: s.ruleId } })).toBe(0);
+  });
+
+  it('a vote built from the old shares snapshot is refused after a re-split', async () => {
+    const s = await withRule();
+    const [w0, w1] = s.w.witnesses as [TestUser, TestUser];
+    const id = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, id, fullVote(s)).expect(201);
+    const fresh = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
+    await api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).send({ shares: fresh }).expect(200);
+    expect((await vote(w1, id, fullVote(s))).status).toBe(409);
+    expect(await ruleState(s.ruleId)).toBe('active');
+    expect(await prisma.releaseVoteShare.count({ where: { ruleId: s.ruleId } })).toBe(0);
   });
 });

@@ -49,12 +49,13 @@ export const SettingsPage: React.FC = () => {
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [savingName, setSavingName] = useState(false);
   const [witnessSet, setWitnessSet] = useState<WitnessSet | null>(null);
+  const [witnessError, setWitnessError] = useState(false);
 
   useEffect(() => {
     let live = true;
     ApiService.getWitnesses()
       .then((w) => live && setWitnessSet(w))
-      .catch(() => undefined);
+      .catch(() => live && setWitnessError(true));
     return () => {
       live = false;
     };
@@ -136,8 +137,11 @@ export const SettingsPage: React.FC = () => {
   const witnesses = (witnessSet?.witnesses ?? []).filter((w) => w.status === 'invited' || w.status === 'accepted');
   const witnessesAccepted = witnesses.filter((w) => w.status === 'accepted').length;
   const witnessesPending = witnesses.length - witnessesAccepted;
-  const witnessLine =
-    witnesses.length === 0
+  const witnessLine = witnessError
+    ? 'Could not load your witnesses.'
+    : !witnessSet
+      ? ''
+      : witnesses.length === 0
       ? 'No witnesses are set.'
       : `Any ${witnessSet?.threshold} of ${witnesses.length} can release what you marked. ${witnessesAccepted} accepted, ${witnessesPending} pending.`;
   const themeName = THEME_OPTIONS.find((o) => o.id === theme)?.name ?? 'System';
@@ -156,7 +160,7 @@ export const SettingsPage: React.FC = () => {
     {
       id: 'witnesses',
       label: 'Witnesses',
-      value: witnesses.length === 0 ? 'None set' : `Any ${witnessSet?.threshold} of ${witnesses.length}${witnessesPending ? ` · ${witnessesPending} pending` : ''}`,
+      value: witnessError ? 'Could not load' : !witnessSet ? undefined : witnesses.length === 0 ? 'None set' : `Any ${witnessSet?.threshold} of ${witnesses.length}${witnessesPending ? ` · ${witnessesPending} pending` : ''}`,
     },
     { id: 'look', label: 'Lock and look', value: `${lockMinutes} ${lockMinutes === 1 ? 'minute' : 'minutes'} · ${themeName} theme` },
     { id: 'storage', label: 'Storage', value: `${formatFileSize(used)} of ${formatFileSize(limit)}` },

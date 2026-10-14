@@ -17,7 +17,7 @@ import { StateBadge, type BadgeState } from '../components/common/StateBadge';
 import { ContactKey, KeyChangedCallout } from '../components/handoff/ContactKey';
 import { toApiError, type WitnessEntry, type WitnessSet } from '../services/api.service';
 import * as WitnessService from '../services/witness.service';
-import { NO_ACCOUNT_MESSAGE, type ContactLookup } from '../services/witness.service';
+import type { ContactLookup } from '../services/witness.service';
 import { useToast } from '../hooks/useToast';
 
 const MIN_K = 2;
@@ -32,14 +32,23 @@ const badgeFor: Record<string, { state: BadgeState; label: string }> = {
 const shortFingerprint = (hex: string) => `${(hex.slice(0, 16).toUpperCase().match(/.{4}/g) ?? []).join(' ')} …`;
 const nameOf = (w: WitnessEntry) => w.user.displayName || w.user.email;
 
+interface StagedWitness {
+  email: string;
+  fingerprint: string;
+}
+
 const WitnessesPage: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const [set, setSet] = useState<WitnessSet | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Everything below is staged. Nothing reaches the server until the one confirmation.
   const [k, setK] = useState(MIN_K);
+  const [staged, setStaged] = useState<StagedWitness[]>([]);
+  const [removals, setRemovals] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveProblems, setSaveProblems] = useState<string[]>([]);
 
   const [email, setEmail] = useState('');
   const [checking, setChecking] = useState(false);
@@ -47,11 +56,12 @@ const WitnessesPage: React.FC = () => {
   const [contact, setContact] = useState<ContactLookup | null>(null);
   const [verified, setVerified] = useState(false);
   const [trusting, setTrusting] = useState(false);
-  const [inviting, setInviting] = useState(false);
 
   const apply = useCallback((next: WitnessSet) => {
     setSet(next);
     setK(next.threshold);
+    setStaged([]);
+    setRemovals([]);
   }, []);
 
   useEffect(() => {
@@ -64,14 +74,16 @@ const WitnessesPage: React.FC = () => {
     };
   }, [apply]);
 
-  const counted = (set?.witnesses ?? []).filter((w) => w.status === 'invited' || w.status === 'accepted');
+  const current = (set?.witnesses ?? []).filter((w) => w.status === 'invited' || w.status === 'accepted');
   const shown = (set?.witnesses ?? []).filter((w) => w.status !== 'removed');
-  const n = counted.length;
-  const maxK = Math.min(n, set?.maxN ?? n);
+  const staying = current.filter((w) => !removals.includes(w.id));
+  // The resulting set: who stays plus who is new.
+  const n = staying.length + staged.length;
+  const maxN = set?.maxN ?? n;
+  const maxK = Math.min(n, maxN);
   const canStep = maxK >= MIN_K;
-  const changed = set !== null && k !== set.threshold;
-
-  const reload = async () => apply(await WitnessService.listWitnesses());
+  const effectiveK = canStep ? Math.min(Math.max(k, MIN_K), maxK) : k;
+  const changed = set !== null && (staged.length > 0 || removals.length > 0 || effectiveK !== set.threshold);
 
   const resetAdd = () => {
     setEmail('');
@@ -90,8 +102,7 @@ const WitnessesPage: React.FC = () => {
       setVerified(found.verifiedInPerson);
     } catch (e) {
       setContact(null);
-      const err = toApiError(e);
-      setLookupError(err.statusCode === 404 || err.code === 'NO_ACCOUNT' ? NO_ACCOUNT_MESSAGE : err.message);
+      setLookupError(e instanceof Error ? e.message : 'Could not look that up');
     } finally {
       setChecking(false);
     }
@@ -112,56 +123,83 @@ const WitnessesPage: React.FC = () => {
     }
   };
 
-  const invite = async () => {
+  const stage = () => {
     if (!contact) return;
-    setInviting(true);
-    try {
-      await WitnessService.invite(contact.email);
-      toast.success(`Invitation sent to ${contact.email}`, 'They count once they accept.');
-      resetAdd();
-      await reload();
-    } catch (e) {
-      const err = toApiError(e);
-      setLookupError(err.statusCode === 404 || err.code === 'NO_ACCOUNT' ? NO_ACCOUNT_MESSAGE : err.message);
-    } finally {
-      setInviting(false);
+    const already = [...current.map((w) => w.user.email), ...staged.map((s) => s.email)].some((e) => e.toLowerCase() === contact.email.toLowerCase());
+    if (already) {
+      setLookupError('They are already in the list.');
+      return;
     }
+    if (n >= maxN) {
+      setLookupError(`You can name at most ${maxN} witnesses.`);
+      return;
+    }
+    setStaged([...staged, { email: contact.email, fingerprint: contact.fingerprint }]);
+    resetAdd();
   };
 
-  const removeWitness = async (w: WitnessEntry) => {
-    try {
-      await WitnessService.remove(w.id);
-      await reload();
-    } catch (e) {
-      toast.error('Could not remove them', toApiError(e).message);
-    }
-  };
+  const toggleRemoval = (id: string) => setRemovals((r) => (r.includes(id) ? r.filter((x) => x !== id) : [...r, id]));
 
-  const saveThreshold = async () => {
+  /** Removals first, then invitations, then the threshold. Failures are collected, not fatal. */
+  const save = async () => {
     setSaving(true);
-    try {
-      apply(await WitnessService.setThreshold(k));
-      setConfirming(false);
-    } catch (e) {
-      toast.error('Could not save', toApiError(e).message);
-      setConfirming(false);
-    } finally {
-      setSaving(false);
+    const problems: string[] = [];
+    for (const id of removals) {
+      const w = current.find((x) => x.id === id);
+      try {
+        await WitnessService.remove(id);
+      } catch (e) {
+        problems.push(`Could not remove ${w ? nameOf(w) : 'a witness'}: ${toApiError(e).message}`);
+      }
     }
+    for (const s of staged) {
+      try {
+        await WitnessService.invite(s.email);
+      } catch (e) {
+        problems.push(`Could not invite ${s.email}: ${toApiError(e).message}`);
+      }
+    }
+    try {
+      const fresh = await WitnessService.listWitnesses();
+      if (canStep && fresh.threshold !== effectiveK) {
+        try {
+          apply(await WitnessService.setThreshold(effectiveK));
+        } catch (e) {
+          problems.push(`Could not set the threshold: ${toApiError(e).message}`);
+          apply(fresh);
+        }
+      } else {
+        apply(fresh);
+      }
+    } catch (e) {
+      problems.push(`Could not reload the list: ${toApiError(e).message}`);
+    }
+    setSaveProblems(problems);
+    if (problems.length === 0) toast.success('Witnesses saved', staged.length ? 'New witnesses count once they accept.' : undefined);
+    setConfirming(false);
+    setSaving(false);
   };
 
   if (confirming) {
     return (
       <OneFact
-        fact={`Any ${k} of these ${n} people, together, can release everything you have marked for handoff.`}
-        action={{ label: 'Save witnesses', onClick: () => void saveThreshold(), disabled: saving }}
+        fact={`Any ${effectiveK} of these ${n} people, together, can release everything you have marked for handoff.`}
+        supporting="New witnesses get an invitation and must accept before they count."
+        action={{ label: 'Save witnesses', onClick: () => void save(), disabled: saving }}
         back={() => setConfirming(false)}
+        backDisabled={saving}
       >
         <ul role="list" className="border-t border-line">
-          {counted.map((w) => (
+          {staying.map((w) => (
             <li key={w.id} className="flex items-center justify-between gap-2 border-b border-line py-2.5 text-sm">
               <span className="break-all text-ink">{nameOf(w)}</span>
               <span className="flex-none text-ink-3">{badgeFor[w.status]?.label}</span>
+            </li>
+          ))}
+          {staged.map((s) => (
+            <li key={s.email} className="flex items-center justify-between gap-2 border-b border-line py-2.5 text-sm">
+              <span className="break-all text-ink">{s.email}</span>
+              <span className="flex-none text-ink-3">Invitation pending</span>
             </li>
           ))}
         </ul>
@@ -170,6 +208,8 @@ const WitnessesPage: React.FC = () => {
   }
 
   const blocked = contact !== null && contact.keyChanged && !verified;
+  const iconButton =
+    'flex h-11 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent';
 
   return (
     <DashboardLayout>
@@ -183,14 +223,25 @@ const WitnessesPage: React.FC = () => {
         </div>
 
         {loadError && <p role="alert" className="text-sm text-danger-text">{loadError}</p>}
+        {saveProblems.length > 0 && (
+          <div role="alert" className="rounded-[10px] bg-danger-soft px-4 py-3.5 text-sm leading-5 text-danger-text">
+            <p className="font-semibold">Some changes did not go through.</p>
+            <ul className="mt-1 list-disc pl-5">
+              {saveProblems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {!set && !loadError && <Spinner size="md" color="text-accent" label="Loading…" />}
 
         {set && (
           <>
-            {shown.length > 0 && (
+            {(shown.length > 0 || staged.length > 0) && (
               <RowList>
                 {shown.map((w) => {
                   const badge = badgeFor[w.status] ?? badgeFor.invited;
+                  const going = removals.includes(w.id);
                   return (
                     <ListRow
                       key={w.id}
@@ -202,20 +253,35 @@ const WitnessesPage: React.FC = () => {
                           <span className="font-mono">{shortFingerprint(w.user.fingerprint)}</span>
                         </span>
                       }
-                      markers={<StateBadge state={badge.state} label={badge.label} />}
+                      markers={going ? <StateBadge state="revoked" label="Will be removed" /> : <StateBadge state={badge.state} label={badge.label} />}
                       actions={
-                        <button
-                          type="button"
-                          aria-label={`Remove ${nameOf(w)}`}
-                          onClick={() => void removeWitness(w)}
-                          className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                        >
-                          <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                        </button>
+                        going ? (
+                          <button type="button" aria-label={`Keep ${nameOf(w)}`} onClick={() => toggleRemoval(w.id)} className={`${iconButton} px-3 text-sm font-medium`}>
+                            Undo
+                          </button>
+                        ) : (
+                          <button type="button" aria-label={`Remove ${nameOf(w)}`} onClick={() => toggleRemoval(w.id)} className={`${iconButton} w-11`}>
+                            <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                          </button>
+                        )
                       }
                     />
                   );
                 })}
+                {staged.map((s) => (
+                  <ListRow
+                    key={`new-${s.email}`}
+                    icon={<UserIcon className="h-5 w-5" />}
+                    title={s.email}
+                    meta={<span className="font-mono">{shortFingerprint(s.fingerprint)}</span>}
+                    markers={<StateBadge state="pending" label="New · invited when you save" />}
+                    actions={
+                      <button type="button" aria-label={`Do not add ${s.email}`} onClick={() => setStaged(staged.filter((x) => x.email !== s.email))} className={`${iconButton} w-11`}>
+                        <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    }
+                  />
+                ))}
               </RowList>
             )}
 
@@ -252,8 +318,8 @@ const WitnessesPage: React.FC = () => {
                     <Button variant="quiet" onClick={resetAdd}>
                       Cancel
                     </Button>
-                    <Button onClick={() => void invite()} isLoading={inviting} disabled={blocked}>
-                      Invite
+                    <Button onClick={stage} disabled={blocked}>
+                      Add
                     </Button>
                   </div>
                 </>
@@ -271,11 +337,11 @@ const WitnessesPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center rounded-lg border border-line-strong bg-surface">
-                  <button type="button" aria-label="Fewer" disabled={!canStep || k <= MIN_K} onClick={() => setK((v) => Math.max(MIN_K, v - 1))} className="h-11 w-11 text-lg text-ink-2 disabled:opacity-40">
+                  <button type="button" aria-label="Fewer" disabled={!canStep || effectiveK <= MIN_K} onClick={() => setK(Math.max(MIN_K, effectiveK - 1))} className="h-11 w-11 text-lg text-ink-2 disabled:opacity-40">
                     −
                   </button>
-                  <output className="w-8 text-center font-medium tabular-nums text-ink">{k}</output>
-                  <button type="button" aria-label="More" disabled={!canStep || k >= maxK} onClick={() => setK((v) => Math.min(maxK, v + 1))} className="h-11 w-11 text-lg text-ink-2 disabled:opacity-40">
+                  <output className="w-8 text-center font-medium tabular-nums text-ink">{effectiveK}</output>
+                  <button type="button" aria-label="More" disabled={!canStep || effectiveK >= maxK} onClick={() => setK(Math.min(maxK, effectiveK + 1))} className="h-11 w-11 text-lg text-ink-2 disabled:opacity-40">
                     +
                   </button>
                 </div>
@@ -284,13 +350,23 @@ const WitnessesPage: React.FC = () => {
             </div>
 
             {changed && (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button variant="quiet" onClick={() => setK(set.threshold)}>
-                  Discard
-                </Button>
-                <Button onClick={() => setConfirming(true)} disabled={!canStep}>
-                  Review and save
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="text-sm text-ink-3">Nothing is saved until you confirm.</p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="quiet"
+                    onClick={() => {
+                      setStaged([]);
+                      setRemovals([]);
+                      setK(set.threshold);
+                    }}
+                  >
+                    Discard
+                  </Button>
+                  <Button onClick={() => setConfirming(true)} disabled={!canStep}>
+                    Review and save
+                  </Button>
+                </div>
               </div>
             )}
           </>

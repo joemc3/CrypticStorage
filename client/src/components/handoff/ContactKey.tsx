@@ -8,7 +8,7 @@ export const KeyChangedCallout: React.FC<{ name: string }> = ({ name }) => (
     <ExclamationTriangleIcon className="h-5 w-5 flex-none" aria-hidden="true" />
     <div className="flex flex-col gap-1">
       <span className="font-semibold">{name} has a new key.</span>
-      <span>It changed since you last shared with them. Check the fingerprint with them before you share again.</span>
+      <span>It changed since you last saw it. Check the fingerprint with them in person or on a call before you continue.</span>
     </div>
   </div>
 );

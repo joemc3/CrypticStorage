@@ -22,7 +22,7 @@ describe('WitnessInvitePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useUIStore.setState({ toasts: [] });
-    vi.spyOn(ApiService, 'getWitnessInvitations').mockResolvedValue({ invitations: [{ id: 'inv1', owner, invitedAt: '2026-10-13T00:00:00.000Z' }], serving: [] });
+    vi.spyOn(ApiService, 'getWitnessInvitations').mockResolvedValue({ invitations: [{ id: 'inv1', owner, invitedAt: '2026-10-13T12:00:00.000Z' }], serving: [] });
   });
 
   it('states the duty, then accepts and confirms calmly', async () => {
@@ -30,12 +30,13 @@ describe('WitnessInvitePage', () => {
     renderAt('inv1');
     expect(await screen.findByRole('heading', { name: 'r.okafor@gmail.com is asking you to be a witness.' })).toBeInTheDocument();
     expect(screen.getByText('Together with others they name, you could release their items to the people they chose. You will never be able to read those items yourself unless you are also a recipient.')).toBeInTheDocument();
+    expect(screen.getByText('Witness invitation · 13 Oct 2026')).toBeInTheDocument();
     expect(accept).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept the duty' }));
     await waitFor(() => expect(accept).toHaveBeenCalledWith('inv1'));
-    expect(await screen.findByText('Nothing to do now. If a release is ever requested, the button will be on your dashboard.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Done' })).toHaveAttribute('href', '/dashboard');
+    expect(await screen.findByText('Nothing is needed from you now. If the time comes, you can request a release from your dashboard.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to dashboard' })).toHaveAttribute('href', '/dashboard');
   });
 
   it('declines and goes to the dashboard', async () => {

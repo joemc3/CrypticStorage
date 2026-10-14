@@ -13,7 +13,9 @@ import { toApiError } from '../services/api.service';
 import * as WitnessService from '../services/witness.service';
 import { useToast } from '../hooks/useToast';
 
-type View = { kind: 'loading' } | { kind: 'ask'; ownerName: string } | { kind: 'accepted'; ownerName: string } | { kind: 'closed' } | { kind: 'error'; message: string };
+type View = { kind: 'loading' } | { kind: 'ask'; ownerName: string; invitedAt: string } | { kind: 'accepted'; ownerName: string } | { kind: 'closed' } | { kind: 'error'; message: string };
+
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 const primaryLink =
   'inline-flex h-11 w-full items-center justify-center rounded-lg bg-accent px-[18px] text-[15px] font-semibold text-accent-ink hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
@@ -31,7 +33,7 @@ const WitnessInvitePage: React.FC = () => {
       .then(({ invitations }) => {
         if (!live) return;
         const found = invitations.find((i) => i.id === id);
-        setView(found ? { kind: 'ask', ownerName: found.owner.displayName || found.owner.email } : { kind: 'closed' });
+        setView(found ? { kind: 'ask', ownerName: found.owner.displayName || found.owner.email, invitedAt: found.invitedAt } : { kind: 'closed' });
       })
       .catch((e) => live && setView({ kind: 'error', message: toApiError(e).message }));
     return () => {
@@ -40,6 +42,7 @@ const WitnessInvitePage: React.FC = () => {
   }, [id]);
 
   const respond = async (decision: 'accept' | 'decline', ownerName: string) => {
+    if (busy) return;
     setBusy(true);
     try {
       if (decision === 'accept') {
@@ -66,14 +69,16 @@ const WitnessInvitePage: React.FC = () => {
   }
 
   if (view.kind === 'ask') {
-    const { ownerName } = view;
+    const { ownerName, invitedAt } = view;
     return (
       <OneFact
+        eyebrow={`Witness invitation · ${formatDate(invitedAt)}`}
         fact={`${ownerName} is asking you to be a witness.`}
         supporting="Together with others they name, you could release their items to the people they chose. You will never be able to read those items yourself unless you are also a recipient."
         action={{ label: 'Accept the duty', onClick: () => void respond('accept', ownerName), disabled: busy }}
         back={() => void respond('decline', ownerName)}
         backLabel="Decline"
+        backDisabled={busy}
         cancel={() => navigate('/dashboard')}
         cancelLabel="Decide later"
       />
@@ -88,9 +93,9 @@ const WitnessInvitePage: React.FC = () => {
             <CheckIcon className="h-7 w-7" aria-hidden="true" />
           </span>
           <h1 className="text-2xl font-semibold leading-[30px] tracking-[-.01em] text-ink">You are a witness for {view.ownerName}.</h1>
-          <p className="text-ink-2">Nothing to do now. If a release is ever requested, the button will be on your dashboard.</p>
+          <p className="text-ink-2">Nothing is needed from you now. If the time comes, you can request a release from your dashboard.</p>
           <Link to="/dashboard" className={primaryLink}>
-            Done
+            Go to dashboard
           </Link>
         </div>
       </PublicFrame>

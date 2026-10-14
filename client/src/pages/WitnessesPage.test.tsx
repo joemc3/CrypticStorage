@@ -69,24 +69,71 @@ describe('WitnessesPage', () => {
     expect(await screen.findByText('Release needs')).toBeInTheDocument();
   });
 
-  it('shows the key and invites only after the person has seen it', async () => {
+  it('stages an invitation and a removal, makes no call until the confirmation, then calls in order', async () => {
     vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(2, three));
     vi.spyOn(ApiService, 'getPublicKey').mockResolvedValue({ id: 'u9', email: 'new@x.co', publicKey: 'K', fingerprint: fp('a'), trust: null });
     vi.spyOn(ApiService, 'markContactSeen').mockResolvedValue({} as never);
-    const inviteSpy = vi.spyOn(ApiService, 'inviteWitness').mockResolvedValue(entry('w4', 'new@x.co', 'invited'));
+    const calls: string[] = [];
+    const inviteSpy = vi.spyOn(ApiService, 'inviteWitness').mockImplementation(async () => { calls.push('invite'); return entry('w4', 'new@x.co', 'invited'); });
+    const removeSpy = vi.spyOn(ApiService, 'removeWitness').mockImplementation(async () => { calls.push('remove'); return { threshold: 2, activeRules: [] }; });
+    const thresholdSpy = vi.spyOn(ApiService, 'setWitnessThreshold').mockImplementation(async () => { calls.push('threshold'); return { ...set(3, three), activeRules: [] }; });
     const { default: CryptoService } = await import('../services/crypto.service');
     vi.spyOn(CryptoService, 'publicKeyFingerprint').mockResolvedValue('aaaa '.repeat(8).trim());
     renderPage();
     await screen.findByText('priya@x.co');
+
     fireEvent.change(screen.getByLabelText('Add a witness by email'), { target: { value: 'new@x.co' } });
-    expect(inviteSpy).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Check key' }));
     expect(await screen.findByLabelText(/^Key fingerprint AAAA/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
-    await waitFor(() => expect(inviteSpy).toHaveBeenCalledWith('new@x.co'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByText('New · invited when you save')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove lena@x.co' }));
+    expect(screen.getByText('Will be removed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(inviteSpy).not.toHaveBeenCalled();
+    expect(removeSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review and save' }));
+    // Resulting set: priya, tom, new = 3 people, k raised to 3.
+    expect(await screen.findByRole('heading', { name: 'Any 3 of these 3 people, together, can release everything you have marked for handoff.' })).toBeInTheDocument();
+    expect(screen.getByText('new@x.co')).toBeInTheDocument();
+    expect(screen.getByText('Invitation pending')).toBeInTheDocument();
+    expect(screen.queryByText('lena@x.co')).toBeNull();
+    expect(inviteSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save witnesses' }));
+    await waitFor(() => expect(thresholdSpy).toHaveBeenCalledWith(3));
+    expect(removeSpy).toHaveBeenCalledWith('w3');
+    expect(inviteSpy).toHaveBeenCalledWith('new@x.co');
+    expect(calls).toEqual(['remove', 'invite', 'threshold']);
   });
 
-  it('draws the red callout when the key changed and holds the invitation until it is re-trusted', async () => {
+  it('undoes a staged removal and bounds the threshold by the resulting number', async () => {
+    vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(3, three));
+    const removeSpy = vi.spyOn(ApiService, 'removeWitness');
+    renderPage();
+    await screen.findByText('priya@x.co');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove tom@x.co' }));
+    expect(screen.getByText('of 2')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('2');
+    fireEvent.click(screen.getByRole('button', { name: 'Keep tom@x.co' }));
+    expect(screen.getByText('of 3')).toBeInTheDocument();
+    expect(removeSpy).not.toHaveBeenCalled();
+  });
+
+  it('reports a partial failure plainly', async () => {
+    vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(2, three));
+    vi.spyOn(ApiService, 'removeWitness').mockRejectedValue({ message: 'Nope', statusCode: 500 });
+    renderPage();
+    await screen.findByText('priya@x.co');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove lena@x.co' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review and save' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save witnesses' }));
+    expect(await screen.findByText('Some changes did not go through.')).toBeInTheDocument();
+    expect(screen.getByText('Could not remove lena@x.co: Nope')).toBeInTheDocument();
+  });
+
+  it('draws the red callout when the key changed and holds the add until it is re-trusted', async () => {
     vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(2, three));
     vi.spyOn(ApiService, 'getPublicKey').mockResolvedValue({
       id: 'u9', email: 'new@x.co', publicKey: 'K', fingerprint: fp('a'),
@@ -102,10 +149,10 @@ describe('WitnessesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check key' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('new@x.co has a new key.');
     expect(seen).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     fireEvent.click(screen.getByRole('switch', { name: 'Mark as verified in person' }));
     await waitFor(() => expect(trust).toHaveBeenCalledWith('u9', true));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Invite' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled());
     expect(within(document.body).queryByRole('alert')).toBeNull();
   });
 

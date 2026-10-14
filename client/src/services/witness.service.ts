@@ -6,7 +6,7 @@
  */
 
 import CryptoService from './crypto.service';
-import ApiService, { type PublicKeyLookup, type WitnessEntry, type WitnessInvitation, type WitnessInvitations, type WitnessSet } from './api.service';
+import ApiService, { toApiError, type PublicKeyLookup, type WitnessEntry, type WitnessInvitation, type WitnessInvitations, type WitnessSet } from './api.service';
 
 export const NO_ACCOUNT_MESSAGE = 'No account with that email, or it is not verified yet.';
 
@@ -27,7 +27,13 @@ const hex = (s: string) => s.replace(/\s+/g, '').toLowerCase();
  * so the caller can show the red callout and the person can re-trust it deliberately.
  */
 export async function lookupContact(email: string): Promise<ContactLookup> {
-  const result = await ApiService.getPublicKey(email.trim().toLowerCase());
+  let result: PublicKeyLookup;
+  try {
+    result = await ApiService.getPublicKey(email.trim().toLowerCase());
+  } catch (error) {
+    const api = toApiError(error);
+    throw new Error(api.statusCode === 404 || api.code === 'NO_ACCOUNT' ? NO_ACCOUNT_MESSAGE : api.message);
+  }
   const localFingerprint = await CryptoService.publicKeyFingerprint(result.publicKey);
   // The local value is the first 128 bits; the server sends the whole SHA-256.
   if (!hex(result.fingerprint).startsWith(hex(localFingerprint))) {

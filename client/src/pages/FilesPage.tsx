@@ -163,8 +163,7 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
         verifiedInPerson: found.verifiedInPerson,
       };
     } catch (error) {
-      const apiError = toApiError(error);
-      throw new Error(apiError.statusCode === 404 ? 'No CrypticStorage account uses that email' : apiError.message);
+      throw new Error(toApiError(error).message);
     }
   };
 

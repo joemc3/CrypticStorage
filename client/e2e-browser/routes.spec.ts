@@ -82,7 +82,7 @@ const witnessSet = {
   ],
 };
 const witnessInvitations = {
-  invitations: [{ id: 'inv1', owner: { id: 'o1', email: 'r.okafor@gmail.com', displayName: null }, invitedAt: '2026-10-13T00:00:00.000Z' }],
+  invitations: [{ id: 'inv1', owner: { id: 'o1', email: 'r.okafor@gmail.com', displayName: null }, invitedAt: '2026-10-13T12:00:00.000Z' }],
   serving: [],
 };
 
@@ -282,6 +282,10 @@ test('inside the safe: locked, dashboard, files, folder, shared, share dialog, s
   await page.waitForLoadState('networkidle');
   await shot(page, info, 'witnesses');
 
+  await page.getByRole('button', { name: 'Remove lena.ortiz@gmail.com' }).click();
+  await expect(page.getByText('Will be removed')).toBeVisible();
+  await shot(page, info, 'witnesses-staged');
+  await page.getByRole('button', { name: 'Keep lena.ortiz@gmail.com' }).click();
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByRole('button', { name: 'Review and save' }).click();
   await expect(page.getByRole('heading', { name: 'Any 3 of these 3 people, together, can release everything you have marked for handoff.' })).toBeVisible();

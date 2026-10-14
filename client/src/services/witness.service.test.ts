@@ -47,4 +47,9 @@ describe('lookupContact', () => {
     await expect(lookupContact('p@x.co')).rejects.toThrow(/does not match/);
     expect(seen).not.toHaveBeenCalled();
   });
+
+  it('turns an unknown account into one plain sentence', async () => {
+    vi.spyOn(ApiService, 'getPublicKey').mockRejectedValue({ message: 'No user', statusCode: 404, code: 'NO_ACCOUNT' });
+    await expect(lookupContact('x@x.co')).rejects.toThrow('No account with that email, or it is not verified yet.');
+  });
 });

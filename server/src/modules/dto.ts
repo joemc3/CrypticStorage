@@ -9,6 +9,9 @@ export function toPublicUser(user: User) {
     storageUsed: Number(user.storageUsed),
     storageLimit: Number(user.storageQuota),
     twoFactorEnabled: user.twoFactorEnabled,
+    displayName: user.displayName,
+    lockAfterMinutes: user.lockAfterMinutes,
+    emailVerifiedAt: user.emailVerifiedAt ? user.emailVerifiedAt.toISOString() : null,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };

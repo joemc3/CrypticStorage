@@ -25,6 +25,9 @@ function toUserData(user: VaultUser): UserData {
     storageUsed: user.storageUsed,
     storageLimit: user.storageLimit,
     twoFactorEnabled: user.twoFactorEnabled,
+    displayName: user.displayName,
+    lockAfterMinutes: user.lockAfterMinutes,
+    emailVerifiedAt: user.emailVerifiedAt,
     createdAt: user.createdAt,
   };
 }

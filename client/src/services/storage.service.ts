@@ -12,6 +12,9 @@ export interface UserData {
   storageUsed: number;
   storageLimit: number;
   twoFactorEnabled: boolean;
+  displayName: string | null;
+  lockAfterMinutes: number;
+  emailVerifiedAt: string | null;
   createdAt: string;
 }
 

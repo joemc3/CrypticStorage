@@ -45,6 +45,9 @@ export interface UserProfile {
   storageUsed: number;
   storageLimit: number;
   twoFactorEnabled: boolean;
+  displayName: string | null;
+  lockAfterMinutes: number;
+  emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -79,7 +82,8 @@ export interface AuthResponse {
 }
 
 export interface UpdateProfileRequest {
-  email?: string;
+  displayName?: string | null;
+  lockAfterMinutes?: number;
   currentPasswordHash?: string;
   newPasswordHash?: string;
   salt?: string;

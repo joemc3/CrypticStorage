@@ -29,19 +29,18 @@ export async function getProfile(userId: string) {
 }
 
 export async function updateProfile(userId: string, sessionId: string, input: z.infer<typeof updateProfileSchema>, req: Request) {
-  const user = await assertPassword(userId, input.currentPasswordHash ?? '');
-
-  if (input.email && input.email !== user.email) {
-    const taken = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
-    if (taken) throw new ConflictError('Email already in use');
-  }
+  const sensitive = Boolean(input.newPasswordHash || input.wrappedMasterKey || input.encryptedPrivateKey || input.salt || input.kdfIterations);
+  // Display name and lock period are not sensitive, so they need no password.
+  if (sensitive) await assertPassword(userId, input.currentPasswordHash ?? '');
+  else await loadUser(userId);
 
   const changingPassword = Boolean(input.newPasswordHash);
   const updated = await prisma.$transaction(async (tx) => {
     const next = await tx.user.update({
       where: { id: userId },
       data: {
-        email: input.email,
+        displayName: input.displayName,
+        lockAfterMinutes: input.lockAfterMinutes,
         passwordHash: input.newPasswordHash ? await hashCredential(input.newPasswordHash) : undefined,
         salt: input.salt,
         kdfIterations: input.kdfIterations,
@@ -59,7 +58,6 @@ export async function updateProfile(userId: string, sessionId: string, input: z.
   audit(req, {
     userId,
     action: changingPassword ? 'user.password_change' : 'user.profile_update',
-    metadata: { emailChanged: Boolean(input.email && input.email !== user.email) },
   });
   return toPublicUser(updated);
 }

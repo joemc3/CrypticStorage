@@ -41,13 +41,47 @@ describe('profile', () => {
     expect((await api().get('/api/users/profile').set(bearer(otherToken))).status).toBe(401); // others revoked
   });
 
-  it('changes the email with password confirmation and refuses taken addresses', async () => {
+  it('does not change the email, even with password confirmation', async () => {
     const user = await registerUser();
-    const other = await registerUser();
-    expect((await api().patch('/api/users/profile').set(bearer(user)).send({ email: other.email, currentPasswordHash: user.passwordHash })).status).toBe(409);
-    const ok = await api().patch('/api/users/profile').set(bearer(user)).send({ email: 'New@Example.com', currentPasswordHash: user.passwordHash });
-    expect(ok.status).toBe(200);
-    expect(ok.body.data.email).toBe('new@example.com');
+    const res = await api().patch('/api/users/profile').set(bearer(user)).send({ email: 'New@Example.com', currentPasswordHash: user.passwordHash });
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBe(user.email);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).email).toBe(user.email);
+  });
+
+  it('reports displayName, lockAfterMinutes and emailVerifiedAt', async () => {
+    const user = await registerUser();
+    const res = await api().get('/api/users/profile').set(bearer(user));
+    expect(res.body.data.displayName).toBeNull();
+    expect(res.body.data.lockAfterMinutes).toBe(5);
+    expect(typeof res.body.data.emailVerifiedAt).toBe('string');
+  });
+
+  it('sets and clears the display name without a password', async () => {
+    const user = await registerUser();
+    const set = await api().patch('/api/users/profile').set(bearer(user)).send({ displayName: 'Joe' });
+    expect(set.status).toBe(200);
+    expect((await api().get('/api/users/profile').set(bearer(user))).body.data.displayName).toBe('Joe');
+    const cleared = await api().patch('/api/users/profile').set(bearer(user)).send({ displayName: null });
+    expect(cleared.status).toBe(200);
+    expect((await api().get('/api/users/profile').set(bearer(user))).body.data.displayName).toBeNull();
+  });
+
+  it('rejects a display name longer than 64 characters', async () => {
+    const user = await registerUser();
+    const res = await api().patch('/api/users/profile').set(bearer(user)).send({ displayName: 'a'.repeat(65) });
+    expect(res.status).toBe(422);
+  });
+
+  it('bounds lockAfterMinutes to 1..30', async () => {
+    const user = await registerUser();
+    const patch = (n: number) => api().patch('/api/users/profile').set(bearer(user)).send({ lockAfterMinutes: n });
+    expect((await patch(0)).status).toBe(422);
+    expect((await patch(31)).status).toBe(422);
+    const low = await patch(1);
+    expect(low.status).toBe(200);
+    expect(low.body.data.lockAfterMinutes).toBe(1);
+    expect((await patch(30)).status).toBe(200);
   });
 
   it('deletes the account together with its files and bytes', async () => {

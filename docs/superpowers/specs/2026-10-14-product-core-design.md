@@ -117,6 +117,7 @@ Folders with breadcrumbs; drag-and-drop upload with progress; previews for text 
 - Email becomes a required service from stage 2 onward. Self-hosters bring SMTP; the hosted service uses a provider.
 - `SECURITY.md` is the document reviewers read. It grows a section for the handoff scheme as that lands, and a dated "review status" section that says plainly who has looked at the design and who has not. An external review is sought and welcomed; nothing in the plan waits for it.
 - A reproducible client build with published hashes is the cheap first step toward attacker 2 and is done early.
+- **Compliance is a goal of the hosted service, pursued after it stands up, never claimed before.** HIPAA is an obligation on whoever handles health data: a hosted safe that holds a clinic's records is a business associate even though it cannot read them, so taking such customers means signed agreements, written policies, breach procedures and risk assessments on the owner's side. SOC 2 is an audit of the operating organization's controls, bought to satisfy enterprise procurement. Both ask for technical properties the core already has or plans: encryption at rest and in transit, access control, auto-lock, an audit log, logging of administrative actions, retention rules. The software keeps those properties and documents how it supports each control. Self-hosters inherit the properties, not the compliance; that is theirs to obtain.
 
 ## 11. Design handoff
 
@@ -138,13 +139,14 @@ The visual and interaction design is produced in Claude Design in a separate ses
 7. Reconcile the design (section 11, step 3) and apply it across the whole UI.
 8. Reproducible client build with published hashes.
 9. The hosted service, with the review status published alongside it. An external review is pursued in parallel and recorded when it happens.
-10. Streaming uploads, passkeys, packaged client, in whatever order matters then.
+10. Compliance readiness for the hosted service: a control-by-control mapping in the docs, audit log export and retention settings, then business associate agreements and a SOC 2 engagement if customers ask for them.
+11. Streaming uploads, passkeys, packaged client, in whatever order matters then.
 
 Each stage gets its own spec and plan under `docs/superpowers/`; this document is the frame they are checked against.
 
 ## 13. Dropped from the 2025 PRD, and staying dropped
 
-Security-question recovery, recovery keys, deduplication, storage analytics dashboard, blockchain integrity, IPFS, real-time collaboration, thumbnails as a priority, 1000-concurrent-user targets, HIPAA and SOC 2 claims. None of them serve a safe.
+Security-question recovery, recovery keys, deduplication, storage analytics dashboard, blockchain integrity, IPFS, real-time collaboration, thumbnails as a priority, 1000-concurrent-user targets. None of them serve a safe. HIPAA and SOC 2 are not dropped; they move from claims in a PRD to a stage of the hosted service (section 10 and stage 10).
 
 ## 14. Open questions
 

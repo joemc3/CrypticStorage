@@ -23,8 +23,8 @@ const SharedPage = lazy(() => import('./pages/SharedPage').then((m) => ({ defaul
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 const LoadingFallback: React.FC = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-    <Spinner size="lg" label="Loading…" />
+  <div className="min-h-screen flex items-center justify-center bg-bg">
+    <Spinner size="lg" color="text-accent" label="Loading…" />
   </div>
 );
 
@@ -94,6 +94,14 @@ const App: React.FC = () => (
           element={
             <ProtectedRoute>
               <FilesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/shared"
+          element={
+            <ProtectedRoute>
+              <FilesPage view="shared" />
             </ProtectedRoute>
           }
         />

@@ -32,7 +32,12 @@ function toDialogLink(link: ShareLinkWithKey): DialogShareLink {
   };
 }
 
-export const FilesPage: React.FC = () => {
+export interface FilesPageProps {
+  /** 'shared' shows only what other people shared with this account. */
+  view?: 'files' | 'shared';
+}
+
+export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
   const navigate = useNavigate();
   const { folderId: routeFolderId } = useParams<{ folderId?: string }>();
   const { files, folders, breadcrumbs, sharedWithMe, selectedFileIds, uploadProgress, isLoading, loadFiles, loadSharedWithMe, uploadFiles, downloadFile, deleteFiles, createFolder, deleteFolder } =
@@ -107,6 +112,50 @@ export const FilesPage: React.FC = () => {
 
   const previewFile = previewId ? files.find((f) => f.id === previewId) ?? null : null;
   const uploads = Array.from(uploadProgress.values());
+
+  const sharedSection = (
+    <section>
+        <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Shared with me</h2>
+        {sharedWithMe.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-400">Nothing has been shared with you yet.</p>}
+        <div className="space-y-2">
+          {sharedWithMe.map((file) => (
+            <div key={file.shareId} className="flex items-center gap-4 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formatFileSize(file.size)} · from {file.sharedBy}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                leftIcon={<ArrowDownTrayIcon className="h-4 w-4" />}
+                onClick={async () => {
+                  try {
+                    const shared = (await ApiService.getSharedWithMe()).find((s) => s.shareId === file.shareId);
+                    if (!shared) throw new Error('Share no longer available');
+                    const decrypted = await FileService.downloadSharedFile(shared);
+                    FileService.saveBlob(decrypted.blob, decrypted.name);
+                  } catch (error) {
+                    addToast({ type: 'error', message: 'Download failed', description: error instanceof Error ? error.message : undefined });
+                  }
+                }}
+              >
+                Download
+              </Button>
+            </div>
+          ))}
+        </div>
+    </section>
+  );
+
+  if (view === 'shared') {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">{sharedSection}</div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -187,41 +236,6 @@ export const FilesPage: React.FC = () => {
           }}
           onFileShare={(id) => void openShare(id)}
         />
-
-        {!currentFolderId && sharedWithMe.length > 0 && (
-          <section>
-            <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Shared with me</h2>
-            <div className="space-y-2">
-              {sharedWithMe.map((file) => (
-                <div key={file.shareId} className="flex items-center gap-4 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatFileSize(file.size)} · from {file.sharedBy}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    leftIcon={<ArrowDownTrayIcon className="h-4 w-4" />}
-                    onClick={async () => {
-                      try {
-                        const shared = (await ApiService.getSharedWithMe()).find((s) => s.shareId === file.shareId);
-                        if (!shared) throw new Error('Share no longer available');
-                        const decrypted = await FileService.downloadSharedFile(shared);
-                        FileService.saveBlob(decrypted.blob, decrypted.name);
-                      } catch (error) {
-                        addToast({ type: 'error', message: 'Download failed', description: error instanceof Error ? error.message : undefined });
-                      }
-                    }}
-                  >
-                    Download
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload files" size="lg">
           <FileUpload onUpload={handleUpload} uploads={uploads} />

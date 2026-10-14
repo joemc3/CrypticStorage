@@ -1,36 +1,28 @@
 /**
  * CrypticStorage - Dashboard Layout
- * Main application layout with sidebar and header
+ * Phone: 60 px top bar and a four-tab bar. Desktop (720 px up): 240 px sidebar with the lock state.
  */
 
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import {
-  HomeIcon,
-  FolderIcon,
-  Cog6ToothIcon,
-  ArrowRightOnRectangleIcon,
-  ShieldCheckIcon,
-  Bars3Icon,
-  XMarkIcon,
-  MoonIcon,
-  SunIcon,
-  LockClosedIcon,
-} from '@heroicons/react/24/outline';
+import { HomeIcon, FolderIcon, ShareIcon, Cog6ToothIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
-import { useUIStore } from '../stores/ui.store';
 import { useIdleLock } from '../hooks/useIdleLock';
+import { Brand } from './PublicFrame';
 
 export interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+  { name: 'Home', href: '/dashboard', icon: HomeIcon },
   { name: 'Files', href: '/files', icon: FolderIcon },
+  { name: 'Shared', href: '/shared', icon: ShareIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
+
+const focus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
@@ -38,162 +30,86 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const { user, logoutUser, lock } = useAuth();
   useIdleLock();
   const lockMinutes = user?.lockAfterMinutes ?? 5;
-  const { theme, setTheme, sidebarOpen, setSidebarOpen } = useUIStore();
+  const account = user?.displayName || user?.email || '';
+
+  const isActive = (href: string) => location.pathname === href || (href === '/files' && location.pathname.startsWith('/files/'));
 
   const handleLogout = async () => {
     await logoutUser();
     navigate('/login');
   };
 
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Mobile menu overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+    <div className="min-h-screen bg-bg text-ink">
+      {/* Phone top bar */}
+      <header className="fixed inset-x-0 top-0 z-30 flex h-[60px] items-center justify-between border-b border-line bg-surface pl-4 pr-2 md:hidden">
+        <Brand to="/dashboard" />
+        <button type="button" onClick={lock} aria-label="Lock now" className={`flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 hover:text-ink ${focus}`}>
+          <LockClosedIcon className="h-5 w-5" />
+        </button>
+      </header>
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}
-      >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center">
-              <ShieldCheckIcon className="h-8 w-8 text-indigo-600 dark:text-indigo-400 mr-2" />
-              <span className="text-xl font-bold text-gray-900 dark:text-white">
-                CrypticStorage
-              </span>
-            </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface md:flex">
+        <div className="px-5 pb-4 pt-5">
+          <Brand to="/dashboard" />
+        </div>
+        <nav aria-label="Main" className="flex-1 space-y-1 px-3">
+          {navigation.map((item) => (
+            <Link
+              key={item.name}
+              to={item.href}
+              aria-current={isActive(item.href) ? 'page' : undefined}
+              className={`flex h-11 items-center gap-3 rounded-lg px-3 font-sans text-[15px] font-medium ${
+                isActive(item.href) ? 'bg-accent-soft text-accent-text' : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
+              } ${focus}`}
             >
-              <XMarkIcon className="h-6 w-6" />
-            </button>
+              <item.icon className="h-5 w-5" aria-hidden="true" />
+              {item.name}
+            </Link>
+          ))}
+        </nav>
+        <div className="space-y-3 border-t border-line px-5 py-4">
+          <div className="flex items-center justify-between gap-2 font-sans text-[13px] leading-[18px] text-ink-3">
+            <span>Unlocked · locks after {lockMinutes} min idle</span>
           </div>
-
-          {/* User info */}
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center">
-              <div className="h-10 w-10 rounded-full bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center text-white font-semibold">
-                {user?.email?.[0]?.toUpperCase() || 'U'}
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {user?.email?.split('@')[0] || 'User'}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {user?.email || ''}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-4 space-y-2">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center px-4 py-3 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <item.icon className="h-5 w-5 mr-3" />
-                  <span className="font-medium">{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Bottom actions */}
-          <div className="px-4 py-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
-            <div className="flex items-center justify-between px-4 pb-2 text-xs text-ink-3">
-              <span>Unlocked · locks after {lockMinutes} min idle</span>
-              <button type="button" onClick={lock} className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">
-                Lock now
-              </button>
-            </div>
-            <button
-              onClick={toggleTheme}
-              className="flex items-center w-full px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              {theme === 'dark' ? (
-                <>
-                  <SunIcon className="h-5 w-5 mr-3" />
-                  <span className="font-medium">Light Mode</span>
-                </>
-              ) : (
-                <>
-                  <MoonIcon className="h-5 w-5 mr-3" />
-                  <span className="font-medium">Dark Mode</span>
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center w-full px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              <ArrowRightOnRectangleIcon className="h-5 w-5 mr-3" />
-              <span className="font-medium">Logout</span>
+          <button type="button" onClick={lock} className={`h-9 w-full rounded-lg border border-line-strong bg-surface font-sans text-sm font-semibold text-ink hover:bg-surface-2 ${focus}`}>
+            Lock now
+          </button>
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate font-sans text-[13px] text-ink-2" title={account}>
+              {account}
+            </p>
+            <button type="button" onClick={() => void handleLogout()} className={`flex-none rounded px-1 font-sans text-[13px] font-medium text-ink-3 hover:text-ink ${focus}`}>
+              Sign out
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Top bar */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
-          <div className="flex items-center justify-between px-4 py-4">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <Bars3Icon className="h-6 w-6" />
-            </button>
-            <div className="flex-1"></div>
-            <button
-              type="button"
-              onClick={lock}
-              aria-label="Lock now"
-              className="lg:hidden text-ink-2 hover:text-ink"
-            >
-              <LockClosedIcon className="h-6 w-6" />
-            </button>
-            <div className="flex items-center gap-4">
-              {/* Additional header actions can go here */}
-            </div>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="p-6">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
+      {/* Content */}
+      <div className="md:pl-60">
+        <main className="px-4 pb-24 pt-[76px] md:px-14 md:pb-14 md:pt-14">
+          <motion.div key={location.pathname} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="mx-auto w-full max-w-[1000px]">
             {children}
           </motion.div>
         </main>
       </div>
+
+      {/* Phone tab bar */}
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface md:hidden">
+        {navigation.map((item) => (
+          <Link
+            key={item.name}
+            to={item.href}
+            aria-current={isActive(item.href) ? 'page' : undefined}
+            className={`flex h-14 flex-col items-center justify-center gap-0.5 font-sans text-xs font-medium ${isActive(item.href) ? 'text-accent-text' : 'text-ink-3'} ${focus}`}
+          >
+            <item.icon className="h-5 w-5" aria-hidden="true" />
+            {item.name}
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 };

@@ -136,16 +136,29 @@ export async function downloadPublicShare(
 // User-to-user
 // ---------------------------------------------------------------------------
 
-export async function shareWithUser(fileId: string, recipientEmail: string, permissions: 'read' | 'write' = 'read', expiresAt?: Date): Promise<UserShare> {
+/**
+ * Share a file with a person. When `verifiedPublicKey` is given (the key whose fingerprint the sender saw),
+ * the file key is wrapped with exactly that key and the directory is not asked a second time, so the
+ * key cannot change between the check and the wrap.
+ */
+export async function shareWithUser(
+  fileId: string,
+  recipientEmail: string,
+  verifiedPublicKey?: string,
+  permissions: 'read' | 'write' = 'read',
+  expiresAt?: Date
+): Promise<UserShare> {
   const metadata = await ApiService.getFile(fileId);
   const fileKey = await fileKeyFor(metadata);
-  let recipient: { publicKey: string };
-  try {
-    recipient = await ApiService.getPublicKey(recipientEmail.trim().toLowerCase());
-  } catch (error) {
-    throw new Error(toApiError(error).statusCode === 404 ? 'No CrypticStorage account uses that email' : toApiError(error).message);
+  let publicKeyB64 = verifiedPublicKey;
+  if (!publicKeyB64) {
+    try {
+      publicKeyB64 = (await ApiService.getPublicKey(recipientEmail.trim().toLowerCase())).publicKey;
+    } catch (error) {
+      throw new Error(toApiError(error).statusCode === 404 ? 'No CrypticStorage account uses that email' : toApiError(error).message);
+    }
   }
-  const publicKey = await CryptoService.importPublicKey(recipient.publicKey);
+  const publicKey = await CryptoService.importPublicKey(publicKeyB64);
   const encryptedFileKey = await CryptoService.wrapKeyForRecipient(fileKey, publicKey);
   try {
     return await ApiService.shareWithUser({ fileId, recipientEmail: recipientEmail.trim().toLowerCase(), encryptedFileKey, permissions, expiresAt: expiresAt?.toISOString() });

@@ -25,6 +25,9 @@ function toUserData(user: VaultUser): UserData {
     storageUsed: user.storageUsed,
     storageLimit: user.storageLimit,
     twoFactorEnabled: user.twoFactorEnabled,
+    displayName: user.displayName,
+    lockAfterMinutes: user.lockAfterMinutes,
+    emailVerifiedAt: user.emailVerifiedAt,
     createdAt: user.createdAt,
   };
 }
@@ -60,7 +63,7 @@ async function openVault(user: VaultUser, wrappingKey: CryptoKey): Promise<void>
 // Registration
 // ============================================================================
 
-export async function register(email: string, password: string): Promise<AuthUser> {
+export async function register(email: string, password: string, displayName: string | undefined, phrase: string): Promise<void> {
   const normalizedEmail = email.trim().toLowerCase();
   const salt = await CryptoService.saltForEmail(normalizedEmail);
   const derived = await CryptoService.deriveKeys(password, salt);
@@ -71,9 +74,9 @@ export async function register(email: string, password: string): Promise<AuthUse
   const wrappedMasterKey = await CryptoService.wrapKey(masterKey, derived.wrappingKey);
   const encryptedPrivateKey = await CryptoService.encryptBytes(await CryptoService.exportPrivateKey(rsa.privateKey), masterKey);
 
-  let response: AuthResponse;
+  const name = displayName?.trim();
   try {
-    response = await ApiService.register({
+    await ApiService.register({
       email: normalizedEmail,
       passwordHash: derived.authHash,
       publicKey,
@@ -81,14 +84,29 @@ export async function register(email: string, password: string): Promise<AuthUse
       wrappedMasterKey: JSON.stringify(wrappedMasterKey),
       salt,
       kdfIterations: derived.iterations,
+      contractPhrase: phrase,
+      ...(name ? { displayName: name } : {}),
     });
   } catch (error) {
     throw new Error(toApiError(error).message);
   }
+  // The safe opens only after the email is verified: no tokens, no vault here.
+}
 
-  persistTokens(response.tokens);
-  await openVault(response.user, derived.wrappingKey);
-  return toUserData(response.user);
+export async function verifyEmail(token: string): Promise<{ email: string }> {
+  try {
+    return await ApiService.verifyEmail(token);
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
+}
+
+export async function resendVerification(email: string): Promise<void> {
+  try {
+    await ApiService.resendVerification(email.trim().toLowerCase());
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
 }
 
 // ============================================================================
@@ -105,7 +123,9 @@ export async function login(email: string, password: string): Promise<LoginResul
     response = await ApiService.login(normalizedEmail, derived.authHash);
   } catch (error) {
     const apiError = toApiError(error);
-    throw new Error(apiError.statusCode === 401 ? 'Invalid email or password' : apiError.message);
+    const failure = new Error(apiError.statusCode === 401 ? 'Invalid email or password' : apiError.message) as Error & { code?: string };
+    failure.code = apiError.code;
+    throw failure;
   }
 
   if (response.requiresTwoFactor) {
@@ -147,6 +167,7 @@ export function cancelTwoFactor(): void {
 // ============================================================================
 
 export function lock(): void {
+  pendingWrappingKey = null;
   StorageService.clearInMemoryData();
 }
 
@@ -187,6 +208,9 @@ export async function refreshProfile(): Promise<AuthUser> {
     storageUsed: profile.storageUsed,
     storageLimit: profile.storageLimit,
     twoFactorEnabled: profile.twoFactorEnabled,
+    displayName: profile.displayName,
+    lockAfterMinutes: profile.lockAfterMinutes,
+    emailVerifiedAt: profile.emailVerifiedAt,
   });
   return StorageService.getUserData()!;
 }
@@ -286,6 +310,8 @@ export function getCurrentUser(): AuthUser | null {
 
 const AuthService = {
   register,
+  verifyEmail,
+  resendVerification,
   login,
   completeTwoFactor,
   cancelTwoFactor,

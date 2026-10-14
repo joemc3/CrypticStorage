@@ -1,0 +1,138 @@
+{
+  "_comment": "Test fixture: only what a server would hold. Regenerate with: node e2e-browser/make-fixture.mts",
+  "passwordSha256": "1ca9120b15dd6b1e23647cef055a55c01ad3e8fdf9c41405bf5150e075c59b8c",
+  "tokens": {
+    "accessToken": "fixture-access",
+    "refreshToken": "fixture-refresh",
+    "expiresAt": 4102444800000
+  },
+  "user": {
+    "id": "u-fixture",
+    "email": "m.hale@fastmail.com",
+    "publicKey": "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2TWg2LDM+Ez3cvwl4AN90gp3/8TEb7Fq/YxDSsIFvJ3vS7SdNmc9JkBi5L8LwAnyHRMwmQNo4OFoY3g/8ZZ85KMSks/FMjmxsbe0j9/inLDk0pD8g93KHcYayxkvntJcxHQhEDObCBDhUb+CPIMuwkxB1AQx/fOCVeYH2HDBHCCNR39UIjqLJqgBkFHMllwA2QNPDMcqoUG/f9ghli5DiIEGMl3ZEWVPZ+wNhsMFwmMQOoGWwEscFb2anPMvET8EhRsOXhEsBgR47pJL6seWueA0xb0cnIZ7GToWIBQ6NjpX9UVvZd9YsrMfXetX9xXqNIOLFjBO0yZ/PbUVWt8Ca1R4NrPUmx8Zj1GMHluGbkWSuEgvYKobrUhPz1YpfAMDDIxrHlog+Btuzd2uRw1DUAHNa434K9rk7iBNi1W5ChVqvKnQl9EUhALTjmPeURIAtVNapNdXkX8xIMASeUsehW3vnKmLTKWTvxi3wH+eyM+xVtJQ/u3qdCZBLH1jVNWTUyIL7SCQsrUymF8+BJ388lOi/tw6cLtH8+nkTDiuJhJx9ybcDMjj56OKF2xAaMrg5ZRbbMNupv/JOY/NcybeH4JvgOMahqPb+IIIw8mO3qNdPtkmONhCziWXGlAi/JnBtlyta9T/Sv1WIeddRHly8R6wx1OmPzpdCxaWEfYplIkCAwEAAQ==",
+    "storageUsed": 40000000,
+    "storageLimit": 1073741824,
+    "twoFactorEnabled": true,
+    "displayName": "Mara Hale",
+    "lockAfterMinutes": 5,
+    "emailVerifiedAt": "2026-09-02T09:00:00.000Z",
+    "createdAt": "2026-09-02T09:00:00.000Z",
+    "updatedAt": "2026-10-12T09:00:00.000Z"
+  },
+  "vault": {
+    "wrappedMasterKey": "{\"data\":\"DwoPeZQIs+fJVhiAlvLKvN8UVeo5yZDHMKJJVWCLid6Ldl1tYq0sslM38otSqrhL\",\"iv\":\"kSc7DSvBkazRvzl9\"}",
+    "encryptedPrivateKey": "{\"data\":\"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\",\"iv\":\"9EFHESVIEE9oI5w6\"}",
+    "publicKey": "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2TWg2LDM+Ez3cvwl4AN90gp3/8TEb7Fq/YxDSsIFvJ3vS7SdNmc9JkBi5L8LwAnyHRMwmQNo4OFoY3g/8ZZ85KMSks/FMjmxsbe0j9/inLDk0pD8g93KHcYayxkvntJcxHQhEDObCBDhUb+CPIMuwkxB1AQx/fOCVeYH2HDBHCCNR39UIjqLJqgBkFHMllwA2QNPDMcqoUG/f9ghli5DiIEGMl3ZEWVPZ+wNhsMFwmMQOoGWwEscFb2anPMvET8EhRsOXhEsBgR47pJL6seWueA0xb0cnIZ7GToWIBQ6NjpX9UVvZd9YsrMfXetX9xXqNIOLFjBO0yZ/PbUVWt8Ca1R4NrPUmx8Zj1GMHluGbkWSuEgvYKobrUhPz1YpfAMDDIxrHlog+Btuzd2uRw1DUAHNa434K9rk7iBNi1W5ChVqvKnQl9EUhALTjmPeURIAtVNapNdXkX8xIMASeUsehW3vnKmLTKWTvxi3wH+eyM+xVtJQ/u3qdCZBLH1jVNWTUyIL7SCQsrUymF8+BJ388lOi/tw6cLtH8+nkTDiuJhJx9ybcDMjj56OKF2xAaMrg5ZRbbMNupv/JOY/NcybeH4JvgOMahqPb+IIIw8mO3qNdPtkmONhCziWXGlAi/JnBtlyta9T/Sv1WIeddRHly8R6wx1OmPzpdCxaWEfYplIkCAwEAAQ==",
+    "salt": "9YMpTohwcJlaSwMQF1smeaMsHMP8+GcOf1kq4B5xSTY=",
+    "kdfIterations": 600000
+  },
+  "stats": {
+    "used": 40000000,
+    "limit": 1073741824,
+    "fileCount": 3,
+    "folderCount": 2
+  },
+  "folders": [
+    {
+      "id": "folder-estate",
+      "userId": "u-fixture",
+      "encryptedName": "l+4wLsyZiDzwVbxVWZwYidRk/96Q/w==",
+      "encryptedNameIV": "YOs+9R/bnabNMyWt",
+      "createdAt": "2026-09-10T10:00:00.000Z",
+      "updatedAt": "2026-09-10T10:00:00.000Z"
+    },
+    {
+      "id": "folder-receipts",
+      "userId": "u-fixture",
+      "encryptedName": "Z80PQCwW0b1BwdbcNRI60HFRCk1tBPHF",
+      "encryptedNameIV": "BUUeRed2OuhdO+nr",
+      "createdAt": "2026-09-12T10:00:00.000Z",
+      "updatedAt": "2026-09-12T10:00:00.000Z"
+    }
+  ],
+  "files": {
+    "root": [
+      {
+        "id": "file-deed",
+        "userId": "u-fixture",
+        "encryptedName": "o3og+cJE4k/6clb+tZb+z5WXr3I2UgIfmL6PdlVWpvwtijU=",
+        "encryptedNameIV": "u/cNJEVXam7Om9mU",
+        "encryptedFileKey": "LmEnBCy+mQfCCUv5Q2IlvzXFuDGfQpmPNurMN4TuKu7G84D9VcAnm1S6a4vl2VmU",
+        "fileKeyIV": "yuWfklaR0L5PqaQb",
+        "iv": "AAAAAAAAAAAAAAAA",
+        "encryptedSize": 2400048,
+        "mimeType": "image/jpeg",
+        "status": "READY",
+        "createdAt": "2026-10-01T10:00:00.000Z",
+        "updatedAt": "2026-10-01T10:00:00.000Z"
+      },
+      {
+        "id": "file-seed",
+        "userId": "u-fixture",
+        "encryptedName": "qrNcbAGbSp9Zdi0gcqSS/sHtdMCwATfNy2Vtu348/rOMNg5UffKF7w71pzU=",
+        "encryptedNameIV": "eLbEF3q4zkuDSxKu",
+        "encryptedFileKey": "uHSo9LQiLQn4PgRTqOCcn3nP3wRP8px0lM7KsRbHp0pIK5vhEPOwdAL0XE0oTofi",
+        "fileKeyIV": "Tm/VkgPMnt8XIIEj",
+        "iv": "AAAAAAAAAAAAAAAA",
+        "encryptedSize": 428,
+        "mimeType": "text/plain",
+        "status": "READY",
+        "createdAt": "2026-09-28T10:00:00.000Z",
+        "updatedAt": "2026-09-28T10:00:00.000Z"
+      }
+    ],
+    "folder-estate": [
+      {
+        "id": "file-tax",
+        "userId": "u-fixture",
+        "folderId": "folder-estate",
+        "encryptedName": "7QHws7jDNkb7+rvZNcKfjGadrg9OA0GMr/WaQJauag2Yw5qWTg==",
+        "encryptedNameIV": "6izCX7UmDh8/7VFa",
+        "encryptedFileKey": "EJIlGHgujdbb7gMbSAa9Gq9IkmbsRmFFVsGXmYbZzWlaawJXNWNeXh+ECpi7gJKK",
+        "fileKeyIV": "PF3wy0Paf7XqnDhP",
+        "iv": "AAAAAAAAAAAAAAAA",
+        "encryptedSize": 184016,
+        "mimeType": "application/pdf",
+        "status": "READY",
+        "createdAt": "2026-10-05T10:00:00.000Z",
+        "updatedAt": "2026-10-05T10:00:00.000Z"
+      }
+    ]
+  },
+  "sharedWithMe": [
+    {
+      "id": "file-shared",
+      "userId": "u-fixture",
+      "encryptedName": "ast4/UC6ShpqSZdvA0oHnpyRCv8e80g+3QTBPZp98j23jIQKAU1BlQ==",
+      "encryptedNameIV": "7XwWkXQ8gAOXPNDA",
+      "encryptedFileKey": "wQXlhm8kOVhvBeJrzcljOF6VCaqppP4i8uqPMCqwTKMTGoBD+XiG+A5VV/V4AzsOTnG/horA/By73yREZV0Jzt20HXmKrHM9dUVAxLdzaxov9X36R8hEyc4dIN2f6j2Gl+yFSS+fsFP3aqpcGvy5Q3HpE1xPU2oytizf0jzt5xgjJYoEgwSetV64grTk9ybYBka77yL0aGuaj/HqAIhwQKoYnXpxVLkFKD/zRTvToShTLrYZfbr2hmy27nLq5fonB9GFZGYdZhkznqxO9f29dCzR7rknFintflNqChccl9Q95IKEVumY8Xct0jN5ZbpnLLa+7kRf/9756sN5AM/GcE2N/HgjHoi47MkyX6SnfKLeb1MNWmiOHJFA5xdZw4n5IpooaOjqHLJ6XUY3z0WEnx+3aQNWdgZNJl/02dO4eNy5z8RuAyHmsrSl5jQpw6gSM8oiJGEyX6lMDDl249nzEVwtEOKRywjW1g+lnGk16ANzEAbgsaHlwxH1E+qJS1+ZOGR0HnJ3c2OIgdGVLez34hjFuTGzVVkn+zhTLEe0GijCYkQ0qBqg7u2tLrGSgXkyTzs1shvMv582mbm8THHIcjxMx1uYgrvWLVejYEX/QwdoxNXEJSou/6OkjM9zZN5aldmyGtdCuZPipy5aEtu5hb2RrRWYviTN+8w6AHHFvqE=",
+      "fileKeyIV": "",
+      "iv": "AAAAAAAAAAAAAAAA",
+      "encryptedSize": 920016,
+      "mimeType": "application/pdf",
+      "status": "READY",
+      "createdAt": "2026-10-08T10:00:00.000Z",
+      "updatedAt": "2026-10-08T10:00:00.000Z",
+      "shareId": "share-1",
+      "permissions": "read",
+      "sharedBy": {
+        "id": "u-sam",
+        "email": "sam.hale@proton.me"
+      }
+    }
+  ],
+  "publicShare": {
+    "info": {
+      "token": "some-token",
+      "fileId": "file-linked",
+      "encryptedName": "B8RWJFlp0zPLo+72uRiY//7wuc2sNWmeumZaMfrhnk3sRrcO",
+      "encryptedNameIV": "GR+5uGqda8Y9BstK",
+      "encryptedSize": 310016,
+      "mimeType": "application/pdf",
+      "iv": "AAAAAAAAAAAAAAAA",
+      "passwordProtected": false,
+      "downloadsRemaining": 3,
+      "sharedBy": "m.hale@fastmail.com"
+    }
+  }
+}

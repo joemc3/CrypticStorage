@@ -14,35 +14,27 @@ Structure is fixed so it can be parsed: the frontmatter above, then the four sec
 
 ## Current state
 
-Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is green on GitHub, and an end-to-end run drives the real client crypto against the real API.
+Stage 2 and the design application are built on `feat/stages-2-5`, awaiting the PR. The product is a safe with a contract signup, mandatory email verification, auto-lock, and the reconciled design on every screen; the handoff subsystem is specified and planned but not started.
 
 | Area | State |
 |---|---|
-| Server (Express, Prisma, Postgres) | rebuilt, 43 integration tests on a real Postgres; dead generated sources deleted 2026-10-14 |
-| Client (React, Vite) | builds, 10 crypto unit tests |
-| End-to-end (register → upload → download → share) | 6 tests, runs in CI |
-| Crypto | per-file keys, chunked AES-GCM with per-chunk nonces, KDF-split auth, keys in link fragments |
-| Ops | Docker Compose (Postgres + API on a volume + nginx web), GitHub Actions with four jobs including a Docker build and smoke, no-Docker path on embedded Postgres |
-| Design | Proposal under `docs/design/output/`, reconciled 2026-10-14 into `docs/design/decisions.md` (14 rows, all adopted or decided); binding on implementation |
-| Branch | `main` (renamed from `master` 2026-10-14, protected, PR-only). No other branches on origin |
-
+| Server (Express, Prisma, Postgres) | 61 integration tests on a real Postgres; stage 2 migration (`stage2_contract_mail`); mail library with `log` and `smtp` drivers; register → verify → login gate; profile `displayName`/`lockAfterMinutes`; activity touch; unverified-account cleanup |
+| Client (React, Vite) | 89 vitest tests; design tokens and self-hosted fonts; `OneFact`; register wizard; verify page; idle lock; every screen restyled; five list components; Playwright smoke (28 checks, 90 screenshots) |
+| End-to-end (register → mail link → verify → login → upload → download → share → lock) | 7 tests, runs in CI |
+| Crypto | unchanged format; `publicKeyFingerprint` (SHA-256 of SPKI) added for display |
+| Ops | Docker Compose forwards `MAIL_DRIVER`, `SMTP_URL`, `MAIL_FROM`; `.env.example` ships `MAIL_DRIVER=log`; CI client job runs the Playwright smoke and uploads `design-screenshots` |
+| Design | applied (stage 2b); deviations recorded in `docs/design/decisions.md`; owner's screenshot review pending |
+| Branch | `feat/stages-2-5` (29 commits from `main` @ `ca32d3e`), PR to open |
 ## Next steps
 
-- [x] Delete the old generated server sources. (2026-10-14, stage 1)
-- [x] Open a PR from `ccr-1fec1232-1akfhk` to `master` and merge. (PR #2, merged 2026-10-13)
-- [x] Stale branch `claude/audit-and-redesign-ui-...` reviewed and deleted (2026-10-14).
-- [x] Rename `master` to `main`, protect it, adopt the branch-and-PR convention (this session).
-- [x] Product core spec reviewed and merged (PR #4); stage 1 plan merged (PR #5).
-- [x] Add a Docker build and smoke job to CI. (2026-10-14, stage 1)
-- [x] Claude Design session run against `docs/design/brief/`; output under `docs/design/output/` on `design/visual-proposal`. (2026-10-14)
-- [x] Reconcile the design into `docs/design/decisions.md` (2026-10-14).
-- [ ] Implement stages 2 to 5 from `docs/superpowers/plans/2026-10-14-stages-2-5-plan.md` on `feat/stages-2-5`, subagent-driven, as far as the session's context allows (stage 2 and the design application first; handoff slices after).
-- [ ] Recovery key at signup, so a forgotten password is not fatal.
-- [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
-- [ ] Passkeys / WebAuthn.
-- [ ] Playwright browser-level e2e on top of the service-level e2e.
+- [x] Implement stage 2 and the design application (tasks 1 to 11 of the plan) on `feat/stages-2-5` (2026-10-14).
+- [ ] Open the PR for `feat/stages-2-5`, watch the four CI jobs, owner reviews the `design-screenshots` artifact against the artboards and merges.
+- [ ] Owner: add `MAIL_DRIVER=log` (or smtp with `SMTP_URL` and `MAIL_FROM`) to the local root `.env` before the next `make up`.
+- [ ] Owner decision: keep lock on `pagehide` (spec 3.5) knowing some mobile browsers fire it on a tab switch.
+- [ ] Next sitting: tasks 12 to 21 (Shamir, handoff crypto, witnesses, rules and timer, quorum, handoff e2e) from `docs/superpowers/plans/2026-10-14-stages-2-5-plan.md`, same subagent-driven loop; carry the known gap (share marker on rows needs share data in the file listing) into slice B.
+- [ ] Deferred minors from this sitting's reviews, in the PR description; a verify-token expiry test and `.strict()` on the profile schema first.
+- [ ] Later stages per spec section 12: admin role; reproducible client build; hosted service; compliance readiness. Streaming uploads, passkeys remain on the supporting list. Recovery key stays ruled out by the spec.
 - [ ] External security review before anyone stores real data.
-
 ## Decisions
 
 | Date | Decision | Why |
@@ -56,8 +48,31 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | 2026-10-12 | Tests run against a real embedded Postgres, not mocks | The previous mocked suite had never executed and could not catch contract drift |
 | 2026-10-14 | `main` replaces `master`; all work on `<type>/<topic>` branches merged by PR with a merge commit; `main` requires the three CI jobs | Same convention as the owner's other repositories, so sessions and tooling behave the same everywhere |
 | 2026-10-14 | MinIO dropped from the Docker stack; the API's local driver on a named volume is the default | MinIO deleted its Docker Hub and Quay images in September 2026 and the last free release carries an auth-bypass CVE. The stack streamed through the API anyway, so MinIO added a service and two secrets for nothing. The S3 driver stays for external stores (S3, R2, Garage) via `STORAGE_DRIVER=s3` in `.env` |
+| 2026-10-14 | Fonts self-hosted through `@fontsource` packages, not Google Fonts | The Docker build's CSP blocked the third-party stylesheet, and a privacy product should not contact a third party on every page load; stage 2 spec 3.1 amended |
+| 2026-10-14 | Login answers 401 for a wrong credential before any verification state; 403 `EMAIL_UNVERIFIED` only with a valid credential | The spec's wording would have let anyone enumerate unverified accounts; spec 2.3 reworded |
+| 2026-10-14 | Email change removed from the profile endpoint | Product spec section 5 rules it out; the UI shows the email read-only with the reason |
+| 2026-10-14 | Settings' key fingerprint is the account's RSA public key (SHA-256 of SPKI), and the share dialog compares against it | The design says people who share with you compare it; the master-key fingerprint could never match |
+| 2026-10-14 | No share marker on file rows until the listing carries share data | A session-only marker told two different stories about one file; the handoff slice that touches the files module adds the data |
+| 2026-10-14 | Shared with me is its own route (`/shared`) and nav entry | The design's B6 is a separate screen and the four-entry nav needs a target |
+| 2026-10-14 | Phone sign-out sits on the locked screen, behind Lock | The design's phone bar carries only brand and lock |
+| 2026-10-14 | This sitting's PR ends at task 11; the handoff slices are the next sitting | Session-sized development: eleven tasks with review loops filled the context's share; the handoff subsystem is a coherent unit on its own |
+| 2026-10-14 | Compose and `.env.example` ship `MAIL_DRIVER=log`; production defaults to `smtp` and refuses to start without `SMTP_URL` and `MAIL_FROM` | The Optional block must work for a local run; a real deployment must not silently lose verification mail |
 
 ## Session log
+
+### 2026-10-14 · local (Claude Code) · stage 2 and the design application built on feat/stages-2-5 (tasks 1 to 11 of 21)
+
+Session: Claude Code, local checkout · Branch: `feat/stages-2-5` · Commits: `858873f` … `560ee64` (29 commits), plus this journal commit
+
+**Did**
+- Ran the plan subagent-driven: one implementer and one reviewer per task, a fix round where the review found Important issues (tasks 2, 5, 10, 11), one whole-branch review at the end. Fifteen controller rulings are listed under Decisions.
+- Stage 2: `User` gains `display_name`, `email_verified_at`, `contract_acknowledged_at`, `lock_after_minutes`, `last_activity_at`; new `email_tokens` table; one migration that backfills `email_verified_at = created_at` so alpha accounts keep signing in. Mail library with `log` (default outside production, last 100 in memory, `GET /api/_test/mail` in test only) and `smtp` (nodemailer) drivers; `MAIL_DRIVER`, `SMTP_URL`, `MAIL_FROM` in both env examples and compose. Register requires `contractPhrase` equal to `I understand there is no way back`, returns 201 with no tokens, sends a 24-hour verify link; `verify-email`, `resend-verification` (always 202), login gate `403 EMAIL_UNVERIFIED` after bcrypt; cleanup deletes unverified accounts after 7 days. Profile PATCH takes `displayName` and `lockAfterMinutes` (1 to 30) without a password; email change removed. Activity touch in the auth middleware, one `updateMany` per 5 minutes. Client: four `OneFact` contract screens, verify page, no forgot-password link, idle lock (`lib/idle.ts`, `useIdleLock`), locked screen, sidebar lock footer and phone lock button, Settings "Lock and look" (lock period, theme), theme via `data-theme` on `<html>`.
+- Stage 2b: tokens, fonts and the Tailwind mapping; every existing screen restyled to its artboard (public pages, layouts with the four-entry nav and a `/shared` route, dashboard, locked, files, preview, share dialog with a new user tab and fingerprint, shared with me, settings with the phone index, base components); five new list components (`Breadcrumbs`, `ListRow`, `StateBadge`, `Fingerprint`, `EmptyState`); old indigo palette, `.btn`/`.card`/`.input` classes, recharts and framer-motion uses removed; Playwright smoke under `client/e2e-browser/` (28 checks, 90 screenshots at 1280 and 390, light and dark, from a committed vault fixture plus mocked API) in the CI client job with a `design-screenshots` artifact.
+- Not started: tasks 12 to 21 (Shamir, handoff crypto, witnesses, rules, timer, quorum, handoff e2e). The product works without them; their slots on the dashboard, rows and settings render nothing.
+
+**Verified**: server typecheck and 61 tests on embedded Postgres; client type-check, 89 vitest tests, build; `make test-e2e` 7 of 7 (register → mail link → verify → login → lock period 1 → forced lock → unlock, plus the existing flow); Playwright 28 of 28 locally. CI on the PR: see the PR checks (pushed at the end of this session).
+
+**Open**: Whole-branch review returned "with fixes"; the fix wave (fonts self-hosted, share bound to the verified key, register survives a failed mail send, resend feedback, dead dependencies removed, README and SECURITY.md updated, seven decisions rows) landed and was re-reviewed. Still deferred from the reviews, all minor: `OneFact` cancel unused by the wizard; profile schema not `.strict()`; activity touch queries on every request; theme radios lack arrow keys; `Modal` md equals lg; components README partly stale; a verify-token expiry test; `UnlockForm` says "1 minutes". Known gap: no share marker on file rows until the file listing carries share data (planned for handoff slice B). Deferred minors from the per-task reviews are listed in the PR description. The owner's local root `.env` has no `MAIL_DRIVER` line; `make up` will fail env validation until it has `MAIL_DRIVER=log` (or smtp with its two values). Google Fonts load from `index.html` per the stage 2 spec; a third-party fetch on every page load is worth a deliberate decision for a privacy product.
 
 ### 2026-10-14 · local (Claude Code) · design reconciled; specs and plan for stages 2 to 5
 

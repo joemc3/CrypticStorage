@@ -3,7 +3,8 @@ import { authHash, email } from '../auth/schema';
 
 export const updateProfileSchema = z
   .object({
-    email: email.optional(),
+    displayName: z.string().trim().min(1).max(64).nullable().optional(),
+    lockAfterMinutes: z.number().int().min(1).max(30).optional(),
     currentPasswordHash: authHash.optional(),
     newPasswordHash: authHash.optional(),
     salt: z.string().min(16).max(256).optional(),
@@ -12,7 +13,7 @@ export const updateProfileSchema = z
     encryptedPrivateKey: z.string().min(1).max(16384).optional(),
   })
   .superRefine((v, ctx) => {
-    const sensitive = Boolean(v.email || v.newPasswordHash || v.wrappedMasterKey || v.encryptedPrivateKey || v.salt);
+    const sensitive = Boolean(v.newPasswordHash || v.kdfIterations || v.wrappedMasterKey || v.encryptedPrivateKey || v.salt);
     if (sensitive && !v.currentPasswordHash) {
       ctx.addIssue({ code: 'custom', path: ['currentPasswordHash'], message: 'Current password is required for this change' });
     }

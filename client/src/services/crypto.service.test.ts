@@ -159,4 +159,12 @@ describe('utilities', () => {
     expect(await CryptoService.keyFingerprint(key)).toBe(await CryptoService.keyFingerprint(key));
     expect(await CryptoService.keyFingerprint(key)).toMatch(/^([0-9a-f]{4} ){7}[0-9a-f]{4}$/);
   });
+
+  it('fingerprints a recipient public key from its SPKI bytes', async () => {
+    const pair = await CryptoService.generateRSAKeyPair();
+    const spki = await CryptoService.exportPublicKey(pair.publicKey);
+    const fp = await CryptoService.publicKeyFingerprint(spki);
+    expect(fp).toMatch(/^([0-9a-f]{4} ){7}[0-9a-f]{4}$/);
+    expect(await CryptoService.publicKeyFingerprint(spki)).toBe(fp);
+  });
 });

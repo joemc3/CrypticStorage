@@ -3,22 +3,27 @@
  * Folder navigation, upload, download, preview, sharing and deletion.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowUpTrayIcon, ChevronRightIcon, FolderIcon, FolderPlusIcon, HomeIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowUpTrayIcon, FolderPlusIcon, TrashIcon, ArrowDownTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { FileList } from '../components/files/FileList';
 import { FileUpload } from '../components/files/FileUpload';
 import { FilePreview } from '../components/files/FilePreview';
-import { ShareDialog, type ShareLink as DialogShareLink, type ShareOptions } from '../components/files/ShareDialog';
+import { ShareDialog, type ShareLink as DialogShareLink, type ShareOptions, type UserShareRow } from '../components/files/ShareDialog';
 import { Modal } from '../components/common/Modal';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
+import { Breadcrumbs } from '../components/common/Breadcrumbs';
+import { EmptyState } from '../components/common/EmptyState';
+import { ListRow, RowList } from '../components/common/ListRow';
+import { formatDate } from '../components/files/FileItem';
 import { useFiles } from '../hooks/useFiles';
 import { useUIStore } from '../stores/ui.store';
 import FileService, { formatFileSize } from '../services/file.service';
 import ShareService, { type ShareLinkWithKey } from '../services/share.service';
-import ApiService from '../services/api.service';
+import ApiService, { toApiError } from '../services/api.service';
+import CryptoService from '../services/crypto.service';
 
 function toDialogLink(link: ShareLinkWithKey): DialogShareLink {
   return {
@@ -32,11 +37,31 @@ function toDialogLink(link: ShareLinkWithKey): DialogShareLink {
   };
 }
 
-export const FilesPage: React.FC = () => {
+export interface FilesPageProps {
+  /** 'shared' shows only what other people shared with this account. */
+  view?: 'files' | 'shared';
+}
+
+export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
   const navigate = useNavigate();
   const { folderId: routeFolderId } = useParams<{ folderId?: string }>();
-  const { files, folders, breadcrumbs, sharedWithMe, selectedFileIds, uploadProgress, isLoading, loadFiles, loadSharedWithMe, uploadFiles, downloadFile, deleteFiles, createFolder, deleteFolder } =
-    useFiles();
+  const {
+    files,
+    folders,
+    breadcrumbs,
+    sharedWithMe,
+    selectedFileIds,
+    uploadProgress,
+    isLoading,
+    loadFiles,
+    loadSharedWithMe,
+    uploadFiles,
+    downloadFile,
+    deleteFiles,
+    createFolder,
+    deleteFolder,
+    toggleFileSelection,
+  } = useFiles();
   const addToast = useUIStore((s) => s.addToast);
 
   const currentFolderId = routeFolderId ?? null;
@@ -46,11 +71,17 @@ export const FilesPage: React.FC = () => {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
   const [existingLinks, setExistingLinks] = useState<DialogShareLink[]>([]);
+  const [userShares, setUserShares] = useState<UserShareRow[]>([]);
+  // Which file the share dialog is for right now. Late responses for another file are dropped.
+  const shareTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (view === 'shared') {
+      void loadSharedWithMe();
+      return;
+    }
     void loadFiles(currentFolderId);
-    if (!currentFolderId) void loadSharedWithMe();
-  }, [currentFolderId, loadFiles, loadSharedWithMe]);
+  }, [view, currentFolderId, loadFiles, loadSharedWithMe]);
 
   const goTo = useCallback((folderId: string | null) => navigate(folderId ? `/files/${folderId}` : '/files'), [navigate]);
 
@@ -74,19 +105,35 @@ export const FilesPage: React.FC = () => {
     if (window.confirm(`Delete ${selectedFileIds.size} file(s)? This cannot be undone.`)) await deleteFiles(Array.from(selectedFileIds));
   };
 
-  const handleDeleteFolder = async (id: string, name: string) => {
+  const handleDeleteFolder = async (id: string) => {
+    const name = folders.find((f) => f.id === id)?.name ?? 'this folder';
     if (window.confirm(`Delete folder "${name}" and everything inside it?`)) await deleteFolder(id);
+  };
+
+  const loadUserShares = async (fileId: string) => {
+    try {
+      const shares = await ShareService.listUserShares(fileId);
+      if (shareTargetRef.current !== fileId) return;
+      setUserShares(shares.map((s) => ({ id: s.id, email: s.recipientEmail ?? 'Unknown account' })));
+    } catch {
+      if (shareTargetRef.current === fileId) setUserShares([]);
+    }
   };
 
   const openShare = async (fileId: string) => {
     const file = files.find((f) => f.id === fileId);
     if (!file) return;
+    shareTargetRef.current = fileId;
     setShareTarget({ id: file.id, name: file.name });
+    setUserShares([]);
+    setExistingLinks([]);
     try {
-      setExistingLinks((await ShareService.listShareLinks(fileId)).map(toDialogLink));
+      const links = (await ShareService.listShareLinks(fileId)).map(toDialogLink);
+      if (shareTargetRef.current === fileId) setExistingLinks(links);
     } catch {
-      setExistingLinks([]);
+      if (shareTargetRef.current === fileId) setExistingLinks([]);
     }
+    void loadUserShares(fileId);
   };
 
   const createShare = async (options: ShareOptions): Promise<DialogShareLink> => {
@@ -100,6 +147,39 @@ export const FilesPage: React.FC = () => {
     }
   };
 
+  const lookupRecipient = async (email: string) => {
+    const normalised = email.trim().toLowerCase();
+    try {
+      const { publicKey } = await ApiService.getPublicKey(normalised);
+      return { email: normalised, publicKey, fingerprint: await CryptoService.publicKeyFingerprint(publicKey) };
+    } catch (error) {
+      const apiError = toApiError(error);
+      throw new Error(apiError.statusCode === 404 ? 'No CrypticStorage account uses that email' : apiError.message);
+    }
+  };
+
+  const shareWithUser = async (email: string, publicKey?: string) => {
+    if (!shareTarget) return;
+    try {
+      await ShareService.shareWithUser(shareTarget.id, email, publicKey);
+      addToast({ type: 'success', message: `Shared with ${email}` });
+      await loadUserShares(shareTarget.id);
+    } catch (error) {
+      addToast({ type: 'error', message: 'Could not share', description: error instanceof Error ? error.message : undefined });
+      throw error;
+    }
+  };
+
+  const revokeUserShare = async (shareId: string) => {
+    if (!shareTarget) return;
+    try {
+      await ShareService.revokeUserShare(shareId);
+      await loadUserShares(shareTarget.id);
+    } catch (error) {
+      addToast({ type: 'error', message: 'Could not remove access', description: error instanceof Error ? error.message : undefined });
+    }
+  };
+
   const decryptForPreview = useCallback(async (fileId: string): Promise<string> => {
     const file = await FileService.downloadFile(fileId);
     return URL.createObjectURL(file.blob);
@@ -108,77 +188,113 @@ export const FilesPage: React.FC = () => {
   const previewFile = previewId ? files.find((f) => f.id === previewId) ?? null : null;
   const uploads = Array.from(uploadProgress.values());
 
+  const downloadShared = async (shareId: string) => {
+    try {
+      const shared = (await ApiService.getSharedWithMe()).find((s) => s.shareId === shareId);
+      if (!shared) throw new Error('Share no longer available');
+      const decrypted = await FileService.downloadSharedFile(shared);
+      FileService.saveBlob(decrypted.blob, decrypted.name);
+    } catch (error) {
+      addToast({ type: 'error', message: 'Download failed', description: error instanceof Error ? error.message : undefined });
+    }
+  };
+
+  if (view === 'shared') {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <h1 className="font-sans text-2xl font-semibold leading-[30px] tracking-[-0.01em] text-ink md:text-[28px] md:leading-[34px]">Shared with me</h1>
+            <p className="text-sm text-ink-2">You open these with your own login. Nobody sent you a second secret.</p>
+          </div>
+
+          {sharedWithMe.length === 0 ? (
+            <EmptyState title="Nothing has been shared with you yet." body="Files that other people share with this account appear here." />
+          ) : (
+            <section aria-label="Items" className="flex flex-col gap-3">
+              <RowList>
+                {sharedWithMe.map((file) => (
+                  <ListRow
+                    key={file.shareId}
+                    icon={<DocumentTextIcon className="h-5 w-5" />}
+                    title={file.name}
+                    meta={<span className="break-all">{`From ${file.sharedBy} · ${formatDate(file.createdAt)} · ${formatFileSize(file.size)}`}</span>}
+                    // The handoff stage draws its marker here, for items that were released to this account.
+                    markers={null}
+                    actions={
+                      <button
+                        type="button"
+                        onClick={() => void downloadShared(file.shareId)}
+                        aria-label={`Download ${file.name}`}
+                        className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      >
+                        <ArrowDownTrayIcon className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    }
+                  />
+                ))}
+              </RowList>
+            </section>
+          )}
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const crumbs = [
+    { label: 'Files', href: '/files', onClick: () => goTo(null) },
+    ...breadcrumbs.map((crumb) => ({ label: crumb.name, href: `/files/${crumb.id}`, onClick: () => goTo(crumb.id) })),
+  ];
+  const title = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1]!.name : 'Files';
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Files</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">Everything here is encrypted before it leaves your browser.</p>
-          </div>
+      <div className="flex flex-col gap-5">
+        {currentFolderId && <Breadcrumbs items={crumbs} />}
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="min-w-0 break-words font-sans text-2xl font-semibold leading-[30px] tracking-[-0.01em] text-ink md:text-[28px] md:leading-[34px]">{title}</h1>
           <div className="flex gap-2">
-            <Button onClick={() => setShowCreateFolder(true)} variant="secondary" leftIcon={<FolderPlusIcon className="h-5 w-5" />}>
+            <Button onClick={() => setShowCreateFolder(true)} variant="secondary" size="sm" leftIcon={<FolderPlusIcon className="h-4 w-4" />}>
               New folder
             </Button>
-            <Button onClick={() => setShowUpload(true)} leftIcon={<ArrowUpTrayIcon className="h-5 w-5" />}>
+            <Button onClick={() => setShowUpload(true)} size="sm" leftIcon={<ArrowUpTrayIcon className="h-4 w-4" />}>
               Upload
             </Button>
           </div>
         </div>
 
-        <nav className="flex items-center flex-wrap gap-1 text-sm" aria-label="Breadcrumb">
-          <button onClick={() => goTo(null)} className={`flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 ${!currentFolderId ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-            <HomeIcon className="h-4 w-4" /> Home
-          </button>
-          {breadcrumbs.map((crumb, index) => (
-            <React.Fragment key={crumb.id}>
-              <ChevronRightIcon className="h-4 w-4 text-gray-400" />
-              <button
-                onClick={() => goTo(crumb.id)}
-                className={`hover:text-indigo-600 dark:hover:text-indigo-400 ${index === breadcrumbs.length - 1 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400'}`}
-              >
-                {crumb.name}
-              </button>
-            </React.Fragment>
-          ))}
-        </nav>
+        {uploads.length > 0 && !showUpload && (
+          <div role="status" className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-4 py-3.5 text-sm">
+            {uploads.map((u) => (
+              <div key={u.fileId} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-ink">{u.fileName}</span>
+                <span className={`flex-none ${u.status === 'error' ? 'text-danger-text' : 'text-ink-3'}`}>
+                  {u.status === 'error' ? u.error ?? 'Upload failed' : u.status === 'complete' ? 'Encrypted and stored' : `${u.status === 'encrypting' ? 'Encrypting' : 'Uploading'} · ${Math.round(u.progress)}%`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {selectedFileIds.size > 0 && (
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 flex items-center justify-between">
-            <span className="text-sm text-indigo-900 dark:text-indigo-100">{selectedFileIds.size} selected</span>
-            <Button variant="danger" size="sm" onClick={handleDeleteSelected} leftIcon={<TrashIcon className="h-4 w-4" />}>
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-accent-soft px-4 py-3">
+            <span className="text-sm font-medium text-accent-text">{selectedFileIds.size} selected</span>
+            <Button variant="danger" size="sm" onClick={() => void handleDeleteSelected()} leftIcon={<TrashIcon className="h-4 w-4" />}>
               Delete
             </Button>
           </div>
         )}
 
-        {folders.length > 0 && (
-          <section>
-            <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Folders</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              {folders.map((folder) => (
-                <div key={folder.id} className="group relative flex items-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">
-                  <button onClick={() => goTo(folder.id)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
-                    <FolderIcon className="h-6 w-6 text-indigo-500 flex-shrink-0" />
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{folder.name}</span>
-                  </button>
-                  <button
-                    onClick={() => void handleDeleteFolder(folder.id, folder.name)}
-                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition-opacity"
-                    aria-label={`Delete folder ${folder.name}`}
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
         <FileList
           files={files.map((f) => ({ id: f.id, name: f.name, size: f.size, mimeType: f.mimeType, uploadedAt: f.createdAt }))}
+          folders={folders.map((f) => ({ id: f.id, name: f.name }))}
           isLoading={isLoading}
-          emptyMessage={folders.length ? 'No files in this folder yet' : 'No files yet. Upload something to get started.'}
+          emptyMessage={currentFolderId ? 'Nothing in this folder yet.' : 'Nothing in your safe yet.'}
+          selectedIds={selectedFileIds}
+          onToggleSelect={toggleFileSelection}
+          onFolderOpen={(id) => goTo(id)}
+          onFolderDelete={(id) => void handleDeleteFolder(id)}
           onFileClick={(id) => setPreviewId(id)}
           onFileDownload={(id) => void downloadFile(id)}
           onFileDelete={(id) => {
@@ -188,49 +304,20 @@ export const FilesPage: React.FC = () => {
           onFileShare={(id) => void openShare(id)}
         />
 
-        {!currentFolderId && sharedWithMe.length > 0 && (
-          <section>
-            <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Shared with me</h2>
-            <div className="space-y-2">
-              {sharedWithMe.map((file) => (
-                <div key={file.shareId} className="flex items-center gap-4 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatFileSize(file.size)} · from {file.sharedBy}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    leftIcon={<ArrowDownTrayIcon className="h-4 w-4" />}
-                    onClick={async () => {
-                      try {
-                        const shared = (await ApiService.getSharedWithMe()).find((s) => s.shareId === file.shareId);
-                        if (!shared) throw new Error('Share no longer available');
-                        const decrypted = await FileService.downloadSharedFile(shared);
-                        FileService.saveBlob(decrypted.blob, decrypted.name);
-                      } catch (error) {
-                        addToast({ type: 'error', message: 'Download failed', description: error instanceof Error ? error.message : undefined });
-                      }
-                    }}
-                  >
-                    Download
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <p className="flex items-center gap-2 text-sm text-ink-3">
+          <ArrowUpTrayIcon className="h-4 w-4 flex-none" aria-hidden="true" />
+          Files are encrypted before they leave this browser.
+        </p>
 
         <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload files" size="lg">
           <FileUpload onUpload={handleUpload} uploads={uploads} />
         </Modal>
 
         <Modal isOpen={showCreateFolder} onClose={() => setShowCreateFolder(false)} title="New folder" size="sm">
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             <Input
               label="Folder name"
+              aria-label="Folder name"
               placeholder="e.g. Tax documents"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
@@ -240,7 +327,7 @@ export const FilesPage: React.FC = () => {
               }}
             />
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowCreateFolder(false)}>
+              <Button variant="quiet" onClick={() => setShowCreateFolder(false)}>
                 Cancel
               </Button>
               <Button onClick={() => void handleCreateFolder()} disabled={!newFolderName.trim()}>
@@ -259,7 +346,20 @@ export const FilesPage: React.FC = () => {
           onShare={previewFile ? () => void openShare(previewFile.id) : undefined}
         />
 
-        <ShareDialog isOpen={shareTarget !== null} onClose={() => setShareTarget(null)} file={shareTarget} onCreateShare={createShare} existingShares={existingLinks} />
+        <ShareDialog
+          isOpen={shareTarget !== null}
+          onClose={() => {
+            shareTargetRef.current = null;
+            setShareTarget(null);
+          }}
+          file={shareTarget}
+          onCreateShare={createShare}
+          existingShares={existingLinks}
+          onLookupRecipient={lookupRecipient}
+          onShareWithUser={shareWithUser}
+          userShares={userShares}
+          onRevokeUserShare={revokeUserShare}
+        />
       </div>
     </DashboardLayout>
   );

@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { AuthLayout } from '../layouts/AuthLayout';
+import { quietAction } from '../layouts/PublicFrame';
 import { UnlockForm } from './auth/UnlockForm';
 
 interface ProtectedRouteProps {
@@ -21,8 +22,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (status === 'locked') {
     return (
-      <AuthLayout>
-        <UnlockForm email={user?.email ?? ''} onUnlock={unlock} onSignOut={() => void logoutUser()} isLoading={isLoading} />
+      <AuthLayout
+        action={
+          <button type="button" onClick={() => void logoutUser()} className={quietAction}>
+            Sign out
+          </button>
+        }
+      >
+        <UnlockForm email={user?.email ?? ''} onUnlock={unlock} isLoading={isLoading} lockAfterMinutes={user?.lockAfterMinutes} />
       </AuthLayout>
     );
   }

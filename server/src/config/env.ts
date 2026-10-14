@@ -47,6 +47,11 @@ const schema = z
     /** Endpoint browsers can reach. When set, uploads and downloads go straight to S3 with presigned URLs. */
     S3_PUBLIC_ENDPOINT: z.string().url().optional(),
 
+    /** `log` prints mail to the log instead of sending it. Production defaults to `smtp`. */
+    MAIL_DRIVER: z.enum(['log', 'smtp']).default(process.env.NODE_ENV === 'production' ? 'smtp' : 'log'),
+    SMTP_URL: z.string().optional(),
+    MAIL_FROM: z.string().optional(),
+
     DEFAULT_STORAGE_QUOTA_BYTES: z.coerce.number().int().positive().default(10 * 1024 ** 3),
     MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(5 * 1024 ** 3),
     PENDING_UPLOAD_TTL_HOURS: z.coerce.number().int().positive().default(24),
@@ -58,6 +63,11 @@ const schema = z
     if (env.STORAGE_DRIVER === 's3') {
       for (const key of ['S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY'] as const) {
         if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when STORAGE_DRIVER=s3` });
+      }
+    }
+    if (env.MAIL_DRIVER === 'smtp') {
+      for (const key of ['SMTP_URL', 'MAIL_FROM'] as const) {
+        if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when MAIL_DRIVER=smtp` });
       }
     }
   });

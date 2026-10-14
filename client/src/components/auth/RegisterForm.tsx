@@ -1,261 +1,228 @@
-import React, { useState, useMemo } from 'react';
-import { EnvelopeIcon, LockClosedIcon, UserIcon } from '@heroicons/react/24/outline';
-import { Button } from '../common/Button';
-import { Input } from '../common/Input';
-import { motion } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { OneFact } from '../common/OneFact';
+import { AuthLayout } from '../../layouts/AuthLayout';
 
-export interface RegisterFormProps {
-  onSubmit: (data: RegisterData) => Promise<void>;
-  onLogin?: () => void;
-  isLoading?: boolean;
-  error?: string;
-}
+export const CONTRACT_PHRASE = 'I understand there is no way back';
 
 export interface RegisterData {
   email: string;
   password: string;
-  confirmPassword: string;
   displayName?: string;
+  phrase: string;
 }
 
-interface PasswordStrength {
-  score: number; // 0-4
-  label: string;
-  color: string;
+export interface RegisterFormProps {
+  onSubmit: (data: RegisterData) => Promise<void>;
+  onResend: () => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+  error?: string;
+  /** Set by the page once the account exists; moves the wizard to "check your email". */
+  sentTo?: string;
+  /** True after a resend went out; shows a one-line confirmation. */
+  resent?: boolean;
 }
 
-const calculatePasswordStrength = (password: string): PasswordStrength => {
-  let score = 0;
+type Step = 1 | 2 | 3 | 4 | 'form';
 
-  if (password.length >= 8) score++;
-  if (password.length >= 12) score++;
-  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
-  if (/\d/.test(password)) score++;
-  if (/[^a-zA-Z0-9]/.test(password)) score++;
-
-  const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
-  const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
-
-  return {
-    score,
-    label: labels[score] || 'Very Weak',
-    color: colors[score] || 'bg-red-500',
-  };
+const FACTS: Record<1 | 2 | 3, { fact: string; supporting: string }> = {
+  1: {
+    fact: 'There is no password reset.',
+    supporting:
+      'If you forget your password, nothing and nobody can get your items back. Not us, not support, not a recovery key.',
+  },
+  2: {
+    fact: 'Your email address cannot be changed later.',
+    supporting: 'Your email is part of how your keys are derived. Choose the one you will still have in ten years.',
+  },
+  3: {
+    fact: 'Your witnesses can release your items without you.',
+    supporting:
+      'You will choose them later. Any k of n of them, together, can hand your items to the people you name. Choose people you would trust with a key to your house.',
+  },
 };
 
-export const RegisterForm: React.FC<RegisterFormProps> = ({
-  onSubmit,
-  onLogin,
-  isLoading = false,
-  error,
-}) => {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface Strength {
+  score: number; // 0-4
+  line: string;
+}
+
+/** A short, honest description of the password, not a gate. */
+const describeStrength = (password: string): Strength => {
+  if (!password) return { score: 0, line: 'Use a long phrase. Length matters more than symbols.' };
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (password.length >= 16) score++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password)) score++;
+  score = Math.min(score, 4);
+  const lines = [
+    'Too short. Use at least 8 characters.',
+    'Weak. A longer phrase is much stronger.',
+    'Fair. Add a few more words.',
+    'Good. Write it down and keep it somewhere that is not this safe.',
+    'Strong. Write it down and keep it somewhere that is not this safe.',
+  ];
+  return { score, line: lines[score] };
+};
+
+const fieldClass =
+  'block w-full rounded-lg border border-line bg-surface px-3 py-2.5 font-sans text-base text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50';
+const labelClass = 'mb-1 block font-sans text-sm font-medium text-ink';
+const helpClass = 'mt-1 block font-sans text-sm text-ink-3';
+
+export const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, onResend, onCancel, isLoading = false, error, sentTo, resent = false }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [phrase, setPhrase] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [errors, setErrors] = useState<Partial<RegisterData>>({});
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [password, setPassword] = useState('');
+  const [again, setAgain] = useState('');
+  const [problem, setProblem] = useState<string | undefined>();
 
-  const passwordStrength = useMemo(() => calculatePasswordStrength(password), [password]);
+  const accepted = phrase.trim() === CONTRACT_PHRASE;
+  const strength = useMemo(() => describeStrength(password), [password]);
 
-  const validate = (): boolean => {
-    const newErrors: Partial<RegisterData> = {};
+  // The step lives in history state so the browser back button walks the wizard.
+  // Nothing about the acknowledgement is stored: a reload loses the typed phrase,
+  // so a restored "form" step without it falls back to the first screen.
+  const requested = (location.state as { registerStep?: Step } | null)?.registerStep ?? 1;
+  const step: Step = requested === 'form' && !accepted ? 1 : requested;
 
-    if (!email) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = 'Invalid email format';
-    }
+  const go = (next: Step) => navigate(location.pathname, { state: { ...(location.state as object | null), registerStep: next } });
 
-    if (!password) {
-      newErrors.password = 'Password is required';
-    } else if (password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-    } else if (passwordStrength.score < 2) {
-      newErrors.password = 'Password is too weak';
-    }
+  if (sentTo) {
+    return (
+      <AuthLayout>
+        <div className="flex flex-col gap-5">
+          <h1 className="font-serif text-[30px] font-semibold leading-9 text-ink">Check your email</h1>
+          <p className="font-sans text-base leading-6 text-ink-2">
+            We sent a link to <span className="text-ink">{sentTo}</span>. Open it on any device to finish. Your safe exists once the
+            address is verified.
+          </p>
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={isLoading}
+            className="w-full rounded-lg border border-line-strong bg-surface px-4 py-3 font-sans text-[15px] font-medium text-ink hover:bg-surface-2 disabled:opacity-50"
+          >
+            Resend the email
+          </button>
+          {resent ? (
+            <p role="status" className="text-center font-sans text-sm text-ink-3">Sent. Nothing after a few minutes? Check spam.</p>
+          ) : (
+            <p className="text-center font-sans text-sm text-ink-3">Nothing after a few minutes? Check spam, then resend.</p>
+          )}
+        </div>
+      </AuthLayout>
+    );
+  }
 
-    if (!confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (password !== confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
+  if (step === 1 || step === 2 || step === 3) {
+    const { fact, supporting } = FACTS[step];
+    return (
+      <OneFact
+        fact={fact}
+        supporting={supporting}
+        action={{ label: 'I understand', onClick: () => go((step + 1) as Step) }}
+        back={step === 1 ? onCancel : () => go((step - 1) as Step)}
+        backLabel={step === 1 ? 'Not now' : 'Back'}
+      />
+    );
+  }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0 && acceptedTerms;
-  };
+  if (step === 4) {
+    return (
+      <OneFact
+        fact={`Type "${CONTRACT_PHRASE}" to continue.`}
+        action={{ label: 'Continue', onClick: () => go('form'), disabled: !accepted }}
+        back={() => go(3)}
+      >
+        <label htmlFor="contract-phrase" className="sr-only">
+          Confirmation phrase
+        </label>
+        <input
+          id="contract-phrase"
+          type="text"
+          value={phrase}
+          onChange={(e) => setPhrase(e.target.value)}
+          placeholder={CONTRACT_PHRASE}
+          autoComplete="off"
+          spellCheck={false}
+          className={fieldClass}
+        />
+        {accepted && <span className="mt-1 block font-sans text-sm text-accent-text">Matches</span>}
+      </OneFact>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validate()) {
-      return;
-    }
-
-    await onSubmit({
-      email,
-      password,
-      confirmPassword,
-      displayName: displayName || undefined,
-    });
+    if (!EMAIL_RE.test(email.trim())) return setProblem('Enter a valid email address.');
+    if (password.length < 8) return setProblem('The password needs at least 8 characters.');
+    if (password !== again) return setProblem('The two passwords differ.');
+    setProblem(undefined);
+    await onSubmit({ email, password, displayName: displayName.trim() || undefined, phrase: phrase.trim() });
   };
 
+  const shown = problem ?? error;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="w-full max-w-md mx-auto"
-    >
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Create Account</h2>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Sign up to get started</p>
-      </div>
+    <AuthLayout>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+        <div>
+          <h1 className="font-serif text-[30px] font-semibold leading-9 text-ink">Create your account</h1>
+          <p className="mt-2 font-sans text-base text-ink-2">The password is the only key there is.</p>
+        </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3"
-          >
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          </motion.div>
+        {shown && (
+          <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 font-sans text-sm text-danger-text">
+            {shown}
+          </p>
         )}
-
-        <Input
-          type="email"
-          label="Email"
-          placeholder="Enter your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          error={errors.email}
-          leftIcon={<EnvelopeIcon className="h-5 w-5" />}
-          disabled={isLoading}
-          autoComplete="email"
-        />
-
-        <Input
-          type="text"
-          label="Display Name (Optional)"
-          placeholder="Enter your name"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          leftIcon={<UserIcon className="h-5 w-5" />}
-          disabled={isLoading}
-          autoComplete="name"
-        />
 
         <div>
-          <Input
-            type="password"
-            label="Password"
-            placeholder="Create a password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            error={errors.password}
-            leftIcon={<LockClosedIcon className="h-5 w-5" />}
-            disabled={isLoading}
-            autoComplete="new-password"
-          />
-          {password && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="mt-2"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-600 dark:text-gray-400">Password Strength:</span>
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  {passwordStrength.label}
-                </span>
-              </div>
-              <div className="flex gap-1">
-                {[0, 1, 2, 3, 4].map((index) => (
-                  <div
-                    key={index}
-                    className={`h-1 flex-1 rounded-full transition-all ${
-                      index < passwordStrength.score ? passwordStrength.color : 'bg-gray-200 dark:bg-gray-700'
-                    }`}
-                  />
-                ))}
-              </div>
-              <ul className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                <li className={password.length >= 8 ? 'text-green-600 dark:text-green-400' : ''}>
-                  ✓ At least 8 characters
-                </li>
-                <li
-                  className={
-                    /[a-z]/.test(password) && /[A-Z]/.test(password) ? 'text-green-600 dark:text-green-400' : ''
-                  }
-                >
-                  ✓ Uppercase and lowercase letters
-                </li>
-                <li className={/\d/.test(password) ? 'text-green-600 dark:text-green-400' : ''}>
-                  ✓ At least one number
-                </li>
-                <li className={/[^a-zA-Z0-9]/.test(password) ? 'text-green-600 dark:text-green-400' : ''}>
-                  ✓ At least one special character
-                </li>
-              </ul>
-            </motion.div>
-          )}
+          <label htmlFor="reg-email" className={labelClass}>Email</label>
+          <input id="reg-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" disabled={isLoading} className={fieldClass} />
+          <span className={helpClass}>Cannot be changed later.</span>
         </div>
 
-        <Input
-          type="password"
-          label="Confirm Password"
-          placeholder="Confirm your password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          error={errors.confirmPassword}
-          success={confirmPassword && password === confirmPassword ? 'Passwords match' : undefined}
-          leftIcon={<LockClosedIcon className="h-5 w-5" />}
-          disabled={isLoading}
-          autoComplete="new-password"
-        />
-
-        <div className="flex items-start">
-          <input
-            type="checkbox"
-            id="terms"
-            checked={acceptedTerms}
-            onChange={(e) => setAcceptedTerms(e.target.checked)}
-            className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-            disabled={isLoading}
-          />
-          <label htmlFor="terms" className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-            I agree to the{' '}
-            <a href="/terms" className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-              Terms of Service
-            </a>{' '}
-            and{' '}
-            <a href="/privacy" className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-              Privacy Policy
-            </a>
-          </label>
+        <div>
+          <label htmlFor="reg-name" className={labelClass}>Display name (optional)</label>
+          <input id="reg-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" disabled={isLoading} className={fieldClass} />
+          <span className={helpClass}>People you share with will see this name.</span>
         </div>
 
-        <Button type="submit" isLoading={isLoading} disabled={!acceptedTerms} className="w-full">
-          Create Account
-        </Button>
-
-        {onLogin && (
-          <div className="text-center mt-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={onLogin}
-                className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
-                disabled={isLoading}
-              >
-                Sign in
-              </button>
-            </p>
+        <div>
+          <label htmlFor="reg-password" className={labelClass}>Password</label>
+          <input id="reg-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" disabled={isLoading} className={fieldClass} />
+          <div className="mt-2 flex gap-1" aria-hidden="true">
+            {[1, 2, 3, 4].map((i) => (
+              <span key={i} className={`h-1 flex-1 rounded-full ${i <= strength.score ? 'bg-accent' : 'bg-line'}`} />
+            ))}
           </div>
-        )}
+          <span className={helpClass}>{strength.line}</span>
+        </div>
+
+        <div>
+          <label htmlFor="reg-again" className={labelClass}>Password again</label>
+          <input id="reg-again" type="password" value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" disabled={isLoading} className={fieldClass} />
+          {again && password === again && <span className="mt-1 block font-sans text-sm text-accent-text">Both match</span>}
+        </div>
+
+        <div className="mt-2 flex flex-col gap-2">
+          <button type="submit" disabled={isLoading} className="w-full rounded-lg bg-accent px-4 py-3 font-sans text-[15px] font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50">
+            {isLoading ? 'Creating your keys…' : 'Create account'}
+          </button>
+          <button type="button" onClick={() => go(4)} disabled={isLoading} className="self-center rounded-lg px-3 py-2 font-sans text-sm font-medium text-ink-2 hover:text-ink">
+            Back
+          </button>
+        </div>
       </form>
-    </motion.div>
+    </AuthLayout>
   );
 };

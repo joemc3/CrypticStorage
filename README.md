@@ -11,6 +11,7 @@ Zero-knowledge, end-to-end encrypted file storage. Files, file names and folder 
 - **Accounts without a password on the server.** The password feeds a PBKDF2-SHA256 derivation (600k iterations) whose output is split into a wrapping key that stays on the device and an authentication hash that is the only credential the server ever sees (and bcrypts).
 - **Per-file keys.** Every file gets a random AES-256 key, wrapped with the account's master key. File content is sealed in 1 MiB AES-GCM chunks with a per-chunk nonce and the chunk index and count in the authenticated data, so chunks cannot be reordered, dropped or duplicated.
 - **Sharing that stays zero-knowledge.** Anonymous links carry the file key in the URL fragment, which browsers never send to the server; the server can still enforce passwords, expiry and download caps. User-to-user shares wrap the file key with the recipient's RSA-OAEP public key.
+- **Signup as a contract.** Three facts read one at a time, then the form. Email verification is mandatory, a display name is optional, and the app locks itself after an idle period you choose (1 to 30 minutes, default 5). Raw keys exist only in memory and are dropped on lock.
 - **Two-factor authentication** with TOTP and single-use backup codes, a locked-vault screen after reload that unlocks offline, password change by re-wrapping the master key, refresh-token rotation, quotas, an audit log.
 - **Storage drivers.** Local filesystem for development, tests and single-node deployments; any S3-compatible store (AWS S3, R2, Garage, ...) for production, with optional presigned URLs straight from the browser.
 
@@ -36,7 +37,7 @@ open http://localhost:3000
 make down          # when finished
 ```
 
-The stack refuses to start with empty or placeholder secrets. Encrypted objects are kept on the `storage_data` volume by the API's local driver; to use an external S3-compatible store instead, set `STORAGE_DRIVER=s3` and the `S3_*` values in `.env` (see the comments there).
+The stack refuses to start with empty or placeholder secrets. An existing deployment must add `MAIL_DRIVER` (and `SMTP_URL` plus `MAIL_FROM` for `smtp`) to its `.env` before upgrading, or the API refuses to start. Encrypted objects are kept on the `storage_data` volume by the API's local driver; to use an external S3-compatible store instead, set `STORAGE_DRIVER=s3` and the `S3_*` values in `.env` (see the comments there).
 
 ### Without Docker
 
@@ -65,6 +66,7 @@ make dev-web       # terminal 3: web app on :3000, proxies /api to :4000
 make test          # server integration suite (boots an embedded Postgres) + client crypto unit tests
 make test-e2e      # starts a real API and drives the real client services through register → upload → share
 make typecheck
+(cd client && npm run test:browser)   # Playwright smoke: every screen at desktop and phone width, light and dark
 ```
 
 CI runs all three on every push (`.github/workflows/ci.yml`), using a Postgres service container.
@@ -107,6 +109,8 @@ Everything is read from the environment and validated at startup (`server/src/co
 | `S3_PUBLIC_ENDPOINT` | endpoint browsers can reach; enables presigned URLs |
 | `APP_URL` | web app origin, used for share links and CORS |
 | `API_PUBLIC_URL` | leave empty when `/api` is proxied on the app's origin |
+| `MAIL_DRIVER` | `log` or `smtp`. `log` (the default outside production) prints each mail to the API log; production defaults to `smtp` |
+| `SMTP_URL`, `MAIL_FROM` | required when `MAIL_DRIVER=smtp`: connection URL and the From address |
 | `DEFAULT_STORAGE_QUOTA_BYTES`, `MAX_FILE_SIZE_BYTES` | limits |
 
 ## License

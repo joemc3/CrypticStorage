@@ -1,71 +1,33 @@
 /**
  * CrypticStorage - 404 Not Found Page
- * Displayed when a route doesn't exist
  */
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { HomeIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { PublicLayout } from '../layouts/PublicLayout';
+import { useAuthStore } from '../stores/auth.store';
 
 export const NotFoundPage: React.FC = () => {
+  const signedIn = useAuthStore((s) => s.status !== 'anonymous');
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-900 flex items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="text-center"
-      >
-        <motion.div
-          initial={{ scale: 0.8 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="mb-8"
-        >
-          <h1 className="text-9xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">
-            404
-          </h1>
-          <div className="h-1 w-32 bg-indigo-600 dark:bg-indigo-400 mx-auto rounded-full" />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="mb-8"
-        >
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            Page Not Found
-          </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-            The page you're looking for doesn't exist or has been moved.
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4"
-        >
+    <PublicLayout narrow>
+      <div className="flex flex-col gap-5 pt-6">
+        <span className="font-mono text-[13px] text-ink-3">404</span>
+        <h1 className="font-sans text-2xl font-semibold leading-[30px] tracking-tight text-ink md:text-[28px] md:leading-[34px]">Nothing is kept at this address.</h1>
+        <p className="font-sans text-base text-ink-2">It may be mistyped, or it pointed at something that was moved or deleted.</p>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
           <Link
-            to="/"
-            className="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors"
+            to={signedIn ? '/dashboard' : '/login'}
+            className="inline-flex h-11 items-center rounded-lg bg-accent px-5 font-sans text-[15px] font-semibold text-accent-ink hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            <HomeIcon className="h-5 w-5 mr-2" />
-            Go Home
+            Go to your safe
           </Link>
-          <button
-            onClick={() => window.history.back()}
-            className="inline-flex items-center px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-lg transition-colors"
-          >
-            <ArrowLeftIcon className="h-5 w-5 mr-2" />
-            Go Back
-          </button>
-        </motion.div>
-      </motion.div>
-    </div>
+          <Link to="/" className="inline-flex h-11 items-center rounded-lg px-3 font-sans text-[15px] font-semibold text-ink-2 hover:text-ink">
+            Home
+          </Link>
+        </div>
+      </div>
+    </PublicLayout>
   );
 };
 

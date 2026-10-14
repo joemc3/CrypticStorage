@@ -1,78 +1,60 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { LockClosedIcon, ShieldCheckIcon, CloudArrowUpIcon, KeyIcon } from '@heroicons/react/24/outline';
+import { PublicLayout } from '../layouts/PublicLayout';
+import { quietAction } from '../layouts/PublicFrame';
 
-const HomePage: React.FC = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
-      {/* Hero Section */}
-      <div className="container mx-auto px-4 py-16 sm:py-24">
-        <div className="text-center">
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6">
-            <span className="text-gradient">CrypticStorage</span>
-          </h1>
-          <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
-            Zero-Knowledge Encrypted File Storage
-          </p>
-          <p className="text-lg text-gray-500 dark:text-gray-400 mb-12 max-w-2xl mx-auto">
-            Your files are encrypted on your device before upload. We can't access your data - only you can.
-          </p>
+const PROMISES: Array<[string, string]> = [
+  ['The server holds nothing it can read.', 'A database dump, a stolen disk or a root shell on the host yields ciphertext.'],
+  ['Sharing needs no second secret.', 'Pick a person with an account. They open it with their own login.'],
+  ['Links exist, and know their place.', 'For people without an account. The key rides in the link, with an optional password, expiry and download limit.'],
+  ['Anything can be handed on.', 'Name who receives an item and what releases it: a timer you reset by showing up, or witnesses who agree it is time.'],
+  ['There is no recovery.', 'Forget the password and the contents are gone. A handoff rule is the only way anyone else reads an item, and only on your terms.'],
+];
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/register" className="btn btn-primary text-lg px-8 py-3">
-              Get Started Free
-            </Link>
-            <Link to="/login" className="btn btn-outline text-lg px-8 py-3">
-              Sign In
-            </Link>
-          </div>
+const button = 'inline-flex h-11 items-center justify-center rounded-lg px-5 font-sans text-[15px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+
+const HomePage: React.FC = () => (
+  <PublicLayout
+    action={
+      <Link to="/login" className={quietAction}>
+        Sign in
+      </Link>
+    }
+  >
+    <div className="flex flex-col gap-14">
+      <div className="flex flex-col gap-6">
+        <h1 className="font-serif text-[44px] font-medium leading-[48px] tracking-[-0.015em] text-ink md:text-[64px] md:leading-[66px]">A safe, not a drive.</h1>
+        <p className="max-w-[34ch] font-sans text-[17px] leading-[26px] text-ink-2">
+          For the few things you cannot afford to lose control of: wallet seeds, recovery codes, legal and financial papers, the password to your password manager.
+          Encrypted in your browser, with keys the server never sees.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-3">
+          <Link to="/register" className={`${button} bg-accent text-accent-ink hover:bg-accent-hover`}>
+            Create account
+          </Link>
+          <Link to="/login" className={`${button} border border-line-strong bg-surface text-ink hover:bg-surface-2`}>
+            Sign in
+          </Link>
         </div>
-
-        {/* Features Grid */}
-        <div className="mt-24 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <div className="card text-center">
-            <div className="flex justify-center mb-4">
-              <LockClosedIcon className="w-12 h-12 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">End-to-End Encryption</h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              Files encrypted with AES-256-GCM before leaving your device
-            </p>
-          </div>
-
-          <div className="card text-center">
-            <div className="flex justify-center mb-4">
-              <ShieldCheckIcon className="w-12 h-12 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">Zero-Knowledge</h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              We never see your encryption keys or unencrypted data
-            </p>
-          </div>
-
-          <div className="card text-center">
-            <div className="flex justify-center mb-4">
-              <CloudArrowUpIcon className="w-12 h-12 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">Secure Upload</h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              Fast, secure uploads with client-side encryption
-            </p>
-          </div>
-
-          <div className="card text-center">
-            <div className="flex justify-center mb-4">
-              <KeyIcon className="w-12 h-12 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">Your Keys Only</h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              You control your encryption keys, not us
-            </p>
-          </div>
-        </div>
+        {/* "Open source and self-hostable ... hosted service at [HOSTED DOMAIN]." is deferred (decision 12). */}
       </div>
+
+      <section className="flex flex-col gap-4" aria-labelledby="promises">
+        <h2 id="promises" className="font-mono text-xs font-medium uppercase leading-4 tracking-[0.04em] text-ink-3">
+          Five promises
+        </h2>
+        <ol className="flex flex-col border-t border-ink">
+          {PROMISES.map(([title, detail], i) => (
+            <li key={title} className="grid grid-cols-[40px_minmax(0,1fr)] gap-x-3 gap-y-1 border-b border-line py-[18px] md:grid-cols-[56px_minmax(0,1fr)] md:py-5">
+              <span className="font-mono text-[13px] font-medium leading-6 text-ink-3">{String(i + 1).padStart(2, '0')}</span>
+              <span className="font-sans text-[17px] font-semibold leading-6 text-ink">{title}</span>
+              <span className="col-start-2 font-sans text-base text-ink-2">{detail}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
-  );
-};
+  </PublicLayout>
+);
 
 export default HomePage;

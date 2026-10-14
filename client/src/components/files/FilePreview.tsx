@@ -7,10 +7,12 @@ import {
   ChevronRightIcon,
   MagnifyingGlassPlusIcon,
   MagnifyingGlassMinusIcon,
+  LockClosedIcon,
 } from '@heroicons/react/24/outline';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Spinner } from '../common/Spinner';
+import { formatFileSize } from './FileItem';
 import { motion } from 'framer-motion';
 
 export interface FilePreviewProps {
@@ -44,72 +46,95 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [text, setText] = useState<string | null>(null);
+
+  const fileId = file?.id;
+  const fileUrl = file?.url;
 
   useEffect(() => {
-    if (!file || !isOpen) {
+    if (!fileId || !isOpen) {
       setPreviewUrl(null);
       setError(null);
       setZoom(1);
       return;
     }
 
+    let cancelled = false;
+    let blobUrl: string | null = null;
+
     const loadPreview = async () => {
       setIsDecrypting(true);
       setError(null);
 
       try {
-        if (file.url) {
-          setPreviewUrl(file.url);
+        if (fileUrl) {
+          setPreviewUrl(fileUrl);
         } else if (decryptFile) {
-          const decryptedUrl = await decryptFile(file.id);
+          const decryptedUrl = await decryptFile(fileId);
+          blobUrl = decryptedUrl;
+          if (cancelled) {
+            if (decryptedUrl.startsWith('blob:')) URL.revokeObjectURL(decryptedUrl);
+            return;
+          }
           setPreviewUrl(decryptedUrl);
         } else {
           setError('No preview available');
         }
       } catch (err: any) {
-        setError(err.message || 'Failed to load preview');
+        if (!cancelled) setError(err.message || 'Failed to load preview');
       } finally {
-        setIsDecrypting(false);
+        if (!cancelled) setIsDecrypting(false);
       }
     };
 
-    loadPreview();
+    void loadPreview();
 
     return () => {
-      // Cleanup blob URLs
-      if (previewUrl && previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      cancelled = true;
+      // The decrypted copy goes away with the preview.
+      if (blobUrl && blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
     };
-  }, [file, isOpen, decryptFile]);
+  }, [fileId, fileUrl, isOpen, decryptFile]);
+
+  // Text files are read from the decrypted blob and drawn in the page, so they take the page's type and theme.
+  useEffect(() => {
+    setText(null);
+    if (!previewUrl || !file?.mimeType.startsWith('text/')) return;
+    let cancelled = false;
+    fetch(previewUrl)
+      .then((r) => r.text())
+      .then((t) => {
+        if (!cancelled) setText(t);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Failed to load preview');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewUrl, file?.mimeType]);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 3));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5));
   const handleResetZoom = () => setZoom(1);
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
+  const center = 'flex min-h-[240px] items-center justify-center';
 
   const renderPreview = () => {
     if (isDecrypting || isLoading) {
       return (
-        <div className="flex items-center justify-center h-96">
-          <Spinner size="lg" label="Decrypting file..." />
+        <div className={center}>
+          <Spinner size="sm" label="Decrypting…" />
         </div>
       );
     }
 
     if (error) {
       return (
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <p className="text-red-600 dark:text-red-400 mb-2">{error}</p>
-            <Button variant="secondary" onClick={onClose}>
+        <div className={center}>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <p className="text-danger-text">{error}</p>
+            <Button variant="secondary" size="sm" onClick={onClose}>
               Close
             </Button>
           </div>
@@ -119,48 +144,41 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
 
     if (!file || !previewUrl) {
       return (
-        <div className="flex items-center justify-center h-96">
-          <p className="text-gray-500 dark:text-gray-400">No preview available</p>
+        <div className={center}>
+          <p className="text-ink-3">No preview available</p>
         </div>
       );
     }
 
-    // Image preview
     if (file.mimeType.startsWith('image/')) {
       return (
-        <div className="relative overflow-auto max-h-[70vh] flex items-center justify-center bg-gray-100 dark:bg-gray-900 rounded-lg">
+        <div className="relative flex max-h-[60vh] items-center justify-center overflow-auto rounded-[10px] border border-line bg-surface">
           <motion.img
             src={previewUrl}
             alt={file.name}
-            className="max-w-full h-auto"
+            className="h-auto max-w-full"
             style={{ transform: `scale(${zoom})` }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.15 }}
           />
         </div>
       );
     }
 
-    // Video preview
     if (file.mimeType.startsWith('video/')) {
       return (
-        <div className="flex items-center justify-center">
-          <video
-            src={previewUrl}
-            controls
-            className="max-w-full max-h-[70vh] rounded-lg"
-          >
+        <div className={center}>
+          <video src={previewUrl} controls className="max-h-[60vh] max-w-full rounded-[10px]">
             Your browser does not support the video tag.
           </video>
         </div>
       );
     }
 
-    // Audio preview
     if (file.mimeType.startsWith('audio/')) {
       return (
-        <div className="flex items-center justify-center p-8">
+        <div className={`${center} p-8`}>
           <audio src={previewUrl} controls className="w-full max-w-md">
             Your browser does not support the audio tag.
           </audio>
@@ -168,33 +186,24 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
       );
     }
 
-    // PDF preview
     if (file.mimeType === 'application/pdf') {
-      return (
-        <iframe
-          src={previewUrl}
-          className="w-full h-[70vh] rounded-lg"
-          title={file.name}
-        />
-      );
+      return <iframe src={previewUrl} className="h-[60vh] w-full rounded-[10px] border border-line bg-surface" title={file.name} />;
     }
 
-    // Text preview
     if (file.mimeType.startsWith('text/')) {
-      return (
-        <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-lg max-h-[70vh] overflow-auto">
-          <iframe src={previewUrl} className="w-full h-full min-h-[500px]" title={file.name} />
+      return text === null ? (
+        <div className={center}>
+          <Spinner size="sm" label="Decrypting…" />
         </div>
+      ) : (
+        <pre className="m-0 max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-[10px] border border-line bg-surface p-5 font-mono text-[13px] leading-[21px] text-ink">{text}</pre>
       );
     }
 
-    // Fallback
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Preview not available for this file type
-          </p>
+      <div className={center}>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="text-ink-2">Preview not available for this file type</p>
           {onDownload && (
             <Button onClick={onDownload} leftIcon={<ArrowDownTrayIcon className="h-5 w-5" />}>
               Download to view
@@ -205,93 +214,74 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
     );
   };
 
+  const iconButton =
+    'flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40';
+  const navButton =
+    'absolute top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-surface text-ink-2 shadow-sm hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  const isImage = file?.mimeType.startsWith('image/') && !isDecrypting && !error;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl" showCloseButton={false}>
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {file?.name || 'Preview'}
-            </h3>
+      <div className="-m-6 flex flex-col text-ink">
+        <div className="flex items-center justify-between gap-3 border-b border-line py-3 pl-5 pr-2">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h2 className="truncate text-base font-semibold leading-[22px] text-ink">{file?.name || 'Preview'}</h2>
             {file && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {formatFileSize(file.size)} • {file.mimeType}
+              <p className="text-xs text-ink-3">
+                {formatFileSize(file.size)} · {file.mimeType}
               </p>
             )}
           </div>
-
-          <button
-            onClick={onClose}
-            className="flex-shrink-0 ml-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-          >
-            <XMarkIcon className="h-6 w-6" />
-          </button>
-        </div>
-
-        {/* Preview Content */}
-        <div className="relative">
-          {renderPreview()}
-
-          {/* Navigation Arrows */}
-          {onNavigate && file && (
-            <>
-              <button
-                onClick={() => onNavigate('prev')}
-                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ChevronLeftIcon className="h-6 w-6 text-gray-700 dark:text-gray-300" />
-              </button>
-              <button
-                onClick={() => onNavigate('next')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ChevronRightIcon className="h-6 w-6 text-gray-700 dark:text-gray-300" />
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-          {/* Zoom controls for images */}
-          {file?.mimeType.startsWith('image/') && !isDecrypting && !error && (
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={handleZoomOut} disabled={zoom <= 0.5}>
-                <MagnifyingGlassMinusIcon className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[4rem] text-center">
-                {Math.round(zoom * 100)}%
-              </span>
-              <Button variant="ghost" size="sm" onClick={handleZoomIn} disabled={zoom >= 3}>
-                <MagnifyingGlassPlusIcon className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleResetZoom}>
-                Reset
-              </Button>
-            </div>
-          )}
-
-          <div className="flex-1" />
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-none items-center gap-1">
             {onShare && (
-              <Button
-                variant="secondary"
-                onClick={onShare}
-                leftIcon={<ShareIcon className="h-4 w-4" />}
-              >
-                Share
-              </Button>
+              <button type="button" onClick={onShare} aria-label={`Share ${file?.name ?? 'file'}`} className={iconButton}>
+                <ShareIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
             )}
             {onDownload && (
-              <Button
-                onClick={onDownload}
-                leftIcon={<ArrowDownTrayIcon className="h-4 w-4" />}
-              >
-                Download
-              </Button>
+              <button type="button" onClick={onDownload} aria-label={`Download ${file?.name ?? 'file'}`} className={iconButton}>
+                <ArrowDownTrayIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
+            )}
+            <button type="button" onClick={onClose} aria-label="Close preview" className={iconButton}>
+              <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 bg-surface-2 p-5">
+          <div className="relative">
+            {renderPreview()}
+            {onNavigate && file && (
+              <>
+                <button type="button" onClick={() => onNavigate('prev')} aria-label="Previous file" className={`${navButton} left-2`}>
+                  <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button type="button" onClick={() => onNavigate('next')} aria-label="Next file" className={`${navButton} right-2`}>
+                  <ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="flex items-center gap-2 text-xs text-ink-3">
+              <LockClosedIcon className="h-3.5 w-3.5 flex-none" aria-hidden="true" />
+              Decrypted in this browser. Closing the preview clears it from memory.
+            </p>
+            {isImage && (
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={handleZoomOut} disabled={zoom <= 0.5} aria-label="Zoom out" className={iconButton}>
+                  <MagnifyingGlassMinusIcon className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <span className="min-w-[3.5rem] text-center text-sm tabular-nums text-ink-2">{Math.round(zoom * 100)}%</span>
+                <button type="button" onClick={handleZoomIn} disabled={zoom >= 3} aria-label="Zoom in" className={iconButton}>
+                  <MagnifyingGlassPlusIcon className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <Button variant="quiet" size="sm" onClick={handleResetZoom}>
+                  Reset
+                </Button>
+              </div>
             )}
           </div>
         </div>

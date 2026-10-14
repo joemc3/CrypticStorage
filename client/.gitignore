@@ -87,3 +87,8 @@ storybook-static/
 
 # Sentry
 .sentryclirc
+
+# Browser smoke output (screenshots are uploaded as a CI artifact)
+/e2e-browser/screenshots/
+/e2e-browser/test-results/
+/playwright-report/

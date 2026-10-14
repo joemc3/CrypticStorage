@@ -25,6 +25,25 @@ async function bytesOf(blob: Blob): Promise<Buffer> {
   return Buffer.from(await blob.arrayBuffer());
 }
 
+const PHRASE = 'I understand there is no way back';
+
+/** Register the way a person does: accept the contract, follow the emailed link, then sign in. */
+async function registerAndVerify(email: string, password: string, beforeVerify?: () => Promise<void>) {
+  await AuthService.register(email, password, undefined, PHRASE);
+  await beforeVerify?.();
+  let token: string | undefined;
+  for (let attempt = 0; attempt < 10 && !token; attempt++) {
+    const res = await fetch(`${API}/_test/mail?to=${encodeURIComponent(email)}`);
+    const body = (await res.json()) as { data?: { text: string }[] };
+    token = body.data?.map((m) => m.text.match(/\/verify\/([A-Za-z0-9_-]+)/)?.[1]).find(Boolean);
+    if (!token) await new Promise((r) => setTimeout(r, 200));
+  }
+  if (!token) throw new Error(`No verification mail arrived for ${email}`);
+  const verified = await AuthService.verifyEmail(token);
+  expect(verified.email).toBe(email);
+  return (await AuthService.login(email, password)).user;
+}
+
 beforeAll(async () => {
   const res = await fetch(`${API}/health`);
   if (!res.ok) throw new Error(`API at ${API} is not healthy: ${res.status}`);
@@ -40,7 +59,12 @@ describe('zero-knowledge flow', () => {
   const original = randomFile('quarterly-report.pdf', 2 * CryptoService.CHUNK_SIZE + 777, 'application/pdf');
 
   it('registers and the server only receives ciphertext', async () => {
-    const user = await AuthService.register(alice.email, alice.password);
+    const user = await registerAndVerify(alice.email, alice.password, async () => {
+      // Registering opens no vault, and signing in before the link is followed is refused.
+      expect(StorageService.isUnlocked()).toBe(false);
+      await expect(AuthService.login(alice.email, alice.password)).rejects.toThrow();
+      expect(StorageService.isUnlocked()).toBe(false);
+    });
     expect(user.email).toBe(alice.email);
     expect(StorageService.isUnlocked()).toBe(true);
 
@@ -83,6 +107,17 @@ describe('zero-knowledge flow', () => {
     expect((await FileService.listFiles()).length).toBe(1);
   }, 60_000);
 
+  it('lets the person choose how long the safe stays open', async () => {
+    await ApiService.updateProfile({ lockAfterMinutes: 1 });
+    await AuthService.refreshProfile();
+    expect(StorageService.getUserData()!.lockAfterMinutes).toBe(1);
+
+    AuthService.lock();
+    expect(StorageService.isUnlocked()).toBe(false);
+    await AuthService.unlock(alice.password);
+    expect(StorageService.isUnlocked()).toBe(true);
+  }, 60_000);
+
   it('creates a share link whose key never reaches the server and opens it anonymously', async () => {
     const link = await ShareService.createShareLink({ fileId: uploadedId, maxDownloads: 3 });
     shareUrl = link.fullUrl;
@@ -118,7 +153,7 @@ describe('zero-knowledge flow', () => {
     // Register Bob in a separate session, then come back as Alice.
     const aliceSession = { tokens: StorageService.getTokens()!, user: StorageService.getUserData()!, vault: StorageService.getVault()! };
     StorageService.clearAllData();
-    await AuthService.register(bob.email, bob.password);
+    await registerAndVerify(bob.email, bob.password);
     const bobSession = { tokens: StorageService.getTokens()!, user: StorageService.getUserData()!, vault: StorageService.getVault()! };
     StorageService.clearAllData();
 

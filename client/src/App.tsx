@@ -3,7 +3,7 @@
  * Router, auth gating, theme application and global toasts.
  */
 
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Spinner } from './components/common/Spinner';
@@ -15,6 +15,7 @@ import { useUIStore } from './stores/ui.store';
 const HomePage = lazy(() => import('./pages/HomePage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const VerifyPage = lazy(() => import('./pages/VerifyPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const FilesPage = lazy(() => import('./pages/FilesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -22,8 +23,8 @@ const SharedPage = lazy(() => import('./pages/SharedPage').then((m) => ({ defaul
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 const LoadingFallback: React.FC = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-    <Spinner size="lg" label="Loading…" />
+  <div className="min-h-screen flex items-center justify-center bg-bg">
+    <Spinner size="lg" color="text-accent" label="Loading…" />
   </div>
 );
 
@@ -37,7 +38,7 @@ const ToastContainer: React.FC = () => {
   const toasts = useUIStore((s) => s.toasts);
   const removeToast = useUIStore((s) => s.removeToast);
   return (
-    <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none">
+    <div className="pointer-events-none fixed inset-x-4 bottom-20 z-[60] flex flex-col items-center gap-2 md:inset-x-auto md:bottom-4 md:right-4 md:items-end">
       <AnimatePresence mode="popLayout">
         {toasts.map((t) => (
           <div key={t.id} className="pointer-events-auto">
@@ -49,22 +50,6 @@ const ToastContainer: React.FC = () => {
   );
 };
 
-/** Applies the persisted theme preference to <html>. */
-const ThemeEffect: React.FC = () => {
-  const theme = useUIStore((s) => s.theme);
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = () => {
-      const dark = theme === 'dark' || (theme === 'system' && media.matches);
-      document.documentElement.classList.toggle('dark', dark);
-    };
-    apply();
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, [theme]);
-  return null;
-};
-
 const PublicOnly: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const status = useAuthStore((s) => s.status);
   return status === 'unlocked' ? <Navigate to="/dashboard" replace /> : <>{children}</>;
@@ -72,7 +57,6 @@ const PublicOnly: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const App: React.FC = () => (
   <BrowserRouter>
-    <ThemeEffect />
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route
@@ -85,6 +69,7 @@ const App: React.FC = () => (
         />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify/:token" element={<VerifyPage />} />
         <Route path="/s/:token" element={<SharedPage />} />
         <Route path="/shared/:token" element={<LegacySharedRedirect />} />
 
@@ -109,6 +94,14 @@ const App: React.FC = () => (
           element={
             <ProtectedRoute>
               <FilesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/shared"
+          element={
+            <ProtectedRoute>
+              <FilesPage view="shared" />
             </ProtectedRoute>
           }
         />

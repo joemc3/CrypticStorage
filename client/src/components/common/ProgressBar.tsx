@@ -1,73 +1,39 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
 export interface ProgressBarProps {
   progress: number; // 0-100
-  size?: 'sm' | 'md' | 'lg';
-  variant?: 'default' | 'success' | 'warning' | 'danger';
+  variant?: 'default' | 'warning' | 'danger';
   label?: string;
+  /** Name for assistive tech when no visible label is shown. */
+  ariaLabel?: string;
   showPercentage?: boolean;
-  animated?: boolean;
 }
 
-const sizeClasses = {
-  sm: 'h-1',
-  md: 'h-2',
-  lg: 'h-3',
+const fill = {
+  default: 'bg-accent',
+  warning: 'bg-warn-text',
+  danger: 'bg-danger',
 };
 
-const variantClasses = {
-  default: 'bg-indigo-600',
-  success: 'bg-green-600',
-  warning: 'bg-yellow-600',
-  danger: 'bg-red-600',
-};
-
-export const ProgressBar: React.FC<ProgressBarProps> = ({
-  progress,
-  size = 'md',
-  variant = 'default',
-  label,
-  showPercentage = true,
-  animated = true,
-}) => {
-  const clampedProgress = Math.min(100, Math.max(0, progress));
-
+export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, variant = 'default', label, ariaLabel, showPercentage = true }) => {
+  const clamped = Math.min(100, Math.max(0, progress));
   return (
     <div className="w-full">
       {(label || showPercentage) && (
-        <div className="flex justify-between items-center mb-1">
-          {label && <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>}
-          {showPercentage && (
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {Math.round(clampedProgress)}%
-            </span>
-          )}
+        <div className="mb-1.5 flex items-center justify-between text-sm">
+          {label && <span className="text-ink">{label}</span>}
+          {showPercentage && <span className="text-ink-3 tabular-nums">{Math.round(clamped)}%</span>}
         </div>
       )}
-      <div className={`w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden ${sizeClasses[size]}`}>
-        <motion.div
-          className={`${sizeClasses[size]} ${variantClasses[variant]} rounded-full ${
-            animated ? 'transition-all duration-300' : ''
-          }`}
-          initial={{ width: 0 }}
-          animate={{ width: `${clampedProgress}%` }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-        >
-          {animated && (
-            <motion.div
-              className="h-full w-full bg-gradient-to-r from-transparent via-white to-transparent opacity-30"
-              animate={{
-                x: ['-100%', '100%'],
-              }}
-              transition={{
-                duration: 1.5,
-                repeat: Infinity,
-                ease: 'linear',
-              }}
-            />
-          )}
-        </motion.div>
+      <div
+        role="progressbar"
+        aria-valuenow={Math.round(clamped)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={ariaLabel ?? label ?? 'Progress'}
+        className="h-1.5 w-full overflow-hidden rounded-full bg-sunk"
+      >
+        <div className={`h-full rounded-full transition-[width] duration-200 ${fill[variant]}`} style={{ width: `${clamped}%` }} />
       </div>
     </div>
   );
@@ -77,51 +43,31 @@ export const CircularProgress: React.FC<{
   progress: number;
   size?: number;
   strokeWidth?: number;
-  variant?: 'default' | 'success' | 'warning' | 'danger';
+  variant?: 'default' | 'warning' | 'danger';
 }> = ({ progress, size = 120, strokeWidth = 8, variant = 'default' }) => {
-  const clampedProgress = Math.min(100, Math.max(0, progress));
+  const clamped = Math.min(100, Math.max(0, progress));
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (clampedProgress / 100) * circumference;
-
-  const strokeColors = {
-    default: '#4F46E5',
-    success: '#10B981',
-    warning: '#F59E0B',
-    danger: '#EF4444',
-  };
+  const offset = circumference - (clamped / 100) * circumference;
+  const stroke = { default: 'text-accent', warning: 'text-warn-text', danger: 'text-danger' }[variant];
 
   return (
     <div className="relative inline-flex items-center justify-center">
-      <svg width={size} height={size} className="transform -rotate-90">
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle className="text-sunk" strokeWidth={strokeWidth} stroke="currentColor" fill="transparent" r={radius} cx={size / 2} cy={size / 2} />
         <circle
-          className="text-gray-200 dark:text-gray-700"
-          strokeWidth={strokeWidth}
+          className={stroke}
           stroke="currentColor"
-          fill="transparent"
-          r={radius}
-          cx={size / 2}
-          cy={size / 2}
-        />
-        <motion.circle
-          stroke={strokeColors[variant]}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           fill="transparent"
           r={radius}
           cx={size / 2}
           cy={size / 2}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-          style={{
-            strokeDasharray: circumference,
-          }}
+          style={{ strokeDasharray: circumference, strokeDashoffset: offset, transition: 'stroke-dashoffset .2s' }}
         />
       </svg>
-      <span className="absolute text-xl font-semibold text-gray-700 dark:text-gray-300">
-        {Math.round(clampedProgress)}%
-      </span>
+      <span className="absolute text-xl font-semibold tabular-nums text-ink">{Math.round(clamped)}%</span>
     </div>
   );
 };

@@ -320,6 +320,12 @@ export async function keyFingerprint(key: CryptoKey): Promise<string> {
   return hash.slice(0, 32).replace(/(.{4})/g, '$1 ').trim();
 }
 
+/** Fingerprint of someone else's public key: SHA-256 of the SPKI bytes, 32 hex characters in groups of four. */
+export async function publicKeyFingerprint(spkiBase64: string): Promise<string> {
+  const hash = bytesToHex(await sha256(base64ToBytes(spkiBase64)));
+  return hash.slice(0, 32).replace(/(.{4})/g, '$1 ').trim();
+}
+
 export function generatePassword(length = 20): string {
   const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}';
   const bytes = randomBytes(length * 2);
@@ -365,6 +371,7 @@ const CryptoService = {
   plaintextSize,
   encryptedSizeFor,
   keyFingerprint,
+  publicKeyFingerprint,
   generatePassword,
 };
 

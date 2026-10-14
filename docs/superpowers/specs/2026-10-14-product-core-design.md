@@ -49,7 +49,7 @@ Changed, because this is a safe:
 
 - **Signup is a contract.** Before the account exists the user sees, one fact per screen, that there is no reset, no recovery key, no support path, and that the email cannot be changed. Each fact is a bold line and one action. The last screen requires typing a short phrase. The audit log records the acknowledgement.
 - **Email verification is mandatory** at signup. Timers, reminders, witness and recipient invitations all depend on reaching the person.
-- **Lock behaviour.** Keys live only in memory while unlocked. Auto-lock after 5 minutes idle by default, configurable down, not up beyond 30. Lock on tab close. Re-entering the password unlocks offline.
+- **Lock behaviour.** Keys live only in memory while unlocked. Auto-lock after 5 minutes idle by default, configurable between 1 and 30 minutes. Lock on tab close. Re-entering the password unlocks offline.
 - **Public key trust.** Every contact shows a fingerprint. Trust on first use; a changed key is a loud warning, never silent. A "verified in person" marker the owner can set. Out-of-band verification proper belongs to attacker 2 work.
 
 Explicitly out: password reset, recovery key, security questions, support-assisted recovery, email change, deduplication (it reveals that two users hold the same file).
@@ -129,12 +129,13 @@ The visual and interaction design is produced in Claude Design in a separate ses
 ## 12. Order of work
 
 1. Repo cleanup: delete the dead generated sources; build the Docker images in CI.
+   Then the design brief goes out (section 11, step 1), so the Claude Design session runs in parallel with stages 2 to 6.
 2. Signup as a contract, mandatory email verification, auto-lock. Email service enters the stack.
 3. Witnesses: invitations, acceptance, Shamir split, fingerprints and trust on first use.
 4. Handoff rules with the timer, reminders and check-ins.
 5. Quorum release.
 6. Admin role and quotas for self-hosters.
-7. Design handoff (section 11) and the design pass over the whole UI.
+7. Reconcile the design (section 11, step 3) and apply it across the whole UI.
 8. Reproducible client build with published hashes.
 9. External security review, then the hosted service.
 10. Streaming uploads, passkeys, packaged client, in whatever order matters then.

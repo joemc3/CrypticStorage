@@ -16,9 +16,11 @@ import {
   XMarkIcon,
   MoonIcon,
   SunIcon,
+  LockClosedIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import { useUIStore } from '../stores/ui.store';
+import { useIdleLock } from '../hooks/useIdleLock';
 
 export interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -33,7 +35,9 @@ const navigation = [
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logoutUser } = useAuth();
+  const { user, logoutUser, lock } = useAuth();
+  useIdleLock();
+  const lockMinutes = user?.lockAfterMinutes ?? 5;
   const { theme, setTheme, sidebarOpen, setSidebarOpen } = useUIStore();
 
   const handleLogout = async () => {
@@ -118,6 +122,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
           {/* Bottom actions */}
           <div className="px-4 py-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+            <div className="flex items-center justify-between px-4 pb-2 text-xs text-ink-3">
+              <span>Unlocked · locks after {lockMinutes} min idle</span>
+              <button type="button" onClick={lock} className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">
+                Lock now
+              </button>
+            </div>
             <button
               onClick={toggleTheme}
               className="flex items-center w-full px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -157,6 +167,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
               <Bars3Icon className="h-6 w-6" />
             </button>
             <div className="flex-1"></div>
+            <button
+              type="button"
+              onClick={lock}
+              aria-label="Lock now"
+              className="lg:hidden text-ink-2 hover:text-ink"
+            >
+              <LockClosedIcon className="h-6 w-6" />
+            </button>
             <div className="flex items-center gap-4">
               {/* Additional header actions can go here */}
             </div>

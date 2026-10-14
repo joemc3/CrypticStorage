@@ -167,6 +167,7 @@ export function cancelTwoFactor(): void {
 // ============================================================================
 
 export function lock(): void {
+  pendingWrappingKey = null;
   StorageService.clearInMemoryData();
 }
 

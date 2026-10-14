@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { LockClosedIcon } from '@heroicons/react/24/outline';
-import { motion } from 'framer-motion';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 
@@ -9,10 +8,11 @@ export interface UnlockFormProps {
   onUnlock: (password: string) => Promise<void>;
   onSignOut: () => void;
   isLoading?: boolean;
+  lockAfterMinutes?: number;
 }
 
-/** Shown after a reload: the session is valid but the keys left memory. */
-export const UnlockForm: React.FC<UnlockFormProps> = ({ email, onUnlock, onSignOut, isLoading = false }) => {
+/** Shown after a lock or reload: the session is valid but the keys left memory. */
+export const UnlockForm: React.FC<UnlockFormProps> = ({ email, onUnlock, onSignOut, isLoading = false, lockAfterMinutes = 5 }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | undefined>();
 
@@ -29,18 +29,18 @@ export const UnlockForm: React.FC<UnlockFormProps> = ({ email, onUnlock, onSignO
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md mx-auto">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 dark:bg-indigo-900 rounded-full mb-4">
-          <LockClosedIcon className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+    <div className="relative w-full max-w-sm mx-auto">
+      <button type="button" onClick={onSignOut} className="absolute -top-16 right-0 text-sm text-ink-2 hover:text-ink">
+        Sign out
+      </button>
+      <form onSubmit={submit} className="space-y-6">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full border-[1.5px] border-line text-ink">
+          <LockClosedIcon className="h-7 w-7" aria-hidden="true" />
         </div>
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Vault locked</h2>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Enter your password to decrypt your keys on this device. Nothing is sent to the server.
-        </p>
-      </div>
-      <form onSubmit={submit} className="space-y-4">
-        <Input type="email" label="Account" value={email} disabled autoComplete="username" />
+        <div className="space-y-2">
+          <h1 className="font-serif text-3xl text-ink">Your safe is locked.</h1>
+          <p className="text-ink-2">{email}</p>
+        </div>
         <Input
           type="password"
           label="Password"
@@ -54,10 +54,10 @@ export const UnlockForm: React.FC<UnlockFormProps> = ({ email, onUnlock, onSignO
         <Button type="submit" isLoading={isLoading} className="w-full">
           Unlock
         </Button>
-        <button type="button" onClick={onSignOut} className="w-full text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-          Sign out instead
-        </button>
+        <p className="text-sm text-ink-3">
+          Locks after {lockAfterMinutes} minutes idle and when you close the tab. Unlocking works offline.
+        </p>
       </form>
-    </motion.div>
+    </div>
   );
 };

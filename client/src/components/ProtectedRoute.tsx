@@ -22,7 +22,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   if (status === 'locked') {
     return (
       <AuthLayout>
-        <UnlockForm email={user?.email ?? ''} onUnlock={unlock} onSignOut={() => void logoutUser()} isLoading={isLoading} />
+        <UnlockForm email={user?.email ?? ''} onUnlock={unlock} onSignOut={() => void logoutUser()} isLoading={isLoading} lockAfterMinutes={user?.lockAfterMinutes} />
       </AuthLayout>
     );
   }

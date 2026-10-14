@@ -11,6 +11,8 @@ export interface FileItem {
   createdAt: string;
   updatedAt: string;
   isFolder?: boolean;
+  /** Active user shares plus live links; the row shows "Shared" when above zero. */
+  shareCount?: number;
 }
 
 export interface Folder {

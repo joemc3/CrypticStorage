@@ -6,6 +6,7 @@
 import CryptoService from './crypto.service';
 import ApiService, { toApiError, type FileMetadata, type FolderMetadata, type SharedFileMetadata } from './api.service';
 import StorageService from './storage.service';
+import { unwrapFileKeyUnderRelease, unwrapForUser } from './handoff.service';
 
 // ============================================================================
 // Types
@@ -42,13 +43,18 @@ export interface FileListItem {
   folderId?: string;
   createdAt: string;
   updatedAt: string;
+  /** Active user shares plus live links. Zero or absent means the file is not shared. */
+  shareCount?: number;
 }
 
 export interface SharedFileListItem extends FileListItem {
+  /** For a handoff row this is not a share; it only keeps rows unique. Never pass it to the share revoke. */
   shareId: string;
   permissions: string;
   sharedBy: string;
   expiresAt?: string;
+  /** Set when the file reached this account through a released handoff rule. */
+  handoff?: { ruleId: string; from: string; releasedAt: string; by: 'timer' | 'quorum' };
 }
 
 export interface FolderListItem {
@@ -57,6 +63,9 @@ export interface FolderListItem {
   parentId?: string;
   createdAt: string;
   updatedAt: string;
+  /** Active or warning handoff rules on this folder or an ancestor. */
+  ruleIds?: string[];
+  coverageGaps?: number;
 }
 
 export interface DecryptedFile extends FileListItem {
@@ -82,13 +91,20 @@ export async function fileKeyFor(file: Pick<FileMetadata, 'id' | 'encryptedFileK
   return key;
 }
 
+/** A released handoff row has no `encryptedFileKey`: open the release key with my private key, then the file key with that. */
+async function handoffFileKey(handoff: NonNullable<SharedFileMetadata['handoff']>, privateKey: CryptoKey): Promise<CryptoKey> {
+  if (!handoff.wrappedReleaseKey) throw new Error('This handoff has not released its key to you yet.');
+  const releaseKey = await unwrapForUser(handoff.wrappedReleaseKey, privateKey);
+  return unwrapFileKeyUnderRelease(JSON.parse(handoff.wrappedFileKey), releaseKey);
+}
+
 /** Unwrap a key that another user wrapped for us with our RSA public key. */
 async function sharedFileKeyFor(file: SharedFileMetadata): Promise<CryptoKey> {
   const cached = StorageService.getCachedFileKey(file.id);
   if (cached) return cached;
   const privateKey = StorageService.getPrivateKey();
   if (!privateKey) throw new Error('Your vault is locked. Unlock it to continue.');
-  const key = await CryptoService.unwrapKeyFromSender(file.encryptedFileKey, privateKey);
+  const key = file.handoff ? await handoffFileKey(file.handoff, privateKey) : await CryptoService.unwrapKeyFromSender(file.encryptedFileKey, privateKey);
   StorageService.cacheFileKey(file.id, key);
   return key;
 }
@@ -103,6 +119,7 @@ async function toListItem(file: FileMetadata, key: CryptoKey): Promise<FileListI
     folderId: file.folderId,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
+    shareCount: file.shareCount,
   };
 }
 
@@ -245,7 +262,20 @@ export async function listSharedWithMe(): Promise<SharedFileListItem[]> {
       } catch {
         item = undecryptable(file);
       }
-      return { ...item, shareId: file.shareId, permissions: file.permissions, sharedBy: file.sharedBy.email, expiresAt: file.expiresAt };
+      const handoff = file.handoff && {
+        ruleId: file.handoff.ruleId,
+        from: file.handoff.from.displayName || file.handoff.from.email,
+        releasedAt: file.handoff.releasedAt,
+        by: file.handoff.by,
+      };
+      return {
+        ...item,
+        shareId: file.shareId,
+        permissions: file.permissions,
+        sharedBy: handoff ? handoff.from : file.sharedBy.email,
+        expiresAt: file.expiresAt,
+        ...(handoff ? { handoff } : {}),
+      };
     })
   );
 }
@@ -288,7 +318,7 @@ async function toFolderItem(folder: FolderMetadata, masterKey: CryptoKey): Promi
   } catch {
     name = '(cannot decrypt)';
   }
-  return { id: folder.id, name, parentId: folder.parentId, createdAt: folder.createdAt, updatedAt: folder.updatedAt };
+  return { id: folder.id, name, parentId: folder.parentId, createdAt: folder.createdAt, updatedAt: folder.updatedAt, ruleIds: folder.ruleIds, coverageGaps: folder.coverageGaps };
 }
 
 export async function listFolders(parentId?: string): Promise<FolderListItem[]> {

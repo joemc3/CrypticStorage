@@ -6,6 +6,7 @@
 import { useCallback, useState } from 'react';
 import { useFileStore } from '../stores/file.store';
 import { useUIStore } from '../stores/ui.store';
+import { coverFile } from '../services/rules.service';
 import FileService, { type FolderListItem, type SharedFileListItem, type UploadProgress } from '../services/file.service';
 
 export const useFiles = () => {
@@ -31,6 +32,7 @@ export const useFiles = () => {
             userId: '',
             createdAt: f.createdAt,
             updatedAt: f.updatedAt,
+            shareCount: f.shareCount,
           }))
         );
         store.setFolders(folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId ?? null, userId: '', createdAt: f.createdAt, updatedAt: f.updatedAt })));
@@ -70,6 +72,9 @@ export const useFiles = () => {
             const uploaded = await FileService.uploadFile(file, folderId ?? undefined, onProgress);
             store.addFile({ id: uploaded.id, name: uploaded.name, encryptedName: '', size: uploaded.size, mimeType: uploaded.mimeType, folderId: uploaded.folderId ?? null, userId: '', createdAt: uploaded.createdAt, updatedAt: uploaded.updatedAt });
             setTimeout(() => store.removeUploadProgress(localId), 3000);
+            // A file that lands in a covered folder is wrapped into its rules now, so the gap never shows.
+            // If this fails, the repair at the next unlock does it.
+            void coverFile(uploaded.id, folderId).catch(() => undefined);
             return uploaded;
           } catch (error) {
             addToast({ type: 'error', message: `Upload failed: ${file.name}`, description: error instanceof Error ? error.message : undefined });

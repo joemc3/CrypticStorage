@@ -7,13 +7,13 @@ Supersedes `project_standards/PRD.md` and `project_standards/SPECIFICATION.md` (
 
 CrypticStorage is a safe, not a drive. It holds a small number of things that are catastrophic to lose control of: wallet seeds, recovery codes, legal and financial documents, the password to the password manager. Everything in it is encrypted in the browser with keys the server never sees. There is no way to get the contents back without the password, and the product says so plainly instead of apologising for it.
 
-It is open source first, reviewed in public, and self-hostable. A hosted service run by the owner is the same code behind a domain.
+It is open source first, open to review by anyone, and self-hostable. A hosted service run by the owner is the same code behind a domain. The hosted service stands up when the owner decides, not when an outside reviewer has signed off; what has and has not been reviewed is stated publicly and kept current.
 
 ## 2. Who it is for, in order
 
 1. People who run it themselves for their own secrets and their family's.
 2. Reviewers and developers who want to read a zero-knowledge design done carefully.
-3. Customers of a hosted service, later, once an external review exists.
+3. Customers of the hosted service, once it stands up.
 
 ## 3. The core, as promises
 
@@ -115,7 +115,7 @@ Folders with breadcrumbs; drag-and-drop upload with progress; previews for text 
 
 - One codebase, three ways to run: self-hosted by Docker Compose; the hosted service, which is the same image behind the owner's domain plus email and later billing; a packaged client, later, for attacker 2. Nothing in the server may depend on which way it runs.
 - Email becomes a required service from stage 2 onward. Self-hosters bring SMTP; the hosted service uses a provider.
-- `SECURITY.md` is the document reviewers read. It grows a section for the handoff scheme as that lands.
+- `SECURITY.md` is the document reviewers read. It grows a section for the handoff scheme as that lands, and a dated "review status" section that says plainly who has looked at the design and who has not. An external review is sought and welcomed; nothing in the plan waits for it.
 - A reproducible client build with published hashes is the cheap first step toward attacker 2 and is done early.
 
 ## 11. Design handoff
@@ -137,7 +137,7 @@ The visual and interaction design is produced in Claude Design in a separate ses
 6. Admin role and quotas for self-hosters.
 7. Reconcile the design (section 11, step 3) and apply it across the whole UI.
 8. Reproducible client build with published hashes.
-9. External security review, then the hosted service.
+9. The hosted service, with the review status published alongside it. An external review is pursued in parallel and recorded when it happens.
 10. Streaming uploads, passkeys, packaged client, in whatever order matters then.
 
 Each stage gets its own spec and plan under `docs/superpowers/`; this document is the frame they are checked against.

@@ -15,6 +15,7 @@ import { useUIStore } from './stores/ui.store';
 const HomePage = lazy(() => import('./pages/HomePage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const VerifyPage = lazy(() => import('./pages/VerifyPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const FilesPage = lazy(() => import('./pages/FilesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -68,6 +69,7 @@ const App: React.FC = () => (
         />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify/:token" element={<VerifyPage />} />
         <Route path="/s/:token" element={<SharedPage />} />
         <Route path="/shared/:token" element={<LegacySharedRedirect />} />
 

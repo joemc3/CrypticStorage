@@ -34,15 +34,13 @@ export const useAuth = () => {
   );
 
   const register = useCallback(
-    (email: string, password: string) =>
-      run(async () => {
-        const created = await AuthService.register(email, password);
-        setUnlocked(created);
-        addToast({ type: 'success', message: 'Welcome to CrypticStorage', description: 'Your keys were generated on this device.' });
-        return created;
-      }, 'Registration failed'),
-    [run, setUnlocked, addToast]
+    (email: string, password: string, displayName: string | undefined, phrase: string) =>
+      run(() => AuthService.register(email, password, displayName, phrase), 'Registration failed'),
+    [run]
   );
+
+  const verifyEmail = useCallback((token: string) => AuthService.verifyEmail(token), []);
+  const resendVerification = useCallback((email: string) => AuthService.resendVerification(email), []);
 
   const loginUser = useCallback(
     (input: LoginInput) =>
@@ -152,6 +150,8 @@ export const useAuth = () => {
     isLoading,
     pendingTwoFactorEmail,
     register,
+    verifyEmail,
+    resendVerification,
     loginUser,
     verifyTwoFactor,
     cancelTwoFactor,

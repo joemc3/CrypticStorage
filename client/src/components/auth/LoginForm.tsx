@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 
 export interface LoginFormProps {
   onSubmit: (data: LoginData) => Promise<void>;
-  onForgotPassword?: () => void;
   onRegister?: () => void;
   /** When set, the form only asks for the second factor. */
   twoFactorRequired?: boolean;
@@ -23,7 +22,7 @@ export interface LoginData {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onForgotPassword, onRegister, twoFactorRequired = false, onCancelTwoFactor, isLoading = false, error }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onRegister, twoFactorRequired = false, onCancelTwoFactor, isLoading = false, error }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -112,13 +111,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onForgotPassword
               disabled={isLoading}
               autoComplete="current-password"
             />
-            {onForgotPassword && (
-              <div className="text-right">
-                <button type="button" onClick={onForgotPassword} className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400" disabled={isLoading}>
-                  Forgot password?
-                </button>
-              </div>
-            )}
+            <p className="font-sans text-sm text-ink-3">There is no password reset.</p>
             <Button type="submit" isLoading={isLoading} className="w-full">
               Sign in
             </Button>

@@ -63,7 +63,7 @@ async function openVault(user: VaultUser, wrappingKey: CryptoKey): Promise<void>
 // Registration
 // ============================================================================
 
-export async function register(email: string, password: string): Promise<AuthUser> {
+export async function register(email: string, password: string, displayName: string | undefined, phrase: string): Promise<void> {
   const normalizedEmail = email.trim().toLowerCase();
   const salt = await CryptoService.saltForEmail(normalizedEmail);
   const derived = await CryptoService.deriveKeys(password, salt);
@@ -74,6 +74,7 @@ export async function register(email: string, password: string): Promise<AuthUse
   const wrappedMasterKey = await CryptoService.wrapKey(masterKey, derived.wrappingKey);
   const encryptedPrivateKey = await CryptoService.encryptBytes(await CryptoService.exportPrivateKey(rsa.privateKey), masterKey);
 
+  const name = displayName?.trim();
   try {
     await ApiService.register({
       email: normalizedEmail,
@@ -83,14 +84,29 @@ export async function register(email: string, password: string): Promise<AuthUse
       wrappedMasterKey: JSON.stringify(wrappedMasterKey),
       salt,
       kdfIterations: derived.iterations,
-      contractPhrase: 'I understand there is no way back', // task 5 rewrites this
+      contractPhrase: phrase,
+      ...(name ? { displayName: name } : {}),
     });
   } catch (error) {
     throw new Error(toApiError(error).message);
   }
+  // The safe opens only after the email is verified: no tokens, no vault here.
+}
 
-  // task 5 rewrites this: registration no longer returns tokens or opens the vault.
-  throw new Error('Check your email to verify your account');
+export async function verifyEmail(token: string): Promise<{ email: string }> {
+  try {
+    return await ApiService.verifyEmail(token);
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
+}
+
+export async function resendVerification(email: string): Promise<void> {
+  try {
+    await ApiService.resendVerification(email.trim().toLowerCase());
+  } catch (error) {
+    throw new Error(toApiError(error).message);
+  }
 }
 
 // ============================================================================
@@ -107,7 +123,9 @@ export async function login(email: string, password: string): Promise<LoginResul
     response = await ApiService.login(normalizedEmail, derived.authHash);
   } catch (error) {
     const apiError = toApiError(error);
-    throw new Error(apiError.statusCode === 401 ? 'Invalid email or password' : apiError.message);
+    const failure = new Error(apiError.statusCode === 401 ? 'Invalid email or password' : apiError.message) as Error & { code?: string };
+    failure.code = apiError.code;
+    throw failure;
   }
 
   if (response.requiresTwoFactor) {
@@ -288,6 +306,8 @@ export function getCurrentUser(): AuthUser | null {
 
 const AuthService = {
   register,
+  verifyEmail,
+  resendVerification,
   login,
   completeTwoFactor,
   cancelTwoFactor,

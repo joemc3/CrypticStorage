@@ -16,7 +16,7 @@ export function api(): ReturnType<typeof request> {
 export async function prepareDatabase(): Promise<void> {
   await storage().init();
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "audit_logs", "sessions", "file_shares", "share_links", "files", "folders", "users" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "audit_logs", "email_tokens", "sessions", "file_shares", "share_links", "files", "folders", "users" RESTART IDENTITY CASCADE'
   );
 }
 

@@ -13,38 +13,46 @@ datasource db {
 }
 
 model User {
-  id                  String   @id @default(uuid())
-  email               String   @unique
+  id                     String    @id @default(uuid())
+  email                  String    @unique
   /// bcrypt hash of the client-derived authentication key (never the password).
-  passwordHash        String   @map("password_hash")
+  passwordHash           String    @map("password_hash")
   /// Base64 salt used by the client KDF. Public, not secret.
-  salt                String
-  kdfIterations       Int      @default(600000) @map("kdf_iterations")
+  salt                   String
+  kdfIterations          Int       @default(600000) @map("kdf_iterations")
   /// Master key wrapped with the password-derived wrapping key (client JSON blob).
-  wrappedMasterKey    String   @map("wrapped_master_key")
+  wrappedMasterKey       String    @map("wrapped_master_key")
   /// RSA-OAEP public key (base64 SPKI) used by other users to share file keys.
-  publicKey           String   @map("public_key")
+  publicKey              String    @map("public_key")
   /// RSA private key encrypted with the master key (client JSON blob).
-  encryptedPrivateKey String   @map("encrypted_private_key")
-  storageQuota        BigInt   @default(10737418240) @map("storage_quota")
-  storageUsed         BigInt   @default(0) @map("storage_used")
-  twoFactorEnabled    Boolean  @default(false) @map("two_factor_enabled")
+  encryptedPrivateKey    String    @map("encrypted_private_key")
+  storageQuota           BigInt    @default(10737418240) @map("storage_quota")
+  storageUsed            BigInt    @default(0) @map("storage_used")
+  twoFactorEnabled       Boolean   @default(false) @map("two_factor_enabled")
   /// Active TOTP secret, encrypted at rest with the server key.
-  totpSecretEnc       String?  @map("totp_secret_enc")
+  totpSecretEnc          String?   @map("totp_secret_enc")
   /// TOTP secret awaiting first successful verification.
-  totpPendingEnc      String?  @map("totp_pending_enc")
-  backupCodeHashes    String[] @default([]) @map("backup_code_hashes")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-  lastLoginAt         DateTime? @map("last_login_at")
+  totpPendingEnc         String?   @map("totp_pending_enc")
+  backupCodeHashes       String[]  @default([]) @map("backup_code_hashes")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  lastLoginAt            DateTime? @map("last_login_at")
+  /// Server-visible, not secret. Shown wherever the design says {name}, else the email.
+  displayName            String?   @map("display_name") @db.VarChar(64)
+  /// Null until the verification link is used.
+  emailVerifiedAt        DateTime? @map("email_verified_at")
+  contractAcknowledgedAt DateTime  @default(now()) @map("contract_acknowledged_at")
+  lockAfterMinutes       Int       @default(5) @map("lock_after_minutes")
+  lastActivityAt         DateTime  @default(now()) @map("last_activity_at")
 
   files          File[]
   folders        Folder[]
   sessions       Session[]
   auditLogs      AuditLog[]
   shareLinks     ShareLink[]
-  sharesGiven    FileShare[] @relation("SharesGiven")
-  sharesReceived FileShare[] @relation("SharesReceived")
+  sharesGiven    FileShare[]  @relation("SharesGiven")
+  sharesReceived FileShare[]  @relation("SharesReceived")
+  emailTokens    EmailToken[]
 
   @@map("users")
 }
@@ -104,17 +112,17 @@ model File {
 
 /// Anonymous share link. The file key travels in the URL fragment and never reaches the server.
 model ShareLink {
-  id              String    @id @default(uuid())
-  token           String    @unique
-  fileId          String    @map("file_id")
-  ownerId         String    @map("owner_id")
-  passwordHash    String?   @map("password_hash")
-  expiresAt       DateTime? @map("expires_at")
-  maxDownloads    Int?      @map("max_downloads")
-  downloadCount   Int       @default(0) @map("download_count")
-  revokedAt       DateTime? @map("revoked_at")
-  lastAccessedAt  DateTime? @map("last_accessed_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  id             String    @id @default(uuid())
+  token          String    @unique
+  fileId         String    @map("file_id")
+  ownerId        String    @map("owner_id")
+  passwordHash   String?   @map("password_hash")
+  expiresAt      DateTime? @map("expires_at")
+  maxDownloads   Int?      @map("max_downloads")
+  downloadCount  Int       @default(0) @map("download_count")
+  revokedAt      DateTime? @map("revoked_at")
+  lastAccessedAt DateTime? @map("last_accessed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   file  File @relation(fields: [fileId], references: [id], onDelete: Cascade)
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -176,4 +184,25 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@map("audit_logs")
+}
+
+enum EmailTokenPurpose {
+  verify_email
+  check_in
+}
+
+model EmailToken {
+  id        String            @id @default(uuid())
+  userId    String            @map("user_id")
+  purpose   EmailTokenPurpose
+  /// SHA-256 hex of a 32-byte random token. The token itself is only ever in the email.
+  tokenHash String            @unique @map("token_hash")
+  expiresAt DateTime          @map("expires_at")
+  usedAt    DateTime?         @map("used_at")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("email_tokens")
 }

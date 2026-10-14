@@ -1,5 +1,6 @@
 import { api, bearer, closeDatabase, prepareDatabase, registerUser, registrationPayload, type TestUser } from '../helpers/api';
 import { outbox } from '../../src/lib/mail';
+import { env } from '../../src/config/env';
 
 beforeAll(prepareDatabase);
 afterAll(closeDatabase);
@@ -31,7 +32,7 @@ describe('witness set', () => {
     const owner = await registerUser();
     const unknown = await invite(owner, 'nobody-here@example.com');
     expect(unknown.status).toBe(404);
-    expect(unknown.body.code ?? unknown.body.error?.code).toBe('NO_ACCOUNT');
+    expect(unknown.body.code).toBe('NO_ACCOUNT');
 
     const payload = registrationPayload();
     expect((await api().post('/api/auth/register').send(payload)).status).toBe(201);
@@ -65,7 +66,7 @@ describe('witness set', () => {
 
   it('caps the set at WITNESS_MAX_N non-removed witnesses', async () => {
     const owner = await registerUser();
-    for (let i = 0; i < 7; i += 1) {
+    for (let i = 0; i < env.WITNESS_MAX_N; i += 1) {
       const w = await registerUser();
       expect((await invite(owner, w.email)).status).toBe(201);
     }
@@ -115,6 +116,34 @@ describe('invitations', () => {
   });
 });
 
+describe('set size ignores declined witnesses', () => {
+  it('lets a declined witness be re-invited at the cap and refits k on decline', async () => {
+    const owner = await registerUser();
+    const ws: TestUser[] = [];
+    const rows: string[] = [];
+    for (let i = 0; i < env.WITNESS_MAX_N; i += 1) {
+      const w = await registerUser();
+      ws.push(w);
+      rows.push((await invite(owner, w.email)).body.data.id);
+    }
+    await api().put('/api/witnesses/threshold').set(bearer(owner)).send({ k: env.WITNESS_MAX_N }).expect(200);
+
+    // Decline lowers k from the max to the new count.
+    await api().post(`/api/witnesses/invitations/${rows[0]}/decline`).set(bearer(ws[0]!)).expect(200);
+    const list = await api().get('/api/witnesses').set(bearer(owner));
+    expect(list.body.data.threshold).toBe(env.WITNESS_MAX_N - 1);
+
+    // The threshold bound ignores the declined row.
+    const tooHigh = await api().put('/api/witnesses/threshold').set(bearer(owner)).send({ k: env.WITNESS_MAX_N });
+    expect(tooHigh.status).toBe(400);
+
+    // One below the cap with a declined row present: re-inviting it fits, and then the set is full.
+    expect((await invite(owner, ws[0]!.email)).status).toBe(201);
+    const extra = await registerUser();
+    expect((await invite(owner, extra.email)).status).toBe(400);
+  });
+});
+
 describe('removal and threshold', () => {
   async function ownerWithWitnesses(n: number) {
     const owner = await registerUser();
@@ -131,7 +160,7 @@ describe('removal and threshold', () => {
     const put = (k: unknown) => api().put('/api/witnesses/threshold').set(bearer(owner)).send({ k });
     expect((await put(1)).status).toBe(400);
     expect((await put(4)).status).toBe(400);
-    expect((await put(2.5)).status).toBeGreaterThanOrEqual(400);
+    expect((await put(2.5)).status).toBe(422);
     const ok = await put(3);
     expect(ok.status).toBe(200);
     expect(ok.body.data).toMatchObject({ threshold: 3, activeRules: [] });
@@ -200,10 +229,25 @@ describe('public key lookup and trust', () => {
     expect(off.body.data.verifiedInPerson).toBe(false);
   });
 
+  it('answers 404 for an unverified account on lookup, seen and trust, like a missing one', async () => {
+    const me = await registerUser();
+    const payload = registrationPayload();
+    const reg = await api().post('/api/auth/register').send(payload);
+    expect(reg.status).toBe(201);
+    const lookup = await api().get('/api/users/public-key').query({ email: payload.email as string }).set(bearer(me));
+    const missing = await api().get('/api/users/public-key').query({ email: 'nobody-at-all@example.com' }).set(bearer(me));
+    expect(lookup.status).toBe(404);
+    expect(lookup.body).toEqual(missing.body);
+    const { prisma } = await import('../../src/config/prisma');
+    const id = (await prisma.user.findUniqueOrThrow({ where: { email: payload.email as string } })).id;
+    expect((await api().post(`/api/contacts/${id}/seen`).set(bearer(me))).status).toBe(404);
+    expect((await api().put(`/api/contacts/${id}/trust`).set(bearer(me)).send({ verifiedInPerson: true })).status).toBe(404);
+  });
+
   it('404s for an unknown contact and rejects a non-boolean', async () => {
     const me = await registerUser();
     const contact = await registerUser();
     expect((await api().post('/api/contacts/00000000-0000-4000-8000-000000000000/seen').set(bearer(me))).status).toBe(404);
-    expect((await api().put(`/api/contacts/${contact.id}/trust`).set(bearer(me)).send({ verifiedInPerson: 'yes' })).status).toBeGreaterThanOrEqual(400);
+    expect((await api().put(`/api/contacts/${contact.id}/trust`).set(bearer(me)).send({ verifiedInPerson: 'yes' })).status).toBe(422);
   });
 });

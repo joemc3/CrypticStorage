@@ -82,12 +82,13 @@ function toTrust(row: { fingerprint: string; verifiedInPerson: boolean; firstSee
 
 /** Read-only: the client compares the fingerprint with `trust` and then decides whether to record it. */
 export async function publicKeyForEmail(callerId: string, email: string) {
-  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, publicKey: true } });
-  if (!user) throw new NotFoundError('No user with that email');
+  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, publicKey: true, emailVerifiedAt: true } });
+  // Unverified accounts answer exactly like missing ones, so they cannot be told apart.
+  if (!user || !user.emailVerifiedAt) throw new NotFoundError('No user with that email');
   const row = await prisma.trustedKey.findUnique({
     where: { userId_contactUserId: { userId: callerId, contactUserId: user.id } },
   });
-  return { ...user, fingerprint: spkiFingerprint(user.publicKey), trust: row ? toTrust(row) : null };
+  return { id: user.id, email: user.email, publicKey: user.publicKey, fingerprint: spkiFingerprint(user.publicKey), trust: row ? toTrust(row) : null };
 }
 
 /**

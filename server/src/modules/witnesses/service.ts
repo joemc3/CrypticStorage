@@ -48,6 +48,19 @@ function invitation(row: RowWithOwner) {
   };
 }
 
+/** The size n of the set: only invited and accepted witnesses hold a slot. */
+function setSize(ownerId: string): Promise<number> {
+  return prisma.witness.count({ where: { ownerId, status: { in: ['invited', 'accepted'] } } });
+}
+
+/** Fit k to the current set, but never below 2. With fewer than 2 left the set is simply incomplete. */
+async function refitThreshold(ownerId: string): Promise<number> {
+  const [n, threshold] = await Promise.all([setSize(ownerId), thresholdOf(ownerId)]);
+  const next = Math.max(MIN_K, Math.min(threshold, n));
+  if (next !== threshold) await prisma.user.update({ where: { id: ownerId }, data: { witnessThreshold: next } });
+  return next;
+}
+
 const withWitness = { witness: { select: { ...personSelect, publicKey: true } } } as const;
 
 async function thresholdOf(ownerId: string): Promise<number> {
@@ -69,7 +82,7 @@ export async function getSet(ownerId: string) {
 }
 
 export async function setThreshold(ownerId: string, k: number, req: Request) {
-  const n = await prisma.witness.count({ where: { ownerId, status: { not: 'removed' } } });
+  const n = await setSize(ownerId);
   const upper = Math.min(n, env.WITNESS_MAX_N);
   if (k < MIN_K || k > upper) {
     throw new BadRequestError(`The threshold must be between ${MIN_K} and the number of witnesses (${n}), at most ${env.WITNESS_MAX_N}`);
@@ -92,7 +105,7 @@ export async function invite(ownerId: string, rawEmail: string, req: Request) {
   if (existing && (existing.status === 'invited' || existing.status === 'accepted')) {
     throw new ConflictError('This person is already one of your witnesses');
   }
-  const active = await prisma.witness.count({ where: { ownerId, status: { not: 'removed' } } });
+  const active = await setSize(ownerId);
   if (active >= env.WITNESS_MAX_N) throw new BadRequestError(`You can have at most ${env.WITNESS_MAX_N} witnesses`);
 
   const now = new Date();
@@ -115,13 +128,7 @@ export async function remove(ownerId: string, id: string, req: Request) {
   if (!row) throw new NotFoundError('Witness not found');
   await prisma.witness.update({ where: { id }, data: { status: 'removed', respondedAt: new Date() } });
 
-  const [n, threshold] = await Promise.all([
-    prisma.witness.count({ where: { ownerId, status: { not: 'removed' } } }),
-    thresholdOf(ownerId),
-  ]);
-  // Fit k to the smaller set, but never below 2. With fewer than 2 left the set is simply incomplete.
-  const next = Math.max(MIN_K, Math.min(threshold, n));
-  if (next !== threshold) await prisma.user.update({ where: { id: ownerId }, data: { witnessThreshold: next } });
+  const next = await refitThreshold(ownerId);
   audit(req, { userId: ownerId, action: 'witness.remove', resourceType: 'witness', resourceId: id });
   return { threshold: next, activeRules: [] as unknown[] };
 }
@@ -151,6 +158,7 @@ export async function respond(userId: string, id: string, decision: 'accepted' |
     data: { status: decision, respondedAt: new Date() },
   });
   if (claimed.count === 0) throw new ConflictError('This invitation has already been answered');
+  if (decision === 'declined') await refitThreshold(row.ownerId);
   audit(req, {
     userId,
     action: decision === 'accepted' ? 'witness.accept' : 'witness.decline',

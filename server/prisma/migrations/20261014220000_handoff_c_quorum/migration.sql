@@ -1,6 +1,9 @@
 -- CreateEnum
 CREATE TYPE "ReleaseRequestState" AS ENUM ('open', 'cancelled', 'completed');
 
+-- AlterTable
+ALTER TABLE "handoff_rules" ADD COLUMN "released_by_request_id" TEXT;
+
 -- CreateTable
 CREATE TABLE "release_requests" (
     "id" TEXT NOT NULL,

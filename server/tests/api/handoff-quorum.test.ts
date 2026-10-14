@@ -96,7 +96,10 @@ describe('opening a request', () => {
 
   it('lets only one of two simultaneous opens through', async () => {
     const s = await withRule();
-    const results = await Promise.all([open(s.w.witnesses[0]!, s.w.owner.id), open(s.w.witnesses[1]!, s.w.owner.id)]);
+    const both = [s.w.witnesses[0]!, s.w.witnesses[1]!].map((wit) =>
+      api().post('/api/handoff/requests').set(bearer(wit)).set('Connection', 'close').send({ ownerId: s.w.owner.id })
+    );
+    const results = await Promise.all(both);
     expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
     expect(await prisma.releaseRequest.count({ where: { ownerId: s.w.owner.id, state: 'open' } })).toBe(1);
   });
@@ -214,6 +217,8 @@ describe('voting and release', () => {
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('NOT_A_WITNESS');
     expect(await prisma.releaseVote.count({ where: { requestId: id } })).toBe(0);
+    // Removing a witness changes the split, so the request is cancelled too.
+    expect((await requestRow(id)).state).toBe('cancelled');
     const listed = await api().get('/api/handoff/requests').set(bearer(s.w.witnesses[1]!)).expect(200);
     expect(listed.body.data).toEqual([]);
   });
@@ -468,5 +473,140 @@ describe('moving a file out of a covered folder', () => {
     const other = await mkdir(w.owner);
     await move(w.owner, f.id, other).expect(200);
     expect(await prisma.handoffRuleItem.count({ where: { ruleId: fileRule.body.data.id } })).toBe(1);
+  });
+});
+
+/** A second rule made behind the API's back, as if it appeared after the early voters voted. */
+async function sneakRule(s: Setup): Promise<string> {
+  const rule = await prisma.handoffRule.create({ data: { ownerId: s.w.owner.id, fileId: s.fileId, periodDays: 30, wrappedReleaseKeyOwner: blob() } });
+  await prisma.handoffRuleRecipient.create({ data: { ruleId: rule.id, userId: s.w.recipient.id, wrappedReleaseKey: blob(256) } });
+  return rule.id;
+}
+
+describe('owner changes and login cancel the request', () => {
+  const cancelledWithMails = async (s: Setup, id: string) => {
+    expect((await requestRow(id)).state).toBe('cancelled');
+    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in, so the request is cancelled').length).toBeGreaterThanOrEqual(1);
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: id } })).toBe(0);
+  };
+
+  it('a login cancels it even inside the touch throttle, and mails the witnesses', async () => {
+    const s = await withRule();
+    const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
+    clearOutbox();
+    await api().post('/api/auth/login').send({ email: s.w.owner.email, passwordHash: s.w.owner.passwordHash }).expect(200);
+    await cancelledWithMails(s, id);
+    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in, so the request is cancelled')).toHaveLength(1);
+    expect(await ruleState(s.ruleId)).toBe('active');
+  });
+
+  it('replacing shares cancels it, and the next request releases with shares from one split only', async () => {
+    const s = await withRule();
+    const [w0, w1, w2] = s.w.witnesses as [TestUser, TestUser, TestUser];
+    const first = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, first, fullVote(s)).expect(201);
+    clearOutbox();
+    const fresh = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
+    await api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).send({ shares: fresh }).expect(200);
+    await cancelledWithMails(s, first);
+
+    const second = (await open(w1, s.w.owner.id)).body.data.id as string;
+    await vote(w1, second, fullVote(s)).expect(201);
+    await vote(w2, second, fullVote(s)).expect(201);
+    const forMe = await api().get('/api/handoff/for-me').set(bearer(s.w.recipient)).expect(200);
+    const shares = forMe.body.data.find((r: { id: string }) => r.id === s.ruleId).voteShares as Array<{ witnessUserId: string }>;
+    expect(shares.map((x) => x.witnessUserId).sort()).toEqual([w1.id, w2.id].sort());
+  });
+
+  it('changing the threshold cancels it', async () => {
+    const s = await withRule();
+    const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
+    clearOutbox();
+    await api().put('/api/witnesses/threshold').set(bearer(s.w.owner)).send({ k: 3 }).expect(200);
+    await cancelledWithMails(s, id);
+  });
+
+  it('inviting a witness cancels it', async () => {
+    const s = await withRule();
+    const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
+    clearOutbox();
+    const extra = await registerUser();
+    await api().post('/api/witnesses').set(bearer(s.w.owner)).send({ email: extra.email }).expect(201);
+    await cancelledWithMails(s, id);
+  });
+
+  it('creating or revoking a rule cancels it', async () => {
+    const s = await withRule();
+    const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
+    clearOutbox();
+    const file = await upload(s.w.owner);
+    const created = await api().post('/api/handoff/rules').set(bearer(s.w.owner)).send(ruleBody(s.w, { fileId: file.id }, [file.id]));
+    expect(created.status).toBe(201);
+    await cancelledWithMails(s, id);
+
+    const again = (await open(s.w.witnesses[1]!, s.w.owner.id)).body.data.id as string;
+    await api().delete(`/api/handoff/rules/${created.body.data.id}`).set(bearer(s.w.owner)).expect(200);
+    expect((await requestRow(again)).state).toBe('cancelled');
+  });
+
+  it('a witness answering an invitation does not cancel it', async () => {
+    const s = await withRule();
+    const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
+    const late = await registerUser();
+    const invited = await api().post('/api/witnesses').set(bearer(s.w.owner)).send({ email: late.email }).expect(201);
+    const reopened = await open(s.w.witnesses[0]!, s.w.owner.id);
+    expect(reopened.status).toBe(201);
+    await api().post(`/api/witnesses/invitations/${invited.body.data.id}/accept`).set(bearer(late)).expect(200);
+    expect((await requestRow(reopened.body.data.id)).state).toBe('open');
+    expect((await requestRow(id)).state).toBe('cancelled');
+  });
+});
+
+describe('vote share lifetime', () => {
+  it('serves a rule only the shares of the request that released it', async () => {
+    const s = await withRule();
+    const [w0, w1, w2] = s.w.witnesses as [TestUser, TestUser, TestUser];
+    const a = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, a, fullVote(s)).expect(201);
+    const rule2 = await sneakRule(s);
+    const both = votes([
+      { ruleId: s.ruleId, recipients: [s.w.recipient.id] },
+      { ruleId: rule2, recipients: [s.w.recipient.id] },
+    ]);
+    const done = await vote(w1, a, both);
+    expect(done.body.data.state).toBe('completed');
+    expect(await ruleState(s.ruleId)).toBe('released_quorum');
+    expect(await ruleState(rule2)).toBe('active');
+    // The one share for rule 2 is gone with the request's completion.
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: a, ruleId: rule2 } })).toBe(0);
+
+    const b = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, b, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }])).expect(201);
+    const second = await vote(w2, b, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }]));
+    expect(second.body.data.state).toBe('completed');
+    expect((await prisma.handoffRule.findUniqueOrThrow({ where: { id: rule2 } })).releasedByRequestId).toBe(b);
+
+    const forMe = await api().get('/api/handoff/for-me').set(bearer(s.w.recipient)).expect(200);
+    const byRule = (id: string) => forMe.body.data.find((r: { id: string }) => r.id === id).voteShares as Array<{ witnessUserId: string }>;
+    expect(byRule(rule2).map((x) => x.witnessUserId).sort()).toEqual([w0.id, w2.id].sort());
+    expect(byRule(s.ruleId).map((x) => x.witnessUserId).sort()).toEqual([w0.id, w1.id].sort());
+  });
+
+  it('closes a request as cancelled when k votes cannot release anything', async () => {
+    const s = await withRule();
+    const [w0, w1] = s.w.witnesses as [TestUser, TestUser];
+    const id = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, id, fullVote(s)).expect(201);
+    await prisma.handoffRule.update({ where: { id: s.ruleId }, data: { state: 'revoked' } });
+    const rule2 = await sneakRule(s);
+    clearOutbox();
+    const res = await vote(w1, id, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }]));
+    expect(res.status).toBe(201);
+    expect(res.body.data.state).toBe('cancelled');
+    expect(await ruleState(rule2)).toBe('active');
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: id } })).toBe(0);
+    for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in, so the request is cancelled')).toHaveLength(1);
+    const rows = await auditRows({ action: 'handoff.request.cancel', resourceId: id });
+    expect(rows[0]!.metadata).toMatchObject({ reason: 'no_release_possible' });
   });
 });

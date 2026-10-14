@@ -12,6 +12,7 @@ import { toFileDto } from '../dto';
 import { assertFileOwnership } from '../files/service';
 import { assertFolderOwnership, collectSubtree } from '../folders/service';
 import { RELEASED_STATES_FOR_ACCESS } from './access';
+import { cancelOpenRequests, dropOpenVoteShares } from './requests';
 import { ruleCoverageGaps } from './coverage';
 import { WARNING_FRACTIONS } from './thresholds';
 import type { addItemsSchema, createRuleSchema, replaceSharesSchema } from './schema';
@@ -208,6 +209,8 @@ export async function createRule(ownerId: string, input: z.infer<typeof createRu
     return created;
   });
 
+  await cancelOpenRequests(ownerId, 'owner_change');
+
   // Mail after the commit. A recipient whose mail failed keeps notifiedAt null; the rule stands.
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: personSelect });
   const link = `${env.APP_URL}/dashboard`;
@@ -253,6 +256,8 @@ export async function revokeRule(ownerId: string, id: string, req: Request) {
     await tx.handoffRuleShare.deleteMany({ where: { ruleId: id } });
   });
 
+  await cancelOpenRequests(ownerId, 'owner_change');
+
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: personSelect });
   const link = `${env.APP_URL}/dashboard`;
   for (const r of rule.recipients) {
@@ -284,6 +289,9 @@ export async function replaceShares(ownerId: string, id: string, shares: ShareIn
     });
     await tx.handoffRule.update({ where: { id }, data: { sharesStale: false } });
   });
+  // The old split is gone, and so is anything a witness re-wrapped from it.
+  await dropOpenVoteShares([id]);
+  await cancelOpenRequests(ownerId, 'owner_change');
   audit(req, { userId: ownerId, action: 'handoff.rule.shares', resourceType: 'handoff_rule', resourceId: id, metadata: { witnesses: shares.length } });
   return detail(ownerId, id);
 }
@@ -325,17 +333,23 @@ function fileForRecipient(file: Parameters<typeof toFileDto>[0]) {
 }
 
 /**
- * The shares re-wrapped for `userId` by the request that released each quorum rule, keyed by rule id. Shares left by
- * requests that did not complete are never served.
+ * The shares re-wrapped for `userId` by the request that released each quorum rule, keyed by rule id. Shares from
+ * any other request are never served.
  */
 async function voteSharesFor(userId: string, ruleIds: string[]): Promise<Map<string, Array<{ witnessUserId: string; wrappedShare: string }>>> {
   const out = new Map<string, Array<{ witnessUserId: string; wrappedShare: string }>>();
   if (ruleIds.length === 0) return out;
+  const rules = await prisma.handoffRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, releasedByRequestId: true } });
+  const releasedBy = new Map(rules.map((r) => [r.id, r.releasedByRequestId]));
   const rows = await prisma.releaseVoteShare.findMany({
     where: { recipientUserId: userId, ruleId: { in: ruleIds }, request: { state: 'completed' } },
     orderBy: [{ ruleId: 'asc' }, { witnessUserId: 'asc' }],
   });
-  for (const r of rows) out.set(r.ruleId, [...(out.get(r.ruleId) ?? []), { witnessUserId: r.witnessUserId, wrappedShare: r.wrappedShare }]);
+  for (const r of rows) {
+    // Only the request that released the rule counts; shares from any other request belong to another split.
+    if (releasedBy.get(r.ruleId) !== r.requestId) continue;
+    out.set(r.ruleId, [...(out.get(r.ruleId) ?? []), { witnessUserId: r.witnessUserId, wrappedShare: r.wrappedShare }]);
+  }
   return out;
 }
 

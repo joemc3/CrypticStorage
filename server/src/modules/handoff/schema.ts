@@ -27,3 +27,4 @@ export const openRequestSchema = z.object({ ownerId: uuid });
 export const voteSchema = z.object({
   shares: z.array(z.object({ ruleId: uuid, recipientUserId: uuid, wrappedShare: blob })).max(50_000),
 });
+export const requestIdParamSchema = z.object({ id: uuid });

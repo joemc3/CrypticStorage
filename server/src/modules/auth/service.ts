@@ -191,7 +191,10 @@ export async function login(input: z.infer<typeof loginSchema>, req: Request) {
     };
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  const at = new Date();
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: at, lastActivityAt: at } });
+  // A login is activity whatever the five-minute touch throttle says: warned rules start over, an open request is cancelled.
+  await onOwnerActivity(user.id);
   const tokens = await issueSession(user, req);
   audit(req, { userId: user.id, action: 'auth.login' });
   return { requiresTwoFactor: false, user: toAuthenticatedUser(user), tokens };
@@ -231,11 +234,13 @@ export async function completeTwoFactor(
       where: { id: user.id },
       data: {
         lastLoginAt: new Date(),
+        lastActivityAt: new Date(),
         ...(usedBackupHash ? { backupCodeHashes: user.backupCodeHashes.filter((h) => h !== usedBackupHash) } : {}),
       },
     }),
   ]);
 
+  await onOwnerActivity(user.id);
   const tokens = await issueSession(user, req);
   audit(req, { userId: user.id, action: 'auth.2fa.verify', metadata: { method: input.token ? 'totp' : 'backup_code' } });
   return { requiresTwoFactor: false, user: toAuthenticatedUser(user), tokens };

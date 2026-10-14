@@ -162,6 +162,8 @@ interface VoteOutcome {
   recipients: Array<{ id: string; email: string; displayName: string | null }>;
   awaitingRepair: string[];
   closedAt: Date | null;
+  /** The votes reached k but no rule could be released, so the request was closed instead of left hanging. */
+  cancelled: boolean;
 }
 
 export async function vote(userId: string, requestId: string, shares: ShareInput[], req: Request) {
@@ -198,7 +200,7 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
       data: shares.map((s) => ({ requestId, witnessUserId: userId, ruleId: s.ruleId, recipientUserId: s.recipientUserId, wrappedShare: s.wrappedShare })),
     });
     const count = await tx.releaseVote.count({ where: { requestId } });
-    const outcome: VoteOutcome = { count, completed: false, releasedRuleIds: [], recipients: [], awaitingRepair, closedAt: null };
+    const outcome: VoteOutcome = { count, completed: false, releasedRuleIds: [], recipients: [], awaitingRepair, closedAt: null, cancelled: false };
     if (count < request.requiredVotes) return outcome;
 
     // A rule is releasable only when every one of its recipients has k shares from this request. A rule created
@@ -218,8 +220,18 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
         for (const x of rule.recipients) if (!outcome.recipients.some((r) => r.id === x.user.id)) outcome.recipients.push(x.user);
       }
     }
-    if (outcome.releasedRuleIds.length === 0) return outcome;
+    if (outcome.releasedRuleIds.length === 0) {
+      // Nothing can ever be released by this request: say so instead of leaving it open for ever.
+      await tx.releaseRequest.update({ where: { id: requestId }, data: { state: 'cancelled', closedAt: at } });
+      await tx.releaseVoteShare.deleteMany({ where: { requestId } });
+      outcome.cancelled = true;
+      outcome.closedAt = at;
+      return outcome;
+    }
     await tx.releaseRequest.update({ where: { id: requestId }, data: { state: 'completed', closedAt: at } });
+    // Shares for rules this request did not release are useless and must not mix with a later split.
+    await tx.releaseVoteShare.deleteMany({ where: { requestId, ruleId: { notIn: outcome.releasedRuleIds } } });
+    await tx.handoffRule.updateMany({ where: { id: { in: outcome.releasedRuleIds } }, data: { releasedByRequestId: requestId } });
     outcome.completed = true;
     outcome.closedAt = at;
     return outcome;
@@ -230,8 +242,10 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: person }),
   ]);
   const at = outcome.closedAt ?? new Date();
-  if (outcome.completed) {
-    await tryMail(owner.email, releaseCompleted({ k: request.requiredVotes, time: mailTime(at), link: `${env.APP_URL}/dashboard` }), { requestId });
+  if (outcome.cancelled) {
+    await announceCancelled(owner, request.ownerId, requestId, 'no_release_possible');
+  } else if (outcome.completed) {
+    await tryMail(owner.email, releaseCompleted({ k: outcome.count, time: mailTime(at), link: `${env.APP_URL}/dashboard` }), { requestId });
     for (const r of outcome.recipients) {
       await tryMail(r.email, releasedRecipient(name(owner), `${env.APP_URL}/shared`), { requestId });
     }
@@ -256,14 +270,24 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
 }
 
 // ---------------------------------------------------------------------------
-// Cancel on owner activity
+// Cancel
 // ---------------------------------------------------------------------------
 
+export type CancelReason = 'owner_activity' | 'owner_change' | 'no_release_possible';
+
+/** Mail every accepted witness that the request is off, and audit it. The one place both happen. */
+async function announceCancelled(owner: { email: string; displayName: string | null }, ownerId: string, requestId: string, reason: CancelReason): Promise<void> {
+  const witnesses = await prisma.witness.findMany({ where: { ownerId, status: 'accepted' }, include: { witness: { select: person } } });
+  for (const w of witnesses) await tryMail(w.witness.email, requestCancelled(name(owner), `${env.APP_URL}/dashboard`), { requestId });
+  audit(undefined, { userId: ownerId, action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: requestId, metadata: { reason } });
+}
+
 /**
- * The owner was seen, so a quorum cannot run quietly against them. Each open request is cancelled with a conditional
- * update, and only the call that wins it sends the mail and writes the audit record. Never throws.
+ * Cancel the owner's open request: the owner was seen, or changed something the votes depend on (rules, witnesses,
+ * threshold). Each request is cancelled with a conditional update, and only the call that wins it sends the mail and
+ * writes the audit record. Nothing was released, so the re-wrapped shares go with it. Never throws.
  */
-export async function cancelOpenRequests(ownerId: string): Promise<void> {
+export async function cancelOpenRequests(ownerId: string, reason: CancelReason = 'owner_activity'): Promise<void> {
   try {
     const open = await prisma.releaseRequest.findMany({ where: { ownerId, state: 'open' }, select: { id: true } });
     if (open.length === 0) return;
@@ -272,16 +296,18 @@ export async function cancelOpenRequests(ownerId: string): Promise<void> {
       const won = await prisma.$transaction(async (tx) => {
         const res = await tx.releaseRequest.updateMany({ where: { id, state: 'open' }, data: { state: 'cancelled', closedAt: new Date() } });
         if (res.count === 0) return false;
-        // Nothing was released, so nothing re-wrapped for the recipients is kept.
         await tx.releaseVoteShare.deleteMany({ where: { requestId: id } });
         return true;
       });
-      if (!won) continue;
-      const witnesses = await prisma.witness.findMany({ where: { ownerId, status: 'accepted' }, include: { witness: { select: person } } });
-      for (const w of witnesses) await tryMail(w.witness.email, requestCancelled(name(owner), `${env.APP_URL}/dashboard`), { requestId: id });
-      audit(undefined, { userId: ownerId, action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: id });
+      if (won) await announceCancelled(owner, ownerId, id, reason);
     }
   } catch (err) {
     logger.warn({ err, ownerId }, 'release request cancel failed');
   }
+}
+
+/** Drop the vote shares that open requests hold for these rules, because the split they came from is gone. */
+export async function dropOpenVoteShares(ruleIds: string[]): Promise<void> {
+  if (ruleIds.length === 0) return;
+  await prisma.releaseVoteShare.deleteMany({ where: { ruleId: { in: ruleIds }, request: { state: 'open' } } });
 }

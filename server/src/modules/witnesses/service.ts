@@ -7,6 +7,7 @@ import { audit } from '../../lib/audit';
 import { spkiFingerprint } from '../../lib/crypto';
 import { sendMail } from '../../lib/mail';
 import { witnessInvitation } from '../../mail/templates';
+import { cancelOpenRequests, dropOpenVoteShares } from '../handoff/requests';
 
 interface ActiveRuleRef {
   id: string;
@@ -24,6 +25,8 @@ async function flagOpenRules(ownerId: string): Promise<ActiveRuleRef[]> {
     select: { id: true, sharesStale: true },
     orderBy: { createdAt: 'asc' },
   });
+  // Shares re-wrapped from the old split must not combine with shares from the new one.
+  await dropOpenVoteShares(rules.map((r) => r.id));
   return rules;
 }
 
@@ -108,7 +111,9 @@ export async function setThreshold(ownerId: string, k: number, req: Request) {
   }
   await prisma.user.update({ where: { id: ownerId }, data: { witnessThreshold: k } });
   audit(req, { userId: ownerId, action: 'witness.threshold', metadata: { k, n } });
-  return { ...(await getSet(ownerId)), activeRules: await flagOpenRules(ownerId) };
+  const activeRules = await flagOpenRules(ownerId);
+  await cancelOpenRequests(ownerId, 'owner_change');
+  return { ...(await getSet(ownerId)), activeRules };
 }
 
 export async function invite(ownerId: string, rawEmail: string, req: Request) {
@@ -138,6 +143,7 @@ export async function invite(ownerId: string, rawEmail: string, req: Request) {
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: personSelect });
   await sendMail({ to: target.email, ...witnessInvitation(owner.displayName ?? owner.email, `${env.APP_URL}/witness/${row.id}`) });
   audit(req, { userId: ownerId, action: 'witness.invite', resourceType: 'witness', resourceId: row.id });
+  await cancelOpenRequests(ownerId, 'owner_change');
   return entry(row);
 }
 
@@ -148,7 +154,9 @@ export async function remove(ownerId: string, id: string, req: Request) {
 
   const next = await refitThreshold(ownerId);
   audit(req, { userId: ownerId, action: 'witness.remove', resourceType: 'witness', resourceId: id });
-  return { threshold: next, activeRules: await flagOpenRules(ownerId) };
+  const activeRules = await flagOpenRules(ownerId);
+  await cancelOpenRequests(ownerId, 'owner_change');
+  return { threshold: next, activeRules };
 }
 
 export async function myInvitations(userId: string) {

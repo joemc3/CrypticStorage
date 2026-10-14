@@ -4,7 +4,7 @@ import { auth, requireAuth } from '../../middleware/auth';
 import { body, validate } from '../../middleware/validate';
 import * as service from './service';
 import * as requests from './requests';
-import { addItemsSchema, createRuleSchema, openRequestSchema, replaceSharesSchema, ruleIdParamSchema, voteSchema } from './schema';
+import { addItemsSchema, createRuleSchema, openRequestSchema, replaceSharesSchema, requestIdParamSchema, ruleIdParamSchema, voteSchema } from './schema';
 
 export const handoffRouter = Router();
 handoffRouter.use(requireAuth);
@@ -55,7 +55,7 @@ handoffRouter.post(
 
 handoffRouter.post(
   '/requests/:id/votes',
-  validate('params', ruleIdParamSchema),
+  validate('params', requestIdParamSchema),
   validate('body', voteSchema),
   handler(async (req, res) => ok(res, await requests.vote(auth(req).userId, req.params.id!, body(req, voteSchema).shares, req), 201))
 );

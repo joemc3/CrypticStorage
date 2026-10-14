@@ -298,6 +298,8 @@ model HandoffRule {
   reminded95At           DateTime?        @map("reminded_95_at")
   releasedAt             DateTime?        @map("released_at")
   revokedAt              DateTime?        @map("revoked_at")
+  /// The release request whose vote shares open this rule. Only its shares are served to recipients.
+  releasedByRequestId    String?          @map("released_by_request_id")
 
   owner      User                   @relation("RuleOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   file       File?                  @relation(fields: [fileId], references: [id], onDelete: Cascade)

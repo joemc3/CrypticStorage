@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { UnauthorizedError } from '../lib/errors';
 import { logger } from '../lib/logger';
+import { onOwnerActivity } from '../modules/handoff/activity';
 import { verifyAccessToken, type AccessScope } from '../lib/jwt';
 
 export interface AuthContext {
@@ -41,10 +42,12 @@ const ACTIVITY_INTERVAL_MS = 5 * 60_000;
 async function touchActivity(userId: string): Promise<void> {
   const now = Date.now();
   try {
-    await prisma.user.updateMany({
+    const touched = await prisma.user.updateMany({
       where: { id: userId, lastActivityAt: { lt: new Date(now - ACTIVITY_INTERVAL_MS) } },
       data: { lastActivityAt: new Date(now) },
     });
+    // The owner was seen: warned rules start over. Only when the throttle actually wrote, so most requests skip it.
+    if (touched.count > 0) await onOwnerActivity(userId);
   } catch (err) {
     logger.warn({ err }, 'activity touch failed');
   }

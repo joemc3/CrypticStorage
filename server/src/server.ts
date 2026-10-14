@@ -4,6 +4,7 @@ import { prisma } from './config/prisma';
 import { logger } from './lib/logger';
 import { storage } from './storage';
 import { startCleanupJob } from './jobs/cleanup';
+import { startHandoffJob } from './jobs/handoff';
 
 async function main(): Promise<void> {
   await prisma.$connect();
@@ -19,10 +20,12 @@ async function main(): Promise<void> {
   server.headersTimeout = 65_000;
 
   const stopCleanup = startCleanupJob();
+  const stopHandoff = startHandoffJob();
 
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'shutting down');
     stopCleanup();
+    stopHandoff();
     server.close(() => {
       prisma.$disconnect().finally(() => process.exit(0));
     });

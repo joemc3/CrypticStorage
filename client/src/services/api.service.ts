@@ -279,6 +279,8 @@ export interface HandoffRule {
   createdAt: string;
   /** Null once the rule is released or revoked. */
   nextCheckInAt: string | null;
+  /** When the first reminder goes out (75 % of the period); null once the rule is no longer open. */
+  warningAt: string | null;
   /** True when the witness set changed and the shares must be re-split (the client repairs at unlock). */
   sharesStale: boolean;
   /** Ready files under the target that have no wrapped key in the rule yet. */
@@ -432,6 +434,11 @@ class ApiService {
   login(email: string, passwordHash: string): Promise<AuthResponse> {
     return this.post('/auth/login', { email, passwordHash });
   }
+  /** The link in a reminder email. Public: the token is the proof. */
+  checkIn(token: string): Promise<{ ok: true }> {
+    return this.post('/auth/check-in', { token });
+  }
+
   verifyTwoFactor(data: { token?: string; backupCode?: string }): Promise<AuthResponse> {
     return this.post('/auth/verify-2fa', data);
   }

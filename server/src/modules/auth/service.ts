@@ -13,6 +13,8 @@ import { clientIp, userAgent } from '../../lib/http';
 import { toAuthenticatedUser, toPublicUser } from '../dto';
 import { sendMail } from '../../lib/mail';
 import { logger } from '../../lib/logger';
+import { now } from '../../lib/clock';
+import { onOwnerActivity } from '../handoff/activity';
 import { verifyEmail as verifyEmailTemplate } from '../../mail/templates';
 import { CONTRACT_PHRASE } from './schema';
 import type { loginSchema, registerSchema } from './schema';
@@ -136,6 +138,28 @@ export async function verifyEmail(token: string, req: Request) {
 
   audit(req, { userId: record.userId, action: 'user.email_verified' });
   return { email: record.user.email };
+}
+
+/** The link in a reminder mail: proves the owner is alive without a sign-in. Single use. */
+export async function checkIn(token: string, req: Request) {
+  const record = await prisma.emailToken.findFirst({
+    where: { tokenHash: sha256Hex(token), purpose: 'check_in', usedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true, userId: true },
+  });
+  if (!record) throw new BadRequestError('This link is invalid or has expired', undefined, 'TOKEN_INVALID');
+
+  const at = now();
+  const claimed = await prisma.$transaction(async (tx) => {
+    const used = await tx.emailToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (used.count === 0) return false;
+    await tx.user.update({ where: { id: record.userId }, data: { lastActivityAt: at } });
+    return true;
+  });
+  if (!claimed) throw new BadRequestError('This link is invalid or has expired', undefined, 'TOKEN_INVALID');
+
+  await onOwnerActivity(record.userId);
+  audit(req, { userId: record.userId, action: 'user.check_in' });
+  return { ok: true as const };
 }
 
 /** Always resolves; callers answer 202 whether or not anything was sent. */

@@ -10,6 +10,9 @@ import { witnessesRouter } from './modules/witnesses/router';
 import { handoffRouter } from './modules/handoff/router';
 import { handler, ok } from './lib/http';
 import { clearOutbox, outbox } from './lib/mail';
+import { setClockOverride } from './lib/clock';
+import { runHandoffTimer } from './jobs/handoff';
+import { z } from 'zod';
 
 export const apiRouter = Router();
 
@@ -51,6 +54,19 @@ if (isTest) {
       const to = typeof req.query.to === 'string' ? req.query.to : undefined;
       ok(res, outbox().filter((m) => to === undefined || m.to === to));
     })
+  );
+  // Lets the end-to-end run move the handoff timer's clock and run one pass of the job.
+  apiRouter.post(
+    '/_test/clock',
+    handler(async (req, res) => {
+      const { now } = z.object({ now: z.string().datetime().nullable() }).parse(req.body);
+      setClockOverride(now ? new Date(now) : null);
+      ok(res, { now });
+    })
+  );
+  apiRouter.post(
+    '/_test/handoff-tick',
+    handler(async (_req, res) => ok(res, await runHandoffTimer()))
   );
   apiRouter.delete(
     '/_test/mail',

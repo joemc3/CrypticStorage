@@ -4,7 +4,7 @@ import { auth, requireAuth, requireTwoFactorPending } from '../../middleware/aut
 import { body, validate } from '../../middleware/validate';
 import { authLimiter } from '../../middleware/rateLimit';
 import * as service from './service';
-import { loginSchema, refreshSchema, registerSchema, resendVerificationSchema, verifyEmailSchema, verifyTwoFactorSchema } from './schema';
+import { checkInSchema, loginSchema, refreshSchema, registerSchema, resendVerificationSchema, verifyEmailSchema, verifyTwoFactorSchema } from './schema';
 
 export const authRouter = Router();
 
@@ -27,6 +27,13 @@ authRouter.post(
   authLimiter,
   validate('body', verifyEmailSchema),
   handler(async (req, res) => ok(res, await service.verifyEmail(body(req, verifyEmailSchema).token, req)))
+);
+
+authRouter.post(
+  '/check-in',
+  authLimiter,
+  validate('body', checkInSchema),
+  handler(async (req, res) => ok(res, await service.checkIn(body(req, checkInSchema).token, req)))
 );
 
 authRouter.post(

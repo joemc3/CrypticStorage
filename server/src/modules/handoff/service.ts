@@ -27,9 +27,14 @@ const fail = (code: string, message: string): BadRequestError => new BadRequestE
 
 const personSelect = { id: true, email: true, displayName: true } as const;
 
-/** The next time the owner must be seen. A placeholder anchored on the last activity; the timer job owns the real rule. */
+/** When the rule releases unless the owner is seen first. The timer job and the DTOs both read it from here. */
 export function nextCheckInAt(lastActivityAt: Date, periodDays: number): Date {
   return new Date(lastActivityAt.getTime() + periodDays * DAY_MS);
+}
+
+/** When the first reminder goes out: 75 % of the period after the last activity. */
+export function warningAt(lastActivityAt: Date, periodDays: number): Date {
+  return new Date(lastActivityAt.getTime() + periodDays * DAY_MS * 0.75);
 }
 
 // ---------------------------------------------------------------------------
@@ -48,6 +53,7 @@ function toRuleDto(row: RuleRow, ownerLastActivityAt: Date, gaps: number) {
     state: row.state,
     createdAt: row.createdAt.toISOString(),
     nextCheckInAt: open ? nextCheckInAt(ownerLastActivityAt, row.periodDays).toISOString() : null,
+    warningAt: open ? warningAt(ownerLastActivityAt, row.periodDays).toISOString() : null,
     sharesStale: row.sharesStale,
     coverageGaps: open ? gaps : 0,
     recipients: row.recipients
@@ -240,7 +246,7 @@ export async function revokeRule(ownerId: string, id: string, req: Request) {
   assertOpen(rule.state);
   await prisma.$transaction(async (tx) => {
     await lockOpenRule(tx, id);
-    await tx.handoffRule.update({ where: { id }, data: { state: 'revoked', revokedAt: new Date() } });
+    await tx.handoffRule.update({ where: { id }, data: { state: 'revoked', revokedAt: new Date(), wrappedReleaseKeyOwner: '' } });
     await tx.handoffRuleRecipient.deleteMany({ where: { ruleId: id } });
     await tx.handoffRuleItem.deleteMany({ where: { ruleId: id } });
     await tx.handoffRuleShare.deleteMany({ where: { ruleId: id } });

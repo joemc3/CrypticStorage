@@ -24,6 +24,8 @@ export const registerSchema = z.object({
 
 export const verifyEmailSchema = z.object({ token: z.string().min(16).max(256) });
 
+export const checkInSchema = z.object({ token: z.string().min(16).max(256) });
+
 export const resendVerificationSchema = z.object({ email });
 
 export const loginSchema = z.object({

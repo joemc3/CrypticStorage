@@ -39,7 +39,7 @@ Templates live in `server/src/mail/templates.ts` as functions returning `{ subje
 
 `POST /api/auth/resend-verification { email }`: always `202`, sends a new token only if the account exists and is unverified. Rate limited like login (`authLimiter`).
 
-`POST /api/auth/login`: an unverified account gets `403 EMAIL_UNVERIFIED` before any credential check result is revealed; the bcrypt compare still runs so timing stays flat.
+`POST /api/auth/login`: an unverified account with a valid credential gets `403 EMAIL_UNVERIFIED`; a wrong credential gets `401` as before, so verification state is never revealed without the credential; the bcrypt compare always runs.
 
 Cleanup job: unverified accounts older than 7 days are deleted with their tokens.
 
@@ -55,7 +55,7 @@ Cleanup job: unverified accounts older than 7 days are deleted with their tokens
 
 ### 3.1 Design tokens and shared components
 
-- `docs/design/output/tokens.css` is copied to `client/src/styles/tokens.css` and imported first in `index.css`; `tailwind.config.js` maps `fontFamily` and colours to the tokens as the comment in that file shows. The fonts (Newsreader, Instrument Sans, IBM Plex Mono) load from Google Fonts in `index.html`.
+- `docs/design/output/tokens.css` is copied to `client/src/styles/tokens.css` and imported first in `index.css`; `tailwind.config.js` maps `fontFamily` and colours to the tokens as the comment in that file shows. The fonts (Newsreader, Instrument Sans, IBM Plex Mono) are self-hosted through the `@fontsource` packages, imported in `index.css`, so no page load contacts a third party and the CSP needs no font origins.
 - New `components/common/OneFact.tsx`: props `{ fact: string; supporting?: string; action: { label; onClick; disabled?; danger? }; back?: () => void; cancel?: () => void; children? }`. Full screen, no app chrome, serif fact at top, one primary action, quiet Back, quiet Cancel top right. Every irreversible act in every later stage uses it.
 - Theme: `ui.store` gains `theme: 'system' | 'light' | 'dark'` persisted in `localStorage`; sets `data-theme` on `<html>` for the two explicit values and removes it for system.
 

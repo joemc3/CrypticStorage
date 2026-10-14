@@ -18,3 +18,10 @@ Filled during reconciliation of `output/` against `docs/superpowers/specs/2026-1
 | 2026-10-14 | 12. `[HOSTED DOMAIN]` placeholder on landing | defer | Filled when the hosted service has a domain (spec stage 9). |
 | 2026-10-14 | Design system, tokens, type (Newsreader for consequence, Instrument Sans operational, IBM Plex Mono for codes), one green accent | adopt | The six "spine" decisions in `output/README.md` are binding on implementation; everything under "latitude" is not. |
 | 2026-10-14 | All 24 artboards | adopt | Every screen in brief sections A to F is present at 1280 desktop and 390 phone in light and dark, every verbatim sentence intact, no recovery flow anywhere. Implementation follows them screen by screen, deviating only where a later row here says so. |
+| 2026-10-14 | `/shared` as its own route and nav entry | adopt | B6 is its own screen, so it gets its own route and a nav entry rather than a tab inside Files. |
+| 2026-10-14 | Key fingerprint in Settings is the public key's | adopt with change | The Settings artboard says people who share with you compare it, so it is the account's public key fingerprint, not the master key's. |
+| 2026-10-14 | Phone sign-out sits on the locked screen behind Lock | adopt with change | The phone bar carries only the brand and Lock; sign-out is one step further, on the locked screen. |
+| 2026-10-14 | No share marker on file rows | defer | Until the listing carries share data. A session-only marker would lie after a reload. |
+| 2026-10-14 | Landing footer links (Run it yourself, Source code, Read the security design) | defer | Not rendered yet; the targets do not exist. |
+| 2026-10-14 | Fonts self-hosted instead of Google Fonts | adopt with change | The CSP allows no font origins and a third-party request is a privacy cost for a zero-knowledge product. `@fontsource` packages, OFL licensed, bundled by Vite. |
+| 2026-10-14 | Verify headings in sans | adopt | The artboard's `.d-title` is sans, so the verify screens use the Title style rather than the Fact style. |

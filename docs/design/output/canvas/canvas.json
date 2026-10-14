@@ -1,0 +1,52 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-14T18:30:00Z"},
+  "title": "CrypticStorage",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 2260, "h": 1700, "title": "Design system"},
+    "Components.dc.html": {"x": 2340, "y": 0, "w": 2700, "h": 2200, "title": "Components"},
+
+    "Landing.dc.html": {"x": 0, "y": 2600, "w": 2260, "h": 1300, "title": "A1 Landing"},
+    "Register.dc.html": {"x": 2340, "y": 2600, "w": 2652, "h": 2100, "title": "A2 Create account: the contract"},
+    "Verify.dc.html": {"x": 5072, "y": 2600, "w": 2260, "h": 2050, "title": "A3 Verify email · A6 Not found"},
+    "SignIn.dc.html": {"x": 7412, "y": 2600, "w": 2700, "h": 1050, "title": "A4 Sign in"},
+    "SharedLink.dc.html": {"x": 10192, "y": 2600, "w": 2700, "h": 2050, "title": "A5 Shared link"},
+
+    "Locked.dc.html": {"x": 0, "y": 5100, "w": 2260, "h": 1050, "title": "B1 Locked"},
+    "Dashboard.dc.html": {"x": 2340, "y": 5100, "w": 2260, "h": 1400, "title": "B2 Dashboard"},
+    "Files.dc.html": {"x": 4680, "y": 5100, "w": 2260, "h": 1150, "title": "B3 Files"},
+    "Preview.dc.html": {"x": 7020, "y": 5100, "w": 2260, "h": 1050, "title": "B4 Preview"},
+    "Share.dc.html": {"x": 9360, "y": 5100, "w": 2700, "h": 1150, "title": "B5 Share"},
+    "SharedWithMe.dc.html": {"x": 12140, "y": 5100, "w": 2260, "h": 1050, "title": "B6 Shared with me"},
+    "Settings.dc.html": {"x": 14480, "y": 5100, "w": 2260, "h": 1900, "title": "B7 Settings"},
+    "DeleteAccount.dc.html": {"x": 16820, "y": 5100, "w": 2260, "h": 1050, "title": "D Delete account"},
+
+    "Witnesses.dc.html": {"x": 0, "y": 7400, "w": 2700, "h": 1150, "title": "C1 Witnesses"},
+    "WitnessInvite.dc.html": {"x": 2780, "y": 7400, "w": 2260, "h": 1050, "title": "C2 Witness invitation"},
+    "CreateRule.dc.html": {"x": 5120, "y": 7400, "w": 2700, "h": 2100, "title": "C3 Create a rule"},
+    "Rules.dc.html": {"x": 7900, "y": 7400, "w": 2700, "h": 1150, "title": "C4 Rules on an item"},
+    "RecipientNotice.dc.html": {"x": 10680, "y": 7400, "w": 2260, "h": 1050, "title": "C5 Recipient notice"},
+    "Release.dc.html": {"x": 13020, "y": 7400, "w": 2700, "h": 1150, "title": "C6 Request a release"},
+    "ReleaseNotice.dc.html": {"x": 15800, "y": 7400, "w": 2260, "h": 1150, "title": "C7 Release notice (owner)"},
+
+    "Admin.dc.html": {"x": 0, "y": 9900, "w": 2260, "h": 1050, "title": "E Admin"},
+    "Emails.dc.html": {"x": 2340, "y": 9900, "w": 2260, "h": 1900, "title": "F Emails"}
+  },
+  "order": [
+    "Main.dc.html", "Components.dc.html",
+    "Landing.dc.html", "Register.dc.html", "Verify.dc.html", "SignIn.dc.html", "SharedLink.dc.html",
+    "Locked.dc.html", "Dashboard.dc.html", "Files.dc.html", "Preview.dc.html", "Share.dc.html", "SharedWithMe.dc.html", "Settings.dc.html", "DeleteAccount.dc.html",
+    "Witnesses.dc.html", "WitnessInvite.dc.html", "CreateRule.dc.html", "Rules.dc.html", "RecipientNotice.dc.html", "Release.dc.html", "ReleaseNotice.dc.html",
+    "Admin.dc.html", "Emails.dc.html"
+  ],
+  "notes": {
+    "tSystem": {"x": 0, "y": -300, "text": "System", "kind": "title1", "maxW": 5040},
+    "tPublic": {"x": 0, "y": 2300, "text": "Public", "kind": "title1", "maxW": 12900},
+    "tVault": {"x": 0, "y": 4800, "text": "Inside the vault", "kind": "title1", "maxW": 19080},
+    "tHandoff": {"x": 0, "y": 7100, "text": "Handoff", "kind": "title1", "maxW": 18060},
+    "tAdmin": {"x": 0, "y": 9600, "text": "Admin and email", "kind": "title1", "maxW": 4600}
+  },
+  "designSystems": []
+}

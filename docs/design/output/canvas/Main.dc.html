@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CrypticStorage design system</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1700px">
+<figure class="slot" style="width: 2148px">
+<figcaption class="slot-cap">Design system · proposal · 14 Oct 2026</figcaption>
+<div class="frame wide t-light" style="padding: 64px; display: flex; flex-direction: column; gap: 64px">
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: end">
+<div class="stack g16">
+<div class="brand" style="font-size: 18px"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</div>
+<h1 class="d-hero" style="font-size: 64px; line-height: 66px">Document of record.</h1>
+</div>
+<div class="stack g12" style="max-width: 640px">
+<p class="t-lead">Cool paper, black ink, one deep vault green. The serif is reserved for sentences that carry consequences: the one-fact screens, the locked state, the landing promise. Everything operational is a quiet sans. Anything a person must compare character by character is mono.</p>
+</div>
+</div>
+
+<section class="stack g24">
+<div class="row between"><h2 class="cap">Color · every token has a light and a dark value</h2><span class="t-sm c3">Text pairs meet 4.5:1. State colors differ in lightness as well as hue.</span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px">
+<sc-for list="{{themes}}" as="th" hint-placeholder-count="2">
+<div class="{{th.cls}}" style="background: var(--bg); color: var(--ink); border-radius: 12px; padding: 28px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 0 0 1px var(--line)">
+<div class="row between"><span class="d-sec">{{th.name}}</span><span class="mono t-xs c3">{{th.sel}}</span></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{th.sw}}" as="s" hint-placeholder-count="17">
+<div style="display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px">
+<div style="width: 44px; height: 44px; border-radius: 8px; flex: none; box-shadow: inset 0 0 0 1px rgba(127,127,127,.25); background: var({{s.tok}})"></div>
+<div class="stack" style="min-width: 0">
+<span class="mono t-xs strong">{{s.tok}}</span>
+<span class="mono t-xs c3">{{s.hex}}</span>
+<span class="t-xs c2">{{s.role}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 64px">
+<section class="stack g24">
+<h2 class="cap">Type · Newsreader / Instrument Sans / IBM Plex Mono</h2>
+<div class="stack" style="border-top: 1px solid var(--ink)">
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Hero</span><span class="mono t-xs c3">Newsreader 500 · 64/66 · phone 44/48</span></div><div style="font: 500 64px/66px var(--serif); letter-spacing: -.015em">A safe, not a drive.</div></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Fact</span><span class="mono t-xs c3">Newsreader 600 · 44/50 · phone 30/36</span></div><div style="font: 600 44px/50px var(--serif); letter-spacing: -.01em">There is no password reset.</div></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Title</span><span class="mono t-xs c3">Instrument Sans 600 · 28/34 · phone 24/30</span></div><div style="font: 600 28px/34px var(--sans); letter-spacing: -.01em">Files</div></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Section</span><span class="mono t-xs c3">Instrument Sans 600 · 16/22</span></div><div style="font: 600 16px/22px var(--sans)">Handoff rules</div></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Lead</span><span class="mono t-xs c3">Instrument Sans 400 · 17/26</span></div><div style="font: 400 17px/26px var(--sans); color: var(--ink-2)">If you forget your password, nothing and nobody can get your items back.</div></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Body</span><span class="mono t-xs c3">Instrument Sans 400 · 15/22</span></div><div style="font: 400 15px/22px var(--sans)">Will and testament (signed).pdf</div></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Small</span><span class="mono t-xs c3">Instrument Sans 400 · 13/18</span></div><div style="font: 400 13px/18px var(--sans); color: var(--ink-3)">2.4 MB · modified 3 Oct</div></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline"><div class="stack g4"><span class="t-sm strong">Mono</span><span class="mono t-xs c3">IBM Plex Mono 500 · 14/22 · fingerprints, codes, URLs</span></div><div style="font: 500 14px/22px var(--mono); letter-spacing: .06em">7F3A 91C2 0B4E D58A</div></div>
+</div>
+</section>
+
+<div class="stack g40">
+<section class="stack g16">
+<h2 class="cap">Spacing · 4 px base</h2>
+<div class="stack g8">
+<sc-for list="{{space}}" as="sp" hint-placeholder-count="10">
+<div class="row g12"><span class="mono t-xs c3" style="width: 32px">{{sp.n}}</span><div style="height: 12px; border-radius: 2px; background: var(--accent); width: {{sp.n}}px"></div><span class="t-xs c3">{{sp.use}}</span></div>
+</sc-for>
+</div>
+</section>
+<section class="stack g16">
+<h2 class="cap">Radius</h2>
+<div class="row g16" style="align-items: flex-end">
+<sc-for list="{{radius}}" as="r" hint-placeholder-count="5">
+<div class="stack g8" style="align-items: center"><div style="width: 64px; height: 64px; background: var(--surface); border: 1.5px solid var(--line-strong); border-radius: {{r.n}}px"></div><span class="mono t-xs">{{r.n}}</span><span class="t-xs c3">{{r.use}}</span></div>
+</sc-for>
+</div>
+</section>
+<section class="stack g16">
+<h2 class="cap">Icons · 1.6 stroke, 20 px, always labelled</h2>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 8px">
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg><span class="t-xs c3">Lock</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z"></path></svg><span class="t-xs c3">Dashboard</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg><span class="t-xs c3">Folder</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><path d="M14 3v5h5"></path></svg><span class="t-xs c3">File</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path><path d="M4 13h4l1.5 2.5h5L16 13h4"></path></svg><span class="t-xs c3">Shared</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><path d="M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z"></path></svg><span class="t-xs c3">Settings</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg><span class="t-xs c3">Handoff</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg><span class="t-xs c3">Link</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"></path></svg><span class="t-xs c3">People</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"></path></svg><span class="t-xs c3">Upload</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg><span class="t-xs c3">Download</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M17 6l3 3M15 8l2 2"></path></svg><span class="t-xs c3">Key</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span class="t-xs c3">Clock</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg><span class="t-xs c3">Warning</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg><span class="t-xs c3">Copy</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><span class="t-xs c3">Reveal</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg><span class="t-xs c3">Delete</span></div>
+<div class="stack g4" style="align-items: center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg><span class="t-xs c3">Email</span></div>
+</div>
+</section>
+</div>
+</div>
+
+<section class="stack g24">
+<h2 class="cap">Layout</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px">
+<div class="stack g8"><span class="d-sec">Phone · 360 to 719</span><p class="t-sm c2">16 px gutters. Top bar with the lock button, content, a four-tab bar at the bottom. Dialogs become bottom sheets. One-fact screens put the action at the bottom, under the thumb.</p></div>
+<div class="stack g8"><span class="d-sec">Desktop · 720 and up</span><p class="t-sm c2">240 px sidebar with the lock state always in its footer, content up to 1000 px at 56 px padding. Dashboard gets a 320 px right column for status. Dialogs centre at 560 px.</p></div>
+<div class="stack g8"><span class="d-sec">One-fact screens · every width</span><p class="t-sm c2">A single 560 px column, no sidebar, no navigation. Step ticks, the serif line, two sentences at most, one action, a quiet way back. Same component for signup, witnesses, rules, votes and deletion.</p></div>
+</div>
+</section>
+
+</div>
+</figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rows = [
+      ['--bg', '#F1F2F0', '#0D0F0E', 'Page ground'],
+      ['--surface', '#FFFFFF', '#151816', 'Cards, bars, sheets'],
+      ['--surface-2', '#F6F7F5', '#1B1F1C', 'Hover, read-only fields'],
+      ['--sunk', '#E8EAE7', '#0A0C0B', 'Tracks, segmented ground'],
+      ['--line', '#DCDFDA', '#272C29', 'Dividers'],
+      ['--line-strong', '#BCC1BA', '#3A413C', 'Control borders'],
+      ['--ink', '#151816', '#E8EBE8', 'Primary text'],
+      ['--ink-2', '#454B47', '#B2B9B3', 'Secondary text'],
+      ['--ink-3', '#5F6661', '#8F9790', 'Meta, captions'],
+      ['--accent', '#1D5844', '#7EC4A7', 'Primary action, active'],
+      ['--accent-soft', '#E1EDE7', '#16302A', 'Active badge ground'],
+      ['--warn-text', '#7F4E00', '#E9B460', 'Warning state'],
+      ['--warn-soft', '#FAEDD3', '#2B2213', 'Warning ground'],
+      ['--danger', '#A12A2A', '#EE8A84', 'Destroy, revoke'],
+      ['--danger-soft', '#F8E3E1', '#311918', 'Danger ground'],
+      ['--info-text', '#1D4A85', '#9BBDEB', 'Released, shared'],
+      ['--info-soft', '#E2EAF5', '#17233A', 'Released ground']
+    ];
+    const themes = [
+      { cls: 't-light', name: 'Light', sel: ':root, [data-theme=light]', sw: rows.map(r => ({ tok: r[0], hex: r[1], role: r[3] })) },
+      { cls: 't-dark', name: 'Dark', sel: '[data-theme=dark], prefers-color-scheme: dark', sw: rows.map(r => ({ tok: r[0], hex: r[2], role: r[3] })) }
+    ];
+    const space = [[4,'Icon to label'],[8,'Inside controls'],[12,'Related items'],[16,'Phone gutter'],[20,'Card padding'],[24,'Between groups'],[32,'Between sections'],[40,'Desktop column gap'],[56,'Desktop page padding'],[72,'One-fact top space']].map(a => ({ n: a[0], use: a[1] }));
+    const radius = [[5,'Badge'],[8,'Control'],[12,'Card'],[14,'Dialog'],[18,'Sheet']].map(a => ({ n: a[0], use: a[1] }));
+    return { themes, space, radius };
+  }
+}
+</script>
+</body>
+</html>

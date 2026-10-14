@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Preview</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="app" aria-hidden="true">
+<aside class="side">
+<span class="brand"><svg class="logo" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span>
+<nav class="nav"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><span class="nav-a {{n.cls}}"><svg class="i" viewBox="0 0 24 24"><path d="{{n.d}}"></path></svg>{{n.label}}</span></sc-for></nav>
+</aside>
+<header class="top"><span class="brand"><svg class="logo" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span></header>
+<main class="main"><div class="main-in"><h1 class="d-title">Estate</h1>
+<div class="list"><sc-for list="{{bg}}" as="r" hint-placeholder-count="4"><div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM14 3v5h5"></path></svg></div><div class="li-main"><span class="li-title">{{r}}</span></div></div></sc-for></div>
+</div></main>
+</div>
+
+<div class="overlay">
+<div class="sheet wide" role="dialog" aria-label="Preview of {{f.name}}">
+<div class="grab" aria-hidden="true"></div>
+<div class="sheet-head">
+<div class="stack g4" style="min-width: 0"><span class="d-sec li-title">{{f.name}}</span><span class="t-xs c3">{{f.meta}}</span></div>
+<div class="row g4"><button class="ib" type="button" aria-label="Download {{f.name}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg></button><button class="ib" type="button" aria-label="Close preview"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+</div>
+<div class="sheet-body" style="background: var(--surface-2); gap: 12px">
+<sc-if value="{{f.txt}}" hint-placeholder-val="{{ true }}">
+<pre class="mono" style="margin: 0; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 21px; white-space: pre-wrap; color: var(--ink)">CHECKING
+First Harbor Bank, account ending 4410
+Online login is in the password manager under "Harbor".
+
+SAVINGS
+Lakeside Credit Union, account ending 0932
+Daniel is listed as payable-on-death beneficiary.
+
+SAFE DEPOSIT BOX
+First Harbor Bank, Main Street branch, box 118.
+Key: desk, left drawer, inside the blue envelope.</pre>
+</sc-if>
+<sc-if value="{{f.img}}" hint-placeholder-val="{{ false }}">
+<div class="hatch" style="height: 520px">[ image · House deed scan.jpg ]</div>
+</sc-if>
+<p class="row g8 t-xs c3"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Decrypted in this browser. Closing the preview clears it from memory.</p>
+</div>
+</div>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const NAV = [
+      ['Dashboard', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z', ''],
+      ['Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'is-on'],
+      ['Shared with me', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4', ''],
+      ['Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z', '']
+    ];
+    const nav = NAV.map(n => ({ label: n[0], d: n[1], cls: n[2] }));
+    const bg = ['Will and testament (signed).pdf', 'House deed scan.jpg', 'Bank accounts.txt', 'Letter to Daniel.txt'];
+    const t = { name: 'Bank accounts.txt', meta: '1 KB · text', txt: true };
+    return { nav, bg, frames: [
+      Object.assign({ cls: 'desk t-light', label: 'Desktop · text preview' }, t),
+      { cls: 'phone t-light', label: 'Phone · image preview', name: 'House deed scan.jpg', meta: '3.1 MB · image', img: true },
+      Object.assign({ cls: 'phone t-dark', label: 'Phone · dark · text preview' }, t)
+    ] };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Files</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1150px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="app">
+<aside class="side">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<nav class="nav" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="nav-a {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.label}}</a></sc-for></nav>
+<div class="side-foot">
+<div class="lockline"><span class="dot" aria-hidden="true"></span>Unlocked · locks after 5 min idle</div>
+<button class="btn btn-secondary btn-sm btn-block" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Lock now</button>
+<span class="t-xs c3">m.hale@fastmail.com</span>
+</div>
+</aside>
+<header class="top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+</header>
+<main class="main"><div class="main-in" style="gap: 20px">
+
+<nav class="crumbs" aria-label="Breadcrumb"><a href="#">Files</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="here" aria-current="page">Estate</span></nav>
+<div class="ph">
+<h1 class="d-title">Estate</h1>
+<div class="actions" style="gap: 8px">
+<button class="btn btn-secondary btn-sm" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New folder</button>
+<button class="btn btn-primary btn-sm" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"></path></svg>Upload</button>
+</div>
+</div>
+<div class="row g12" style="align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text)">
+<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg>
+<p class="t-sm grow"><span class="strong">Handoff rule on this folder.</span> Everything in it goes to daniel.hale@gmail.com and sam.hale@proton.me on 14 Oct 2027, or sooner if your witnesses agree.</p>
+<a class="t-sm strong" href="#" style="color: inherit; white-space: nowrap">Details</a>
+</div>
+
+<sc-if value="{{f.inline}}" hint-placeholder-val="{{ false }}">
+<div class="card stack g8" style="padding: 14px 16px"><div class="row between t-sm"><span class="row g8"><span class="spin" aria-hidden="true"></span>Encrypting Insurance policy.pdf</span><span class="c3">41%</span></div><div class="bar" role="progressbar" aria-label="Upload progress" aria-valuenow="41" aria-valuemin="0" aria-valuemax="100"><span style="width: 41%"></span></div></div>
+</sc-if>
+
+<div class="list ftable">
+<div class="li-head" aria-hidden="true"><span>Name</span><span>Size</span><span>Modified</span><span></span></div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+<div class="li">
+<div class="li-ic {{r.ic}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{r.d}}"></path></svg></div>
+<div class="li-main"><span class="li-title">{{r.name}}</span><span class="li-meta"><span class="phone-meta">{{r.pm}}</span><sc-if value="{{r.mk}}" hint-placeholder-val="{{ false }}"><span class="mk {{r.mkc}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{r.mkd}}"></path></svg>{{r.mk}}</span></sc-if></span></div>
+<span class="col-size">{{r.size}}</span>
+<span class="col-date">{{r.date}}</span>
+<div class="li-side"><button class="ib" type="button" aria-label="Actions for {{r.name}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"></path></svg></button></div>
+</div>
+</sc-for>
+</div>
+<p class="row g8 t-sm c3"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"></path></svg>Drop files anywhere on this page. They are encrypted before they leave this browser.</p>
+
+</div></main>
+<nav class="tabs" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="tab {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+
+<sc-if value="{{f.tray}}" hint-placeholder-val="{{ false }}">
+<div class="card stack g12" role="status" style="position: absolute; right: 32px; bottom: 32px; width: 380px; box-shadow: var(--shadow); padding: 16px">
+<div class="row between"><span class="d-sec">Uploading 2 files</span><button class="ib" type="button" aria-label="Hide uploads" style="width: 32px; height: 32px"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div class="stack g8"><div class="row between t-sm"><span>Insurance policy.pdf</span><span class="c3">Encrypting · 41%</span></div><div class="bar"><span style="width: 41%"></span></div></div>
+<div class="stack g8"><div class="row between t-sm"><span>Pension statement 2026.pdf</span><span class="c3">Waiting</span></div><div class="bar"><span style="width: 0%"></span></div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{f.sheet}}" hint-placeholder-val="{{ false }}">
+<div class="overlay">
+<div class="sheet" role="dialog" aria-label="Actions for House deed scan.jpg">
+<div class="grab" aria-hidden="true"></div>
+<div class="sheet-head"><div class="stack g4" style="min-width: 0"><span class="d-sec li-title">House deed scan.jpg</span><span class="t-xs c3">3.1 MB · 10 Oct · shared with 1</span></div><button class="ib" type="button" aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div class="stack" style="padding: 8px 8px 28px">
+<sc-for list="{{acts}}" as="a" hint-placeholder-count="7">
+<button class="btn btn-quiet {{a.cls}}" type="button" style="justify-content: flex-start; height: 52px; gap: 14px; padding: 0 12px; font-weight: 500"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{a.d}}"></path></svg>{{a.label}}</button>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1150}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = 'files';
+    const NAV = [
+      ['dash', 'Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z'],
+      ['files', 'Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['shared', 'Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4'],
+      ['settings', 'Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z']
+    ];
+    const nav = NAV.map(n => ({ label: n[1], short: n[2], d: n[3], cls: n[0] === active ? 'is-on' : '', cur: n[0] === active ? 'page' : 'false' }));
+    const FOLDER = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
+    const FILE = 'M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM14 3v5h5';
+    const PERSON = 'M12.5 8a3.5 3.5 0 1 1-7 0a3.5 3.5 0 1 1 7 0zM2.5 20a6.5 6.5 0 0 1 13 0';
+    const LINK = 'M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1';
+    const row = (name, folder, size, date, mk, mkc, mkd) => ({ name, d: folder ? FOLDER : FILE, ic: folder ? 'folder' : '', size, date, pm: size + ' · ' + date, mk: mk || '', mkc: mkc || '', mkd: mkd || '' });
+    const rows = [
+      row('Property', true, '3 items', '12 Oct'),
+      row('Insurance', true, '2 items', '9 Oct'),
+      row('Will and testament (signed).pdf', false, '2.4 MB', '3 Oct'),
+      row('House deed scan.jpg', false, '3.1 MB', '10 Oct', 'Shared with 1', 'shared', PERSON),
+      row('Bank accounts.txt', false, '1 KB', '28 Sep', 'Link · 6 days left', '', LINK),
+      row('Letter to Daniel.txt', false, '6 KB', '21 Sep'),
+      row('Executor contacts.txt', false, '2 KB', '14 Sep')
+    ];
+    const acts = [
+      { label: 'Download', cls: '', d: 'M12 4v12M7 11l5 5 5-5M5 20h14' },
+      { label: 'Preview', cls: '', d: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM15 12a3 3 0 1 1-6 0a3 3 0 1 1 6 0z' },
+      { label: 'Share', cls: '', d: PERSON },
+      { label: 'Handoff rule', cls: '', d: 'M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3' },
+      { label: 'Move', cls: '', d: 'M5 12h14M13 6l6 6-6 6' },
+      { label: 'Rename', cls: '', d: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4' },
+      { label: 'Delete', cls: 'btn-quiet-danger', d: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3' }
+    ];
+    return { nav, rows, acts, frames: [
+      { cls: 'desk t-light', label: 'Desktop · 1280 · light · uploading', tray: true },
+      { cls: 'phone t-light', label: 'Phone · light · row actions open', sheet: true },
+      { cls: 'phone t-dark', label: 'Phone · dark · uploading', inline: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

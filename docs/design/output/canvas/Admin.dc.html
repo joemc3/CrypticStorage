@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="app">
+<aside class="side">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<nav class="nav" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="5"><a class="nav-a {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.label}}</a></sc-for></nav>
+<div class="side-foot">
+<div class="lockline"><span class="dot" aria-hidden="true"></span>Unlocked · locks after 5 min idle</div>
+<button class="btn btn-secondary btn-sm btn-block" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Lock now</button>
+<span class="t-xs c3">m.hale@fastmail.com · admin</span>
+</div>
+</aside>
+<header class="top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+</header>
+<main class="main"><div class="main-in">
+<div class="stack g8"><h1 class="d-title">Accounts</h1><p class="t-sm c2">This server · 6 accounts · 412 MB stored. Admins see accounts and storage, never items, names or keys.</p></div>
+
+<div class="card stack g12">
+<div class="row g8" style="align-items: flex-end; flex-wrap: wrap"><div class="field grow" style="min-width: 220px"><label class="label" for="ac-{{f.id}}">Create an account</label><input class="input" id="ac-{{f.id}}" type="email" placeholder="Their email address"></div><button class="btn btn-primary" type="button">Create account</button></div>
+<p class="help">They get an email and set their own password. You never see it.</p>
+</div>
+
+<div class="card-flush desk-only" style="flex-direction: column">
+<table class="table">
+<thead><tr><th>Email</th><th>Verified</th><th>Storage</th><th>Created</th><th><span class="sr">Actions</span></th></tr></thead>
+<tbody>
+<sc-for list="{{users}}" as="u" hint-placeholder-count="6">
+<tr><td>{{u.email}}</td><td class="{{u.vc}}">{{u.v}}</td><td><div class="stack g4" style="width: 200px"><span class="t-sm">{{u.used}} of {{u.quota}}</span><div class="bar"><span style="width: {{u.pct}}%"></span></div></div></td><td class="c2">{{u.created}}</td><td style="text-align: right"><button class="btn btn-secondary btn-sm" type="button">Set quota</button></td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+
+<div class="list phone-only">
+<sc-for list="{{users}}" as="u" hint-placeholder-count="6">
+<div class="li"><div class="li-main g8"><span class="li-title">{{u.email}}</span><div class="bar" style="max-width: 200px"><span style="width: {{u.pct}}%"></span></div><span class="li-meta"><span>{{u.used}} of {{u.quota}}</span><span class="{{u.vc}}">{{u.vshort}}</span><span>{{u.created}}</span></span></div><div class="li-side"><button class="ib" type="button" aria-label="Set quota for {{u.email}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z"></path></svg></button></div></div>
+</sc-for>
+</div>
+
+</div></main>
+<nav class="tabs" aria-label="Main" style="grid-template-columns: repeat(5, minmax(0, 1fr))"><sc-for list="{{nav}}" as="n" hint-placeholder-count="5"><a class="tab {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = 'admin';
+    const NAV = [
+      ['dash', 'Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z'],
+      ['files', 'Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['shared', 'Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4'],
+      ['settings', 'Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z'],
+      ['admin', 'Admin', 'Admin', 'M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z']
+    ];
+    const nav = NAV.map(n => ({ label: n[1], short: n[2], d: n[3], cls: n[0] === active ? 'is-on' : '', cur: n[0] === active ? 'page' : 'false' }));
+    const u = (email, ok, used, quota, pct, created) => ({ email, v: ok ? 'Yes' : 'Not yet', vshort: ok ? 'Verified' : 'Not verified', vc: ok ? '' : 'c3', used, quota, pct, created });
+    const users = [
+      u('m.hale@fastmail.com', true, '38.2 MB', '1 GB', 4, '2 Sep 2026'),
+      u('daniel.hale@gmail.com', true, '296 MB', '1 GB', 29, '4 Sep 2026'),
+      u('sam.hale@proton.me', true, '61 MB', '1 GB', 6, '4 Sep 2026'),
+      u('priya.n@outlook.com', true, '12 MB', '500 MB', 3, '5 Sep 2026'),
+      u('tom.becker@icloud.com', true, '4.6 MB', '500 MB', 1, '5 Sep 2026'),
+      u('lena.ortiz@gmail.com', false, '0 B', '500 MB', 0, '12 Oct 2026')
+    ];
+    return { nav, users, frames: [
+      { id: 'a', cls: 'desk t-light', label: 'Desktop · 1280 · light' },
+      { id: 'b', cls: 'phone t-light', label: 'Phone · 390 · light' },
+      { id: 'c', cls: 'phone t-dark', label: 'Phone · 390 · dark' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

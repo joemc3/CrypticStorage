@@ -4,7 +4,7 @@
 
 - Nothing that removes or softens a promise in `01-product-core.md`.
 - No recovery flow of any kind: no "forgot password", no recovery key, no security questions, no "contact support".
-- No change to the lock behaviour: five minutes idle, lock on tab close.
+- No change to the lock behaviour: five minutes idle by default, selectable 1 to 30 in Settings, lock on tab close.
 - No screen that asks the server for something it cannot know: no previews generated server-side, no search over names, no thumbnails.
 - No change to the **verbatim** sentences in `03-screens-and-flows.md`. Present them; do not rewrite them.
 - No consent walls, scrolling terms, or checkbox lists in place of the one-fact-per-screen pattern.

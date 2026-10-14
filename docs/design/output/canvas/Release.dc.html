@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Request a release</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2700px; min-height: 1150px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="4">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+
+<sc-if value="{{f.dash}}" hint-placeholder-val="{{ true }}">
+<div class="app">
+<aside class="side">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<nav class="nav" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="nav-a {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.label}}</a></sc-for></nav>
+<div class="side-foot">
+<div class="lockline"><span class="dot" aria-hidden="true"></span>Unlocked · locks after 5 min idle</div>
+<button class="btn btn-secondary btn-sm btn-block" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Lock now</button>
+<span class="t-xs c3">m.hale@fastmail.com</span>
+</div>
+</aside>
+<header class="top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+</header>
+<main class="main"><div class="main-in">
+
+<sc-if value="{{f.overview}}" hint-placeholder-val="{{ true }}">
+<div class="stack g24">
+<div class="stack g8"><h1 class="d-title">You are a witness for</h1><p class="t-sm c2">You cannot read their items. You can, with others, release them to the people they chose.</p></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 20px">
+<section class="card stack g16">
+<div class="row between g8"><span class="d-sec wrap-any">r.okafor@gmail.com</span><span class="t-xs c3">Any 2 of 3</span></div>
+<ul class="stack g8 t-sm"><li class="row between"><span>You</span><span class="c3">Witness</span></li><li class="row between"><span class="wrap-any">c.adeyemi@gmail.com</span><span class="c3">Witness</span></li><li class="row between"><span class="wrap-any">k.okafor@proton.me</span><span class="c3">Witness</span></li></ul>
+<hr class="rule">
+<p class="t-sm c2">No release request is open.</p>
+<button class="btn btn-secondary" type="button" style="align-self: flex-start">Request a release</button>
+</section>
+<section class="card stack g16" style="border-color: var(--warn-line)">
+<div class="row between g8"><span class="d-sec wrap-any">anna.lind@gmail.com</span><span class="badge b-warn">Request open</span></div>
+<p class="t-sm c2">Opened by j.park@outlook.com · 13 Oct, 14:02</p>
+<ul class="stack g8 t-sm"><li class="row between"><span class="wrap-any">j.park@outlook.com</span><span class="badge b-active">Voted</span></li><li class="row between"><span>You</span><span class="badge b-pending">Not yet</span></li><li class="row between"><span class="wrap-any">e.lind@gmail.com</span><span class="badge b-pending">Not yet</span></li></ul>
+<div class="row g8"><div class="bar grow warn"><span style="width: 50%"></span></div><span class="t-xs c2" style="white-space: nowrap">1 of 2 votes</span></div>
+<div class="actions" style="gap: 8px"><button class="btn btn-primary" type="button">Add your vote</button><button class="btn btn-quiet" type="button">Refuse</button></div>
+<p class="t-xs c3">If anna.lind@gmail.com signs in, the request is cancelled.</p>
+</section>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{f.status}}" hint-placeholder-val="{{ false }}">
+<div class="stack g20">
+<a class="row g4 t-sm" href="#" style="text-decoration: none; color: var(--ink-2)"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Dashboard</a>
+<div class="stack g8"><span class="badge b-warn" style="align-self: flex-start">Request open</span><h1 class="d-title wrap-any">Release request for anna.lind@gmail.com</h1><p class="t-sm c2">Opened by j.park@outlook.com · 13 Oct, 14:02</p></div>
+<div class="card stack g12"><div class="row between"><span class="d-sec">Votes</span><span class="t-sm c2">1 of 2 needed</span></div><div class="bar warn"><span style="width: 50%"></span></div>
+<ul class="stack g12 t-sm"><li class="row between"><span class="wrap-any">j.park@outlook.com</span><span class="badge b-active">Voted</span></li><li class="row between"><span>You</span><span class="badge b-pending">Not yet</span></li><li class="row between"><span class="wrap-any">e.lind@gmail.com</span><span class="badge b-pending">Not yet</span></li></ul></div>
+<p class="t-sm c2">anna.lind@gmail.com has been told. If they sign in, the request is cancelled.</p>
+<div class="stack g8"><button class="btn btn-primary btn-block" type="button">Add your vote</button><button class="btn btn-secondary btn-block" type="button">Refuse</button></div>
+</div>
+</sc-if>
+
+</div></main>
+<nav class="tabs" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="tab {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+</sc-if>
+
+<sc-if value="{{f.fact}}" hint-placeholder-val="{{ false }}">
+<div class="pub">
+<header class="pub-top"><span class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span><a class="btn btn-quiet" href="#">Cancel</a></header>
+<main class="pub-body"><div class="pub-col">
+<sc-if value="{{f.open}}" hint-placeholder-val="{{ true }}">
+<div class="fact">
+<span class="mono t-xs c3">Witness · open a release request</span>
+<h1 class="d-fact">You are asking to release r.okafor@gmail.com's items now.</h1>
+<p class="fact-sub">r.okafor@gmail.com and the other witnesses will be told. If r.okafor@gmail.com signs in, the request is cancelled.</p>
+</div>
+<div class="fact-foot"><button class="btn btn-primary btn-block" type="button">Open the request</button><button class="btn btn-quiet" type="button">Back</button></div>
+</sc-if>
+<sc-if value="{{f.vote}}" hint-placeholder-val="{{ false }}">
+<div class="fact">
+<span class="mono t-xs c3">Witness · vote 2 of 2</span>
+<h1 class="d-fact">Add your vote to release anna.lind@gmail.com's items.</h1>
+<p class="fact-sub">Once 2 votes are in, the items go to the people anna.lind@gmail.com chose. This cannot be undone.</p>
+</div>
+<div class="fact-foot"><button class="btn btn-danger btn-block" type="button">Add my vote</button><button class="btn btn-quiet" type="button">Back</button></div>
+</sc-if>
+</div></main>
+</div>
+</sc-if>
+
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2700,"height":1150}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = 'dash';
+    const NAV = [
+      ['dash', 'Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z'],
+      ['files', 'Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['shared', 'Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4'],
+      ['settings', 'Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z']
+    ];
+    const nav = NAV.map(n => ({ label: n[1], short: n[2], d: n[3], cls: n[0] === active ? 'is-on' : '', cur: n[0] === active ? 'page' : 'false' }));
+    return { nav, frames: [
+      { cls: 'desk t-light', label: 'Desktop · dashboard, witness section', dash: true, overview: true },
+      { cls: 'phone t-light', label: 'Phone · open a request', fact: true, open: true },
+      { cls: 'phone t-light', label: 'Phone · add a vote', fact: true, vote: true },
+      { cls: 'phone t-dark', label: 'Phone · dark · request status', dash: true, status: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

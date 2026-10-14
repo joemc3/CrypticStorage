@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CrypticStorage components</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2700px; min-height: 2200px">
+<sc-for list="{{themes}}" as="th" hint-placeholder-count="2">
+<figure class="slot wide">
+<figcaption class="slot-cap">Components · {{th.name}}</figcaption>
+<div class="frame wide {{th.cls}}" style="padding: 48px; gap: 40px">
+
+<section class="stack g16">
+<h2 class="cap">Button · primary, secondary, danger, quiet</h2>
+<div class="actions">
+<button class="btn btn-primary" type="button">Create rule</button>
+<button class="btn btn-secondary" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"></path></svg>Upload</button>
+<button class="btn btn-danger" type="button">Delete this safe</button>
+<button class="btn btn-quiet" type="button">Back</button>
+<button class="btn btn-primary" type="button" disabled>Continue</button>
+<button class="btn btn-secondary btn-sm" type="button">Small</button>
+<button class="ib" type="button" aria-label="More actions"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"></path></svg></button>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="field"><label class="label" for="c-e-{{th.cls}}">Email</label><input class="input" id="c-e-{{th.cls}}" value="m.hale@fastmail.com"><span class="help">Cannot be changed later.</span></div>
+<div class="field"><label class="label" for="c-p-{{th.cls}}">Password</label><div class="input-wrap"><input class="input" id="c-p-{{th.cls}}" type="password" value="correct-horse-staple"><button class="ib" type="button" aria-label="Show password"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div><div class="strength" aria-hidden="true"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div><span class="help">Good. Four unrelated words would take decades to guess.</span></div>
+<div class="field"><label class="label" for="c-c-{{th.cls}}">Six-digit code</label><input class="input input-code" id="c-c-{{th.cls}}" value="482 91" inputmode="numeric"><span class="err">That code did not match. Codes change every 30 seconds.</span></div>
+</section>
+
+<section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="stack g16">
+<h2 class="cap">State badge · handoff rule</h2>
+<div class="actions" style="gap: 8px"><span class="badge b-active">Active</span><span class="badge b-warn">Warning</span><span class="badge b-released">Released by timer</span><span class="badge b-released">Released by quorum</span><span class="badge b-revoked">Revoked</span><span class="badge b-pending">Pending</span></div>
+<h2 class="cap" style="margin-top: 8px">Markers · on file rows</h2>
+<div class="actions" style="gap: 16px">
+<span class="mk handoff"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg>Handoff</span>
+<span class="mk shared"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path></svg>Shared with 1</span>
+<span class="mk"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg>Link · 6 days</span>
+</div>
+</div>
+<div class="stack g16">
+<h2 class="cap">Fingerprint · monospace, grouped by four</h2>
+<div class="card stack g12">
+<div class="row between"><span class="t-sm c2">sam.hale@proton.me</span><span class="badge b-active">Verified in person</span></div>
+<div class="fp" aria-label="Key fingerprint 7F3A 91C2 0B4E D58A 3C61 E0F7 9A24 B1D8"><span>7F3A</span><span>91C2</span><span>0B4E</span><span>D58A</span><span>3C61</span><span>E0F7</span><span>9A24</span><span>B1D8</span></div>
+</div>
+</div>
+</section>
+
+<section class="stack g16">
+<h2 class="cap">List rows · folder, file, rule, witness</h2>
+<div class="list">
+<div class="li"><div class="li-ic folder"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div><div class="li-main"><span class="li-title">Estate</span><span class="li-meta"><span>6 items</span><span class="mk handoff"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg>Handoff</span></span></div><div class="li-side"><button class="ib" type="button" aria-label="Actions for Estate"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"></path></svg></button></div></div>
+<div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><path d="M14 3v5h5"></path></svg></div><div class="li-main"><span class="li-title">Seed phrase, cold wallet.txt</span><span class="li-meta"><span>412 B · 28 Sep</span><span class="mk shared"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path></svg>Shared with 1</span></span></div><div class="li-side"><button class="ib" type="button" aria-label="Actions for Seed phrase, cold wallet.txt"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"></path></svg></button></div></div>
+<div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg></div><div class="li-main"><span class="li-title">Estate → daniel.hale@gmail.com, sam.hale@proton.me</span><span class="li-meta"><span>1 year</span><span>Releases 14 Oct 2027 unless you sign in</span></span></div><div class="li-side"><span class="badge b-active">Active</span><button class="btn btn-quiet-danger btn-sm" type="button">Revoke</button></div></div>
+<div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path></svg></div><div class="li-main"><span class="li-title">lena.ortiz@gmail.com</span><span class="li-meta"><span>Invited 12 Oct</span><span class="mono">D04C 7718 …</span></span></div><div class="li-side"><span class="badge b-pending">Pending</span><button class="btn btn-quiet btn-sm" type="button">Remove</button></div></div>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="stack g16">
+<h2 class="cap">Breadcrumbs</h2>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="#">Files</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><a href="#">Estate</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="here" aria-current="page">Property</span></nav>
+<h2 class="cap" style="margin-top: 8px">Progress · spinner</h2>
+<div class="stack g8"><div class="row between t-sm"><span>House deed scan.jpg</span><span class="c3">Encrypting · 62%</span></div><div class="bar" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="Upload progress"><span style="width: 62%"></span></div></div>
+<div class="row g12 t-sm c2"><span class="spin" aria-hidden="true"></span>Decrypting names…</div>
+</div>
+<div class="stack g16">
+<h2 class="cap">Toast · one line, one optional action</h2>
+<div class="toast"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span class="grow">Link copied. Anyone with it can open the file.</span><button class="btn btn-quiet btn-sm" type="button">Dismiss</button></div>
+<h2 class="cap" style="margin-top: 8px">Callouts · used sparingly</h2>
+<div class="callout danger"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg><div class="stack g4"><span class="strong">sam.hale@proton.me has a new key.</span><span>It changed since you last shared with them. Check the fingerprint with Sam before you share again.</span></div></div>
+<div class="callout warn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg><span>priya.n@outlook.com is also one of your witnesses. They would hold part of the release and be a destination.</span></div>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start">
+<div class="stack g16">
+<h2 class="cap">One-fact screen</h2>
+<div class="card stack g12" style="padding: 24px">
+<div class="fact-steps"><span class="mono t-xs c3">2 of 4</span><span class="ticks" aria-hidden="true"><span class="on"></span><span class="on"></span><span></span><span></span></span></div>
+<p style="font: 600 24px/30px var(--serif)">Your email address cannot be changed later.</p>
+<p class="t-sm c2">Your email is part of how your keys are derived. Choose the one you will still have in ten years.</p>
+<div class="row g8" style="margin-top: 8px"><button class="btn btn-primary btn-sm" type="button">Continue</button><button class="btn btn-quiet btn-sm" type="button">Back</button></div>
+</div>
+</div>
+<div class="stack g16">
+<h2 class="cap">Empty state</h2>
+<div class="card empty"><div class="ring"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div><p class="strong">Nothing in this folder yet.</p><p class="t-sm c3">Drop files here. They are encrypted before they leave this browser.</p><button class="btn btn-secondary btn-sm" type="button">Upload</button></div>
+</div>
+<div class="stack g16">
+<h2 class="cap">Card · modal</h2>
+<div class="card-flush" style="box-shadow: var(--shadow)">
+<div class="card-head"><span class="d-sec">Rename</span><button class="ib" type="button" aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div style="padding: 16px" class="field"><label class="label" for="c-r-{{th.cls}}">Name</label><input class="input" id="c-r-{{th.cls}}" value="Bank accounts.txt"></div>
+<div class="row g8" style="padding: 0 16px 16px; justify-content: flex-end"><button class="btn btn-quiet btn-sm" type="button">Cancel</button><button class="btn btn-primary btn-sm" type="button">Save</button></div>
+</div>
+</div>
+</section>
+
+<section class="stack g16">
+<h2 class="cap">Table · admin only</h2>
+<div class="card-flush">
+<table class="table">
+<thead><tr><th>Email</th><th>Verified</th><th>Storage</th><th>Created</th><th><span class="sr">Actions</span></th></tr></thead>
+<tbody>
+<tr><td>m.hale@fastmail.com</td><td>Yes</td><td><div class="stack g4" style="width: 180px"><span class="t-sm">38.2 MB of 1 GB</span><div class="bar"><span style="width: 4%"></span></div></div></td><td>2 Sep 2026</td><td style="text-align: right"><button class="btn btn-secondary btn-sm" type="button">Set quota</button></td></tr>
+<tr><td>daniel.hale@gmail.com</td><td class="c3">Not yet</td><td><div class="stack g4" style="width: 180px"><span class="t-sm">0 B of 1 GB</span><div class="bar"><span style="width: 0%"></span></div></div></td><td>12 Oct 2026</td><td style="text-align: right"><button class="btn btn-secondary btn-sm" type="button">Set quota</button></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2700,"height":2200}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { themes: [ { cls: 't-light', name: 'light' }, { cls: 't-dark', name: 'dark' } ] };
+  }
+}
+</script>
+</body>
+</html>

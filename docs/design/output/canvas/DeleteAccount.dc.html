@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Delete account</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="pub">
+<header class="pub-top">
+<span class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span>
+<a class="btn btn-quiet" href="#">Cancel</a>
+</header>
+<main class="pub-body">
+<div class="pub-col">
+<div class="fact">
+<span class="mono t-xs c3">Settings · Delete account</span>
+<h1 class="d-fact">Everything in this safe is destroyed.</h1>
+<p class="fact-sub">Files, rules, shares and witness settings. Items already released to others stay with them.</p>
+<div class="field" style="margin-top: 8px; max-width: 420px">
+<label class="label" for="de-{{f.id}}">Type your account email to continue</label>
+<input class="input" id="de-{{f.id}}" type="email" value="{{f.typed}}" placeholder="m.hale@fastmail.com" autocomplete="off">
+</div>
+</div>
+<div class="fact-foot">
+<button class="btn btn-danger btn-block" type="button" disabled="{{f.dis}}">Destroy this safe</button>
+<a class="btn btn-quiet" href="#">Keep my safe</a>
+</div>
+</div>
+</main>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { frames: [
+      { id: 'a', cls: 'desk t-light', label: 'Desktop · email typed', typed: 'm.hale@fastmail.com', dis: false },
+      { id: 'b', cls: 'phone t-light', label: 'Phone · nothing typed yet', typed: '', dis: true },
+      { id: 'c', cls: 'phone t-dark', label: 'Phone · dark · email typed', typed: 'm.hale@fastmail.com', dis: false }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

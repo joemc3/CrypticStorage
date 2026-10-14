@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dashboard</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1400px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="app">
+<aside class="side">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<nav class="nav" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="nav-a {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.label}}</a></sc-for></nav>
+<div class="side-foot">
+<div class="lockline"><span class="dot" aria-hidden="true"></span>Unlocked · locks after 5 min idle</div>
+<button class="btn btn-secondary btn-sm btn-block" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Lock now</button>
+<span class="t-xs c3">m.hale@fastmail.com</span>
+</div>
+</aside>
+<header class="top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+</header>
+<main class="main"><div class="main-in">
+
+<div class="stack g8">
+<h1 class="d-title">Your safe</h1>
+<p class="row g8 t-sm c2"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Your sign-in today at 09:12 reset every handoff clock.</p>
+</div>
+
+<div class="tiles">
+<div class="tile"><span class="t-sm c2">Items</span><span class="n">14</span><span class="t-xs c3">in 4 folders</span></div>
+<div class="tile"><span class="t-sm c2">Storage</span><span class="n">38.2 MB</span><div class="bar" role="progressbar" aria-label="Storage used" aria-valuenow="4" aria-valuemin="0" aria-valuemax="100"><span style="width: 4%"></span></div><span class="t-xs c3">of 1 GB</span></div>
+<div class="tile"><span class="t-sm c2">Handoff rules</span><span class="n">3 active</span><span class="t-xs c3">Earliest release 12 Jan 2027</span></div>
+</div>
+
+<section class="stack g12">
+<h2 class="d-sec">For you</h2>
+<div class="list">
+<div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"></path></svg></div><div class="li-main"><span class="wrap-any" style="font-weight: 500">r.okafor@gmail.com is asking you to be a witness.</span><span class="li-meta">Invited 13 Oct</span></div><div class="li-side"><a class="btn btn-secondary btn-sm" href="#">Review</a></div></div>
+<div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg></div><div class="li-main"><span class="wrap-any" style="font-weight: 500">tom.becker@icloud.com has set something aside for you.</span><span class="li-meta">12 Oct · nothing to do now</span></div></div>
+</div>
+</section>
+
+<div class="split">
+<div class="stack g24">
+<section class="stack g12">
+<div class="row between"><h2 class="d-sec">Handoff rules</h2><a class="t-sm" href="#">All rules</a></div>
+<div class="list">
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="4">
+<div class="li {{r.muted}}"><div class="li-ic {{r.ic}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{r.d}}"></path></svg></div><div class="li-main"><span class="li-title">{{r.name}}</span><span class="li-meta"><span class="wrap-any">To {{r.to}}</span><span>{{r.when}}</span></span></div><div class="li-side" style="padding-right: 8px"><span class="badge {{r.b}}">{{r.state}}</span></div></div>
+</sc-for>
+</div>
+</section>
+<section class="stack g12">
+<h2 class="d-sec">Recent activity</h2>
+<ol class="stack" style="border-top: 1px solid var(--line)">
+<sc-for list="{{activity}}" as="a" hint-placeholder-count="4">
+<li class="row between g16 t-sm" style="padding: 12px 0; border-bottom: 1px solid var(--line)"><span class="c2">{{a.what}}</span><span class="c3" style="white-space: nowrap">{{a.when}}</span></li>
+</sc-for>
+</ol>
+</section>
+</div>
+<aside class="card stack g16">
+<div class="row between"><h2 class="d-sec">Witnesses</h2><a class="t-sm" href="#">Manage</a></div>
+<p class="t-sm c2">Any 2 of these 3 can release what you marked for handoff.</p>
+<ul class="stack g12">
+<li class="row between g8"><span class="t-sm wrap-any">priya.n@outlook.com</span><span class="badge b-active">Accepted</span></li>
+<li class="row between g8"><span class="t-sm wrap-any">tom.becker@icloud.com</span><span class="badge b-active">Accepted</span></li>
+<li class="row between g8"><span class="t-sm wrap-any">lena.ortiz@gmail.com</span><span class="badge b-pending">Pending</span></li>
+</ul>
+<p class="t-xs c3">Release requests open: none.</p>
+</aside>
+</div>
+
+</div></main>
+<nav class="tabs" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="tab {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = 'dash';
+    const NAV = [
+      ['dash', 'Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z'],
+      ['files', 'Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['shared', 'Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4'],
+      ['settings', 'Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z']
+    ];
+    const nav = NAV.map(n => ({ label: n[1], short: n[2], d: n[3], cls: n[0] === active ? 'is-on' : '', cur: n[0] === active ? 'page' : 'false' }));
+    const FOLDER = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
+    const FILE = 'M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM14 3v5h5';
+    const rules = [
+      { name: 'Estate', d: FOLDER, ic: 'folder', to: 'daniel.hale@gmail.com, sam.hale@proton.me', when: 'Releases 14 Oct 2027', b: 'b-active', state: 'Active', muted: '' },
+      { name: 'Seed phrase, cold wallet.txt', d: FILE, ic: '', to: 'daniel.hale@gmail.com', when: 'Releases 12 Jan 2027', b: 'b-active', state: 'Active', muted: '' },
+      { name: 'Letters', d: FOLDER, ic: 'folder', to: 'sam.hale@proton.me', when: 'Releases 14 Oct 2031', b: 'b-active', state: 'Active', muted: '' },
+      { name: 'Old will (2019).pdf', d: FILE, ic: '', to: 'daniel.hale@gmail.com', when: 'Revoked 2 Sep 2026', b: 'b-revoked', state: 'Revoked', muted: 'is-muted' }
+    ];
+    const activity = [
+      { what: 'You signed in', when: 'Today 09:12' },
+      { what: 'Uploaded 2 files to Estate', when: '12 Oct' },
+      { what: 'Shared House deed scan.jpg with sam.hale@proton.me', when: '10 Oct' },
+      { what: 'Created a handoff rule on Estate', when: '3 Oct' }
+    ];
+    return { nav, rules, activity, frames: [
+      { cls: 'desk t-light', label: 'Desktop · 1280 · light' },
+      { cls: 'phone t-light', label: 'Phone · 390 · light' },
+      { cls: 'phone t-dark', label: 'Phone · 390 · dark' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

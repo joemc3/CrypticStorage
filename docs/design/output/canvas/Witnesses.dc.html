@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Witnesses</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2700px; min-height: 1150px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="4">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+
+<sc-if value="{{f.manage}}" hint-placeholder-val="{{ true }}">
+<div class="app">
+<aside class="side">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<nav class="nav" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="nav-a {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.label}}</a></sc-for></nav>
+<div class="side-foot">
+<div class="lockline"><span class="dot" aria-hidden="true"></span>Unlocked · locks after 5 min idle</div>
+<button class="btn btn-secondary btn-sm btn-block" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Lock now</button>
+<span class="t-xs c3">m.hale@fastmail.com</span>
+</div>
+</aside>
+<header class="top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+</header>
+<main class="main"><div class="main-in" style="max-width: 760px">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="#">Settings</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="here" aria-current="page">Witnesses</span></nav>
+<div class="stack g8"><h1 class="d-title">Witnesses</h1><p class="c2" style="max-width: 56ch">Together they can release what you marked for handoff, early. None of them can read anything unless they are also a recipient.</p></div>
+
+<div class="list">
+<sc-for list="{{wit}}" as="w" hint-placeholder-count="4">
+<div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 8a3.5 3.5 0 1 1-7 0a3.5 3.5 0 1 1 7 0zM2.5 20a6.5 6.5 0 0 1 13 0"></path></svg></div><div class="li-main"><span class="li-title">{{w.email}}</span><span class="li-meta"><span>{{w.meta}}</span><span class="mono">{{w.fp}}</span></span></div><div class="li-side"><span class="badge {{w.b}}">{{w.state}}</span><button class="ib" type="button" aria-label="Remove {{w.email}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div>
+</sc-for>
+</div>
+
+<div class="row g8" style="align-items: flex-end"><div class="field grow"><label class="label" for="wa-{{f.id}}">Add a witness by email</label><input class="input" id="wa-{{f.id}}" type="email" placeholder="They need an account here"></div><button class="btn btn-secondary" type="button">Add</button></div>
+
+<div class="callout warn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg><span>daniel.hale@gmail.com also receives Estate. He would hold part of the release and be where it goes.</span></div>
+
+<div class="card row between g16" style="flex-wrap: wrap">
+<div class="stack g4"><span class="label">Release needs</span><span class="help">Between 2 and 4. Never 1, so no single person can release anything.</span></div>
+<div class="row g12"><div class="stepper"><button type="button" aria-label="Fewer">−</button><output>2</output><button type="button" aria-label="More">+</button></div><span class="c2">of 4</span></div>
+</div>
+
+<div class="row between g16" style="flex-wrap: wrap"><p class="t-sm c3">Saving re-seals every handoff rule in this browser.</p><div class="actions" style="gap: 8px"><button class="btn btn-quiet" type="button">Discard</button><button class="btn btn-primary" type="button">Review and save</button></div></div>
+</div></main>
+<nav class="tabs" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="tab {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+</sc-if>
+
+<sc-if value="{{f.confirm}}" hint-placeholder-val="{{ false }}">
+<div class="pub">
+<header class="pub-top"><span class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span><a class="btn btn-quiet" href="#">Cancel</a></header>
+<main class="pub-body"><div class="pub-col">
+<div class="fact">
+<span class="mono t-xs c3">Witnesses</span>
+<h1 class="d-fact">Any 2 of these 4 people, together, can release everything you have marked for handoff.</h1>
+<ul class="stack" style="border-top: 1px solid var(--line)">
+<sc-for list="{{wit}}" as="w" hint-placeholder-count="4"><li class="row between g8 t-sm" style="padding: 10px 0; border-bottom: 1px solid var(--line)"><span class="wrap-any">{{w.email}}</span><span class="c3">{{w.short}}</span></li></sc-for>
+</ul>
+<p class="fact-sub">New witnesses get an invitation and must accept before they count.</p>
+</div>
+<div class="fact-foot"><button class="btn btn-primary btn-block" type="button">Save witnesses</button><button class="btn btn-quiet" type="button">Back</button></div>
+</div></main>
+</div>
+</sc-if>
+
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2700,"height":1150}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = 'settings';
+    const NAV = [
+      ['dash', 'Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z'],
+      ['files', 'Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['shared', 'Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4'],
+      ['settings', 'Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z']
+    ];
+    const nav = NAV.map(n => ({ label: n[1], short: n[2], d: n[3], cls: n[0] === active ? 'is-on' : '', cur: n[0] === active ? 'page' : 'false' }));
+    const wit = [
+      { email: 'priya.n@outlook.com', meta: 'Accepted 4 Sep', fp: '91C2 7F3A …', b: 'b-active', state: 'Accepted', short: 'Accepted' },
+      { email: 'tom.becker@icloud.com', meta: 'Accepted 5 Sep', fp: 'E0F7 3C61 …', b: 'b-active', state: 'Accepted', short: 'Accepted' },
+      { email: 'lena.ortiz@gmail.com', meta: 'Invited 12 Oct', fp: 'D04C 7718 …', b: 'b-pending', state: 'Pending', short: 'Invited' },
+      { email: 'daniel.hale@gmail.com', meta: 'New · invited when you save', fp: 'B1D8 9A24 …', b: 'b-pending', state: 'New', short: 'New' }
+    ];
+    return { nav, wit, frames: [
+      { id: 'a', cls: 'desk t-light', label: 'Desktop · manage witnesses', manage: true },
+      { id: 'b', cls: 'phone t-light', label: 'Phone · manage', manage: true },
+      { id: 'c', cls: 'phone t-light', label: 'Phone · confirm before saving', confirm: true },
+      { id: 'd', cls: 'phone t-dark', label: 'Phone · dark · confirm', confirm: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

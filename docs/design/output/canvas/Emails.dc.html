@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Email templates</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1900px">
+<figure class="slot" style="width: 2148px">
+<figcaption class="slot-cap">Emails · plain text · subject, two sentences, one link</figcaption>
+<div class="frame wide t-light" style="padding: 56px; gap: 40px">
+<div class="stack g8" style="max-width: 900px">
+<h1 class="d-title">Every email the safe sends</h1>
+<p class="c2">Plain text only. They carry what the server knows: addresses, dates, counts and states. Never an item name: the server cannot read one, so no email can contain one. Placeholders are in braces.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<sc-for list="{{mails}}" as="m" hint-placeholder-count="13">
+<article class="card stack g12" style="padding: 24px">
+<div class="row between g8"><span class="cap">{{m.id}}</span><span class="t-xs c3">To {{m.to}}</span></div>
+<h2 class="d-sec">{{m.subject}}</h2>
+<p class="t-sm c2">{{m.body}}</p>
+<p class="mono t-xs" style="color: var(--accent-text); overflow-wrap: anywhere">{{m.link}}</p>
+</article>
+</sc-for>
+</div>
+</div>
+</figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const m = (id, to, subject, body, link) => ({ id, to, subject, body, link });
+    return { mails: [
+      m('Verify', 'the new account', 'Verify your email for CrypticStorage', 'Open the link to finish creating your safe. If you did not sign up, ignore this and nothing will happen.', 'https://{host}/verify/{token}'),
+      m('Reminder · 75%', 'the owner', 'A handoff rule releases on {date}', 'You have not signed in since {last activity}, so a rule you made will release to {recipients} on {date}. Sign in, or follow this link, to reset the clock.', 'https://{host}/check-in/{token}'),
+      m('Reminder · 90%', 'the owner', 'A handoff rule releases in {days} days', 'This is your second reminder; {recipients} receive what the rule covers on {date}. Following this link resets the clock, and nothing else is needed.', 'https://{host}/check-in/{token}'),
+      m('Final warning', 'the owner', 'Final notice: a handoff rule releases on {date}', 'If you do not sign in or follow this link by then, {recipients} will receive what the rule covers. This is the last email before it happens.', 'https://{host}/check-in/{token}'),
+      m('Released by timer', 'the owner', 'A handoff rule has released', 'After {period} without a sign-in, a rule you made released to {recipients} on {date}. Your own copies are unchanged.', 'https://{host}/dashboard'),
+      m('Released by timer', 'each recipient', '{owner} has handed something to you', 'It released on {owner}’s terms and is now in Shared with me. Sign in to open it.', 'https://{host}/shared'),
+      m('Witness invitation', 'the invited witness', '{owner} asked you to be a witness', 'Together with others they name, you could release their items to the people they chose, and you could never read those items yourself. Open the link to accept or decline.', 'https://{host}/witness/{token}'),
+      m('Request opened', 'the owner', 'A witness asked to release your items', '{witness} opened a release request at {time}. Sign in to cancel it; if {k} witnesses vote first, what you marked is released.', 'https://{host}/login'),
+      m('Request opened', 'the other witnesses', '{witness} asked to release {owner}’s items', 'You can add your vote or refuse. If {owner} signs in, the request is cancelled.', 'https://{host}/dashboard'),
+      m('Vote added', 'the owner', 'Release request: {count} of {k} votes', '{witness} added a vote at {time}. Sign in now to cancel the request.', 'https://{host}/login'),
+      m('Release completed', 'the owner', 'Your witnesses released your items', '{k} witnesses voted, and what you marked went to the people you named at {time}. Your own copies are unchanged.', 'https://{host}/dashboard'),
+      m('Request cancelled', 'the witnesses', '{owner} signed in, so the request is cancelled', 'Nothing was released. There is nothing for you to do.', 'https://{host}/dashboard'),
+      m('Recipient notice', 'each recipient', '{owner} has set something aside for you', 'You will receive it on their terms. There is nothing to do now.', 'https://{host}/dashboard')
+    ] };
+  }
+}
+</script>
+</body>
+</html>

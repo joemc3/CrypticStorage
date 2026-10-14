@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Create account</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2652px; min-height: 2100px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="9">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="pub">
+<header class="pub-top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<a class="btn btn-quiet" href="#">Sign in</a>
+</header>
+<main class="pub-body">
+<div class="pub-col">
+
+<sc-if value="{{f.fact}}" hint-placeholder-val="{{ true }}">
+<div class="fact">
+<div class="fact-steps"><span class="mono t-xs c3">Before you begin · {{f.n}} of 4</span><span class="ticks" aria-hidden="true"><span class="{{f.k1}}"></span><span class="{{f.k2}}"></span><span class="{{f.k3}}"></span><span class="{{f.k4}}"></span></span></div>
+
+<sc-if value="{{f.s1}}" hint-placeholder-val="{{ true }}">
+<h1 class="d-fact">There is no password reset.</h1>
+<p class="fact-sub">If you forget your password, nothing and nobody can get your items back. Not us, not support, not a recovery key.</p>
+</sc-if>
+<sc-if value="{{f.s2}}" hint-placeholder-val="{{ false }}">
+<h1 class="d-fact">Your email address cannot be changed later.</h1>
+<p class="fact-sub">Your email is part of how your keys are derived. Choose the one you will still have in ten years.</p>
+</sc-if>
+<sc-if value="{{f.s3}}" hint-placeholder-val="{{ false }}">
+<h1 class="d-fact">Your witnesses can release your items without you.</h1>
+<p class="fact-sub">You will choose them later. Any k of n of them, together, can hand your items to the people you name. Choose people you would trust with a key to your house.</p>
+</sc-if>
+<sc-if value="{{f.s4}}" hint-placeholder-val="{{ false }}">
+<h1 class="d-fact">Type "I understand there is no way back" to continue.</h1>
+<div class="field" style="margin-top: 8px">
+<label class="label sr" for="phrase-{{f.id}}">Confirmation phrase</label>
+<input class="input" id="phrase-{{f.id}}" value="{{f.typed}}" placeholder="I understand there is no way back" autocomplete="off" spellcheck="false">
+<sc-if value="{{f.matched}}" hint-placeholder-val="{{ false }}"><span class="ok"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Matches</span></sc-if>
+</div>
+</sc-if>
+</div>
+<div class="fact-foot">
+<button class="btn btn-primary btn-block" type="button" disabled="{{f.dis}}">{{f.cta}}</button>
+<button class="btn btn-quiet" type="button">{{f.back}}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{f.form}}" hint-placeholder-val="{{ false }}">
+<div class="stack g24" style="padding-top: 24px; max-width: 400px; width: 100%">
+<div class="stack g8"><h1 class="d-title">Create your account</h1><p class="c2">Three fields. The password is the only key there is.</p></div>
+<div class="field"><label class="label" for="em-{{f.id}}">Email</label><input class="input" id="em-{{f.id}}" type="email" value="m.hale@fastmail.com" autocomplete="email"><span class="help">Cannot be changed later.</span></div>
+<div class="field"><label class="label" for="pw-{{f.id}}">Password</label><div class="input-wrap"><input class="input" id="pw-{{f.id}}" type="password" value="lantern-orchard-basalt-71" autocomplete="new-password"><button class="ib" type="button" aria-label="Show password"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div><div class="strength" aria-hidden="true"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span></div><span class="help">Strong. Write it down and keep it somewhere that is not this safe.</span></div>
+<div class="field"><label class="label" for="pw2-{{f.id}}">Password again</label><div class="input-wrap"><input class="input" id="pw2-{{f.id}}" type="password" value="lantern-orchard-basalt-71" autocomplete="new-password"><button class="ib" type="button" aria-label="Show password"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div><span class="ok"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Both match</span></div>
+<div class="stack g8" style="margin-top: 8px"><button class="btn btn-primary btn-block" type="button">Create account</button><button class="btn btn-quiet" type="button" style="align-self: center">Back</button></div>
+</div>
+</sc-if>
+
+<sc-if value="{{f.check}}" hint-placeholder-val="{{ false }}">
+<div class="stack g20" style="padding-top: 48px; max-width: 400px">
+<div class="li-ic" style="width: 52px; height: 52px; border-radius: 12px"><svg class="i i-lg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg></div>
+<h1 class="d-title">Check your email</h1>
+<p class="c2">We sent a link to <span class="strong" style="color: var(--ink)">m.hale@fastmail.com</span>. Open it on any device to finish. Your safe exists once the address is verified.</p>
+<div class="stack g8" style="margin-top: 8px"><button class="btn btn-secondary btn-block" type="button">Resend the email</button><p class="t-sm c3" style="text-align: center">Nothing after a few minutes? Check spam, then resend.</p></div>
+</div>
+</sc-if>
+
+</div>
+</main>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2652,"height":2100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ticks = n => ({ k1: n >= 1 ? 'on' : '', k2: n >= 2 ? 'on' : '', k3: n >= 3 ? 'on' : '', k4: n >= 4 ? 'on' : '' });
+    const fact = (id, cls, label, n, extra) => Object.assign({ id, cls, label, fact: true, n, cta: 'I understand', back: n === 1 ? 'Not now' : 'Back', dis: false }, ticks(n), extra);
+    return { frames: [
+      fact('p1', 'phone t-light', '1 · No reset', 1, { s1: true }),
+      fact('p2', 'phone t-light', '2 · Email is permanent', 2, { s2: true }),
+      fact('p3', 'phone t-light', '3 · Witnesses', 3, { s3: true }),
+      fact('p4', 'phone t-light', '4 · Confirm, phrase partly typed', 4, { s4: true, typed: 'I understand there is no w', cta: 'Continue', dis: true }),
+      { id: 'pf', cls: 'phone t-light', label: '5 · The form', form: true },
+      { id: 'pc', cls: 'phone t-light', label: '6 · Check your email', check: true },
+      fact('d4', 'desk t-light', 'Desktop · 1280 · 4 · phrase matches', 4, { s4: true, typed: 'I understand there is no way back', matched: true, cta: 'Continue' }),
+      fact('k1', 'phone t-dark', 'Phone · dark · 1', 1, { s1: true }),
+      { id: 'kf', cls: 'phone t-dark', label: 'Phone · dark · 5', form: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

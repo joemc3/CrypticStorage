@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shared with me</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="app">
+<aside class="side">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<nav class="nav" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="nav-a {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.label}}</a></sc-for></nav>
+<div class="side-foot">
+<div class="lockline"><span class="dot" aria-hidden="true"></span>Unlocked · locks after 5 min idle</div>
+<button class="btn btn-secondary btn-sm btn-block" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Lock now</button>
+<span class="t-xs c3">m.hale@fastmail.com</span>
+</div>
+</aside>
+<header class="top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+</header>
+<main class="main"><div class="main-in">
+
+<div class="stack g8"><h1 class="d-title">Shared with me</h1><p class="t-sm c2">You open these with your own login. Nobody sent you a second secret.</p></div>
+
+<section class="stack g12">
+<h2 class="d-sec">Set aside for you</h2>
+<div class="list">
+<div class="li"><div class="li-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg></div><div class="li-main"><span class="wrap-any" style="font-weight: 500">tom.becker@icloud.com has set something aside for you.</span><span class="li-meta">Since 12 Oct 2026 · you will receive it on their terms</span></div></div>
+</div>
+</section>
+
+<section class="stack g12">
+<h2 class="d-sec">Items</h2>
+<div class="list">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+<div class="li">
+<div class="li-ic {{r.ic}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{r.d}}"></path></svg></div>
+<div class="li-main">
+<span class="li-title">{{r.name}}</span>
+<sc-if value="{{r.handoff}}" hint-placeholder-val="{{ false }}"><span class="mk handoff wrap-any" style="white-space: normal; font-size: 13px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12M6 21h12M7 3v3l5 6-5 6v3M17 3v3l-5 6 5 6v3"></path></svg>{{r.handoff}}</span></sc-if>
+<span class="li-meta"><span class="wrap-any">{{r.meta}}</span></span>
+</div>
+<div class="li-side"><button class="ib" type="button" aria-label="Download {{r.name}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg></button></div>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div></main>
+<nav class="tabs" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="tab {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = 'shared';
+    const NAV = [
+      ['dash', 'Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z'],
+      ['files', 'Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['shared', 'Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4'],
+      ['settings', 'Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z']
+    ];
+    const nav = NAV.map(n => ({ label: n[1], short: n[2], d: n[3], cls: n[0] === active ? 'is-on' : '', cur: n[0] === active ? 'page' : 'false' }));
+    const FILE = 'M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM14 3v5h5';
+    const FOLDER = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
+    const rows = [
+      { name: 'Garage and storage unit codes.txt', d: FILE, ic: '', handoff: 'Handed off to you by robert.hale@gmail.com.', meta: 'Released by timer · 30 Aug 2026 · 2 KB' },
+      { name: 'Robert, papers', d: FOLDER, ic: 'folder', handoff: 'Handed off to you by robert.hale@gmail.com.', meta: 'Released by timer · 30 Aug 2026 · 5 items' },
+      { name: 'Boat insurance 2026.pdf', d: FILE, ic: '', handoff: '', meta: 'From daniel.hale@gmail.com · 19 Sep · 820 KB' },
+      { name: 'Recipes.txt', d: FILE, ic: '', handoff: '', meta: 'From tom.becker@icloud.com · 2 Sep · 14 KB' }
+    ];
+    return { nav, rows, frames: [
+      { cls: 'desk t-light', label: 'Desktop · 1280 · light' },
+      { cls: 'phone t-light', label: 'Phone · 390 · light' },
+      { cls: 'phone t-dark', label: 'Phone · 390 · dark' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

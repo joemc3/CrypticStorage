@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1900px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="app">
+<aside class="side">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<nav class="nav" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="nav-a {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.label}}</a></sc-for></nav>
+<div class="side-foot">
+<div class="lockline"><span class="dot" aria-hidden="true"></span>Unlocked · locks after 5 min idle</div>
+<button class="btn btn-secondary btn-sm btn-block" type="button"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Lock now</button>
+<span class="t-xs c3">m.hale@fastmail.com</span>
+</div>
+</aside>
+<header class="top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+</header>
+<main class="main"><div class="main-in" style="max-width: 860px">
+
+<sc-if value="{{f.full}}" hint-placeholder-val="{{ true }}">
+<div class="stack g32">
+<h1 class="d-title">Settings</h1>
+<div class="stack">
+<section class="sec kv"><h2 class="d-sec">Profile</h2><div class="field"><label class="label" for="pe-{{f.id}}">Email</label><input class="input" id="pe-{{f.id}}" readonly value="m.hale@fastmail.com"><span class="help">Your email is part of how your keys are derived, so it cannot be changed.</span></div></section>
+<section class="sec kv"><h2 class="d-sec">Password</h2><div class="stack g16" style="max-width: 420px">
+<div class="field"><label class="label" for="p0-{{f.id}}">Current password</label><input class="input" id="p0-{{f.id}}" type="password"></div>
+<div class="field"><label class="label" for="p1-{{f.id}}">New password</label><input class="input" id="p1-{{f.id}}" type="password"></div>
+<div class="field"><label class="label" for="p2-{{f.id}}">New password again</label><input class="input" id="p2-{{f.id}}" type="password"></div>
+<p class="help">Your keys are re-wrapped in this browser. There is still no reset if you forget the new one.</p>
+<button class="btn btn-secondary" type="button" style="align-self: flex-start">Change password</button>
+</div></section>
+<section class="sec kv"><h2 class="d-sec">Key fingerprint</h2><div class="stack g12"><div class="fp" aria-label="Key fingerprint 7F3A 91C2 0B4E D58A 3C61 E0F7 9A24 B1D8"><span>7F3A</span><span>91C2</span><span>0B4E</span><span>D58A</span><span>3C61</span><span>E0F7</span><span>9A24</span><span>B1D8</span></div><p class="help">People who share with you compare this, in person or on a call, to know the key is yours.</p></div></section>
+<section class="sec kv"><h2 class="d-sec">Two-factor</h2><div class="stack g12"><div class="row g12"><span class="badge b-active">On</span><span class="t-sm c2">Authenticator app · 8 backup codes left</span></div><div class="actions" style="gap: 8px"><button class="btn btn-secondary btn-sm" type="button">Show backup codes</button><button class="btn btn-quiet btn-sm" type="button">Turn off</button></div></div></section>
+<section class="sec kv"><h2 class="d-sec">Witnesses</h2><div class="row between g16" style="flex-wrap: wrap"><p class="t-sm c2">Any 2 of 3 can release what you marked. 2 accepted, 1 pending.</p><a class="btn btn-secondary btn-sm" href="#">Manage witnesses</a></div></section>
+<section class="sec kv"><h2 class="d-sec">Lock and look</h2><div class="stack g16" style="max-width: 420px">
+<div class="field"><label class="label" for="lk-{{f.id}}">Lock after</label><select class="select" id="lk-{{f.id}}"><option>5 minutes idle</option></select><span class="help">It also locks when you close the tab.</span></div>
+<div class="field"><span class="label">Theme</span><div class="seg" role="radiogroup" aria-label="Theme" style="grid-template-columns: repeat(3, minmax(0, 1fr))"><button type="button" role="radio" aria-checked="true" class="is-on">System</button><button type="button" role="radio" aria-checked="false">Light</button><button type="button" role="radio" aria-checked="false">Dark</button></div></div>
+</div></section>
+<section class="sec kv"><h2 class="d-sec">Storage</h2><div class="stack g8" style="max-width: 420px"><div class="row between t-sm"><span>38.2 MB used</span><span class="c3">of 1 GB</span></div><div class="bar"><span style="width: 4%"></span></div></div></section>
+<section class="sec kv"><h2 class="d-sec">Delete account</h2><div class="stack g12"><p class="t-sm c2">Destroys every item, rule, share and witness setting in this safe. Items already released to others stay with them.</p><a class="btn btn-secondary" href="#" style="align-self: flex-start; color: var(--danger-text)">Delete account</a></div></section>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{f.index}}" hint-placeholder-val="{{ false }}">
+<div class="stack g20">
+<h1 class="d-title">Settings</h1>
+<div class="list">
+<sc-for list="{{idx}}" as="s" hint-placeholder-count="8">
+<a class="li" href="#" style="text-decoration: none; color: inherit; min-height: 56px"><div class="li-main"><span class="li-title {{s.cls}}">{{s.label}}</span><sc-if value="{{s.val}}" hint-placeholder-val="{{ true }}"><span class="li-meta"><span class="{{s.vcls}}">{{s.val}}</span></span></sc-if></div><svg class="i c3" viewBox="0 0 24 24" aria-hidden="true" style="margin-right: 8px"><path d="M9 6l6 6-6 6"></path></svg></a>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{f.detail}}" hint-placeholder-val="{{ false }}">
+<div class="stack g24">
+<a class="row g4 t-sm" href="#" style="text-decoration: none; color: var(--ink-2)"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Settings</a>
+<section class="stack g12"><h1 class="d-title">Key fingerprint</h1><div class="card stack g12"><div class="fp" aria-label="Key fingerprint 7F3A 91C2 0B4E D58A 3C61 E0F7 9A24 B1D8"><span>7F3A</span><span>91C2</span><span>0B4E</span><span>D58A</span><span>3C61</span><span>E0F7</span><span>9A24</span><span>B1D8</span></div></div><p class="help">People who share with you compare this, in person or on a call, to know the key is yours.</p></section>
+<section class="stack g12"><h2 class="d-sec">Two-factor</h2><div class="row g12"><span class="badge b-active">On</span><span class="t-sm c2">8 backup codes left</span></div><div class="stack g8"><button class="btn btn-secondary btn-block" type="button">Show backup codes</button><button class="btn btn-quiet" type="button">Turn off two-factor</button></div></section>
+</div>
+</sc-if>
+
+</div></main>
+<nav class="tabs" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="tab {{n.cls}}" href="#" aria-current="{{n.cur}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = 'settings';
+    const NAV = [
+      ['dash', 'Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z'],
+      ['files', 'Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['shared', 'Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4'],
+      ['settings', 'Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z']
+    ];
+    const nav = NAV.map(n => ({ label: n[1], short: n[2], d: n[3], cls: n[0] === active ? 'is-on' : '', cur: n[0] === active ? 'page' : 'false' }));
+    const idx = [
+      { label: 'Profile', val: 'm.hale@fastmail.com', cls: '', vcls: '' },
+      { label: 'Password', val: '', cls: '', vcls: '' },
+      { label: 'Key fingerprint', val: '7F3A 91C2 0B4E D58A …', cls: '', vcls: 'mono' },
+      { label: 'Two-factor', val: 'On · 8 backup codes left', cls: '', vcls: '' },
+      { label: 'Witnesses', val: 'Any 2 of 3 · 1 pending', cls: '', vcls: '' },
+      { label: 'Lock and look', val: '5 minutes · System theme', cls: '', vcls: '' },
+      { label: 'Storage', val: '38.2 MB of 1 GB', cls: '', vcls: '' },
+      { label: 'Delete account', val: '', cls: 'err', vcls: '' }
+    ];
+    return { nav, idx, frames: [
+      { id: 'a', cls: 'desk t-light', label: 'Desktop · 1280 · light', full: true },
+      { id: 'b', cls: 'phone t-light', label: 'Phone · settings index', index: true },
+      { id: 'c', cls: 'phone t-dark', label: 'Phone · dark · one section', detail: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

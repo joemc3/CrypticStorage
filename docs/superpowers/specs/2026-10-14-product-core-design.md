@@ -48,6 +48,7 @@ Kept from the 2026-10-12 rebuild, because it already matches the core:
 Changed, because this is a safe:
 
 - **Signup is a contract.** Before the account exists the user sees, one fact per screen, that there is no reset, no recovery key, no support path, and that the email cannot be changed. Each fact is a bold line and one action. The last screen requires typing a short phrase. The audit log records the acknowledgement.
+- **Optional display name.** An account may set a display name, at signup or in Settings. It is server-visible and not secret; it exists so that witnesses, recipients and notices can say "Joe" instead of an email address. Where absent, the email is shown. (Design reconciliation, 2026-10-14.)
 - **Email verification is mandatory** at signup. Timers, reminders, witness and recipient invitations all depend on reaching the person.
 - **Lock behaviour.** Keys live only in memory while unlocked. Auto-lock after 5 minutes idle by default, configurable between 1 and 30 minutes. Lock on tab close. Re-entering the password unlocks offline.
 - **Public key trust.** Every contact shows a fingerprint. Trust on first use; a changed key is a loud warning, never silent. A "verified in person" marker the owner can set. Out-of-band verification proper belongs to attacker 2 work.
@@ -92,18 +93,19 @@ Revoking a rule deletes its blobs. The owner's own copies of the file keys are u
 - Activity is any authenticated request, or following a check-in link from a reminder email.
 - Reminders at 75 % and 90 % of the period, then a final warning; the rule enters `warning` at the first reminder.
 - When the period passes with no activity, the server marks the rule `released_by_timer` and lets each recipient fetch their wrapped release key. The server decided when; it never decrypted anything.
-- The owner is emailed at every step. Logging in during `warning` resets the clock.
+- The owner is emailed at every step. Logging in during `warning` resets the clock. On release, each recipient is emailed too.
+- **No email ever names an item.** The server cannot read names, so a notice says that a rule covers something, never what. (Design reconciliation, 2026-10-14.)
 
 ### 7.5 Release by quorum
 
 - Any witness can open a release request for an owner. Every other witness is notified and can contribute or refuse.
 - A contributing witness unwraps their share with their own keys and submits it re-wrapped under each recipient's public key. The server forwards blobs it cannot read.
 - When k shares are present, the recipient's client combines them, recovers the release key, and unwraps the file keys. The server cannot fake a quorum.
-- The owner is emailed when a request opens and at each contribution. If the owner logs in while a request is open, the request is cancelled and the witnesses are told. A quorum cannot run quietly against a living, active owner.
+- The owner is emailed when a request opens and at each contribution. If the owner logs in while a request is open, the request is cancelled and every witness is emailed that it was. A quorum cannot run quietly against a living, active owner.
 
 ### 7.6 After release
 
-The items appear in the recipient's "shared with me", marked as a handoff and from whom. From there it is the ordinary sharing path. The owner's data is unchanged.
+The items appear in the recipient's "shared with me", marked as a handoff and from whom. From there it is the ordinary sharing path. The owner's data is unchanged. A released rule stays released as a record and cannot be re-armed; the owner creates a new rule if they want one. (Design reconciliation, 2026-10-14.)
 
 ## 8. Irreversibility principle
 

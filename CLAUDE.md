@@ -28,5 +28,11 @@ Every session that changes anything:
 
 ## Git
 
-- Work on the branch the session was given. Do not open a pull request unless asked.
+Same convention as the owner's other repositories (Gotcha, Am I, tuPoint).
+
+- `main` is the only long-lived branch. Never commit to it directly; it is protected and requires the three CI jobs to pass before a merge.
+- Every change goes on a short-lived branch named `<type>/<topic>` and lands through a pull request into `main`. Types in use: `feat/`, `fix/`, `docs/`, `chore/`, `spec/`, `plan/`, `design/`. Keep the topic short and in kebab-case (`fix/empty-env-values`, `spec/recovery-key`).
+- At session start, check the branch. If it is `main`, create the branch for the work before changing anything.
+- Push the branch and open the pull request when the work is verified; the title says what changed and the description says why. The owner merges with a merge commit; do not merge or force-push.
+- Delete the branch after it is merged. Branches named `claude/...` or `ccr-...` were created by hosted sessions; treat them as pull-request candidates to review, not as long-lived branches.
 - Commit messages explain why, not just what.

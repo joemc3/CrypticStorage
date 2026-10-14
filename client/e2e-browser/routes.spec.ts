@@ -1,7 +1,9 @@
 import { test as base, expect, type Page, type Route, type TestInfo } from '@playwright/test';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FIXTURE_LINK_KEY_SEED, FIXTURE_PASSWORD } from './fixture-constants.ts';
 
 /**
  * Loads every route, saves a screenshot of it and checks two things on each: nothing scrolls
@@ -12,6 +14,11 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(readFileSync(join(here, 'fixtures', 'vault.json'), 'utf8'));
 const shotsDir = join(here, 'screenshots');
+
+if (fx.passwordSha256 !== createHash('sha256').update(FIXTURE_PASSWORD).digest('hex')) {
+  throw new Error('fixtures/vault.json does not match fixture-constants.ts. Re-run: node e2e-browser/make-fixture.mts');
+}
+const linkFragment = createHash('sha256').update(FIXTURE_LINK_KEY_SEED).digest().toString('base64url');
 
 // ---------------------------------------------------------------------------
 // Console and overflow checks
@@ -123,7 +130,7 @@ test.describe('public routes', () => {
     await shot(page, info, 'login');
 
     await page.getByLabel('Email').fill(fx.user.email);
-    await page.getByLabel('Password', { exact: true }).fill(fx.password);
+    await page.getByLabel('Password', { exact: true }).fill(FIXTURE_PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByRole('heading', { name: 'Two-factor code' })).toBeVisible();
     await shot(page, info, 'login-two-factor');
@@ -166,7 +173,7 @@ test.describe('public routes', () => {
   });
 
   test('shared link: open, password required, expired', async ({ page, watch }, info) => {
-    const url = `/s/some-token#${fx.publicShare.fragment}`;
+    const url = `/s/some-token#${linkFragment}`;
     await page.route('**/api/shares/public/some-token', (route) => route.fulfill(ok(fx.publicShare.info)));
     await page.goto(url);
     await expect(page.getByText('Letter of wishes.pdf').first()).toBeVisible();
@@ -208,7 +215,7 @@ test('inside the safe: locked, dashboard, files, folder, shared, share dialog, s
   await expect(page.getByRole('heading', { name: 'Your safe is locked.' })).toBeVisible();
   await shot(page, info, 'locked');
 
-  await page.getByLabel('Password').fill(fx.password);
+  await page.getByLabel('Password').fill(FIXTURE_PASSWORD);
   await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(nav).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('House deed scan.jpg').first()).toBeVisible();

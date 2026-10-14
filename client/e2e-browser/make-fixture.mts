@@ -5,16 +5,19 @@
  *   node e2e-browser/make-fixture.mts
  *
  * It uses the real crypto service, so the smoke unlocks a vault the app really opens and shows
- * names it really decrypts. The file holds no secret: the password is the constant below,
- * written in the file's "_comment". Do not reuse it anywhere.
+ * names it really decrypts. The JSON holds only what a server would hold. The password and the
+ * public link's key come from fixture-constants.ts; the JSON carries a hash of the password so
+ * the spec can tell when the two have drifted apart. Do not reuse the constants anywhere.
  */
+import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import CryptoService from '../src/services/crypto.service.ts';
+import { FIXTURE_EMAIL, FIXTURE_LINK_KEY_SEED, FIXTURE_PASSWORD } from './fixture-constants.ts';
 
-const PASSWORD = 'lantern-orchard-9';
-const EMAIL = 'm.hale@fastmail.com';
+const PASSWORD = FIXTURE_PASSWORD;
+const EMAIL = FIXTURE_EMAIL;
 const here = dirname(fileURLToPath(import.meta.url));
 
 const salt = await CryptoService.saltForEmail(EMAIL);
@@ -97,11 +100,10 @@ const sharedWithMe = [
   },
 ];
 
-// A public link: the key lives in the URL fragment, the name is encrypted under it.
-const linkKey = await CryptoService.generateAesKey();
+// A public link: its key (in the URL fragment, never on the server) is derived from a constant.
+const linkKey = await CryptoService.importAesKey(createHash('sha256').update(FIXTURE_LINK_KEY_SEED).digest());
 const linkName = await CryptoService.encryptString('Letter of wishes.pdf', linkKey);
 const publicShare = {
-  fragment: CryptoService.bytesToBase64Url(await CryptoService.exportAesKey(linkKey)),
   info: {
     token: 'some-token',
     fileId: 'file-linked',
@@ -117,8 +119,8 @@ const publicShare = {
 };
 
 const out = {
-  _comment: `Test fixture, no secret. The vault password is "${PASSWORD}". Regenerate with: node e2e-browser/make-fixture.mts`,
-  password: PASSWORD,
+  _comment: 'Test fixture: only what a server would hold. Regenerate with: node e2e-browser/make-fixture.mts',
+  passwordSha256: createHash('sha256').update(PASSWORD).digest('hex'),
   tokens: { accessToken: 'fixture-access', refreshToken: 'fixture-refresh', expiresAt: 4_102_444_800_000 },
   user,
   vault,

@@ -6,19 +6,22 @@ import { sendMail } from '../lib/mail';
 import { now as clockNow } from '../lib/clock';
 import { randomToken, sha256Hex } from '../lib/crypto';
 import { nextCheckInAt } from '../modules/handoff/service';
+import { STAMP_FIELDS, WARNING_FRACTIONS, type Level } from '../modules/handoff/thresholds';
 import { finalWarning, joinNames, mailDate, periodLabel, releasedByTimerOwner, releasedByTimerRecipient, reminder75, reminder90 } from '../mail/templates';
 
 const DAY_MS = 86_400_000;
 const CHECK_IN_TOKEN_TTL_MS = 30 * DAY_MS;
 
-export const WARNING_FRACTIONS = { 75: 0.75, 90: 0.9, 95: 0.95 } as const;
-type Level = 75 | 90 | 95;
 
 const OPEN = ['active', 'warning'] as const;
 const person = { id: true, email: true, displayName: true } as const;
 const name = (p: { email: string; displayName: string | null }) => p.displayName ?? p.email;
 
 interface Pending {
+  ruleId: string;
+  /** Stamp fields this tick wrote, so a failed send can undo exactly those. */
+  wrote: Level[];
+  stamped: Date;
   level: Level;
   releaseAt: Date;
   recipients: string[];
@@ -71,10 +74,11 @@ export async function runHandoffTimer(now: () => Date = clockNow): Promise<{ war
     const due = passed.filter((l) => stamps[l] === null);
     if (due.length === 0) continue;
     const top = due[due.length - 1]!;
-    const stampField = { 75: 'reminded75At', 90: 'reminded90At', 95: 'reminded95At' } as const;
+    const stampField = STAMP_FIELDS;
 
     const claim = await prisma.handoffRule.updateMany({
-      where: { id: rule.id, state: { in: [...OPEN] }, [stampField[top]]: null },
+      // The owner's activity must still be the value we read, or this reminder would be for someone just seen.
+      where: { id: rule.id, state: { in: [...OPEN] }, [stampField[top]]: null, owner: { lastActivityAt: rule.owner.lastActivityAt } },
       data: {
         state: 'warning',
         ...(passed.includes(75) ? { reminded75At: rule.reminded75At ?? at } : {}),
@@ -85,7 +89,7 @@ export async function runHandoffTimer(now: () => Date = clockNow): Promise<{ war
     if (claim.count === 0) continue;
     warned += 1;
     const entry = pending.get(rule.owner.id) ?? { owner: rule.owner, byLevel: new Map() };
-    entry.byLevel.set(top, [...(entry.byLevel.get(top) ?? []), { level: top, releaseAt, recipients }]);
+    entry.byLevel.set(top, [...(entry.byLevel.get(top) ?? []), { ruleId: rule.id, wrote: due, stamped: at, level: top, releaseAt, recipients }]);
     pending.set(rule.owner.id, entry);
   }
 
@@ -100,6 +104,7 @@ export async function runHandoffTimer(now: () => Date = clockNow): Promise<{ war
       link = `${env.APP_URL}/check-in/${token}`;
     } catch (err) {
       logger.warn({ err, userId: owner.id }, 'check-in token not created');
+      for (const group of byLevel.values()) await rollback(group);
       continue;
     }
     for (const [level, group] of byLevel) {
@@ -116,11 +121,31 @@ export async function runHandoffTimer(now: () => Date = clockNow): Promise<{ war
       try {
         await sendMail({ to: owner.email, ...mail });
       } catch (err) {
+        // Give the stamps back so the next tick tries again; a lost final warning would mean release without notice.
         logger.warn({ err, userId: owner.id, level }, 'reminder not sent');
+        await rollback(group);
+        warned -= group.length;
       }
     }
   }
   return { warned, released };
+}
+
+/** Undo this tick's stamps, matching the value written so a concurrent tick's claim is not touched. */
+async function rollback(group: Pending[]): Promise<void> {
+  for (const p of group) {
+    try {
+      for (const level of p.wrote) {
+        await prisma.handoffRule.updateMany({ where: { id: p.ruleId, [STAMP_FIELDS[level]]: p.stamped }, data: { [STAMP_FIELDS[level]]: null } });
+      }
+      await prisma.handoffRule.updateMany({
+        where: { id: p.ruleId, state: 'warning', reminded75At: null, reminded90At: null, reminded95At: null },
+        data: { state: 'active' },
+      });
+    } catch (err) {
+      logger.warn({ err, ruleId: p.ruleId }, 'reminder stamps not rolled back');
+    }
+  }
 }
 
 async function sendReleaseMails(
@@ -161,6 +186,10 @@ export function startHandoffJob(intervalMs = 15 * 60_000, now?: () => Date): () 
   };
   const timer = setInterval(tick, intervalMs);
   timer.unref();
-  setTimeout(tick, 10_000).unref();
-  return () => clearInterval(timer);
+  const first = setTimeout(tick, 10_000);
+  first.unref();
+  return () => {
+    clearInterval(timer);
+    clearTimeout(first);
+  };
 }

@@ -142,15 +142,15 @@ export async function verifyEmail(token: string, req: Request) {
 
 /** The link in a reminder mail: proves the owner is alive without a sign-in. Single use. */
 export async function checkIn(token: string, req: Request) {
+  const at = now();
   const record = await prisma.emailToken.findFirst({
-    where: { tokenHash: sha256Hex(token), purpose: 'check_in', usedAt: null, expiresAt: { gt: new Date() } },
+    where: { tokenHash: sha256Hex(token), purpose: 'check_in', usedAt: null, expiresAt: { gt: at } },
     select: { id: true, userId: true },
   });
   if (!record) throw new BadRequestError('This link is invalid or has expired', undefined, 'TOKEN_INVALID');
 
-  const at = now();
   const claimed = await prisma.$transaction(async (tx) => {
-    const used = await tx.emailToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
+    const used = await tx.emailToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: at } });
     if (used.count === 0) return false;
     await tx.user.update({ where: { id: record.userId }, data: { lastActivityAt: at } });
     return true;

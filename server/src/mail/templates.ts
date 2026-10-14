@@ -63,7 +63,7 @@ export function reminder75(i: ReminderInput & { lastActivity: string }): { subje
 
 export function reminder90(i: ReminderInput & { days: number }): { subject: string; text: string } {
   return {
-    subject: `A handoff rule releases in ${i.days} days`,
+    subject: `A handoff rule releases in ${i.days === 1 ? '1 day' : `${i.days} days`}`,
     text: `This is your second reminder; ${i.recipients} receive what the rule covers on ${i.date}. Following this link resets the clock, and nothing else is needed.\n\n${i.link}\n`,
   };
 }

@@ -1,5 +1,6 @@
 import { api, bearer, closeDatabase, prepareDatabase, registerUser, type TestUser } from '../helpers/api';
 import { blob, ruleBody, upload, world, type World } from '../helpers/handoff';
+import * as mail from '../../src/lib/mail';
 import { outbox } from '../../src/lib/mail';
 import { prisma } from '../../src/config/prisma';
 import { runHandoffTimer } from '../../src/jobs/handoff';
@@ -263,5 +264,58 @@ describe('dates and revoke', () => {
     const { id } = await ruleFor(w);
     await api().delete(`/api/handoff/rules/${id}`).set(bearer(w.owner)).expect(200);
     expect((await row(id)).wrappedReleaseKeyOwner).toBe('');
+  });
+});
+
+describe('failure and races', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('gives the stamps back when the mail fails, and the next tick sends the reminder', async () => {
+    const w = await world();
+    const { id } = await ruleFor(w);
+    const t0 = await pinActivity(w.owner);
+    jest.spyOn(mail, 'sendMail').mockRejectedValueOnce(new Error('smtp down'));
+    expect(await runHandoffTimer(at(t0, 0.96))).toEqual({ warned: 0, released: 0 });
+    expect(reminders(w.owner)).toHaveLength(0);
+    let r = await row(id);
+    expect(r.state).toBe('active');
+    expect([r.reminded75At, r.reminded90At, r.reminded95At]).toEqual([null, null, null]);
+
+    expect(await runHandoffTimer(at(t0, 0.96))).toEqual({ warned: 1, released: 0 });
+    expect(reminders(w.owner)).toHaveLength(1);
+    r = await row(id);
+    expect(r.state).toBe('warning');
+    expect(r.reminded95At).not.toBeNull();
+  });
+
+  it('does not warn an owner who was seen between the read and the claim', async () => {
+    const w = await world();
+    const { id } = await ruleFor(w);
+    const t0 = await pinActivity(w.owner);
+    const original = prisma.handoffRule.findMany.bind(prisma.handoffRule) as (args: unknown) => Promise<unknown>;
+    jest.spyOn(prisma.handoffRule, 'findMany').mockImplementationOnce(((args: unknown) =>
+      original(args).then(async (rows) => {
+        await prisma.user.update({ where: { id: w.owner.id }, data: { lastActivityAt: new Date(t0.getTime() + DAY) } });
+        return rows;
+      })) as never);
+    expect(await runHandoffTimer(at(t0, 0.8))).toEqual({ warned: 0, released: 0 });
+    expect(reminders(w.owner)).toHaveLength(0);
+    const r = await row(id);
+    expect(r.state).toBe('active');
+    expect(r.reminded75At).toBeNull();
+  });
+
+  it('says "1 day" when one day is left', async () => {
+    const w = await world();
+    await ruleFor(w);
+    const t0 = await pinActivity(w.owner);
+    await runHandoffTimer(() => new Date(t0.getTime() + 29.5 * DAY));
+    const mails = reminders(w.owner);
+    expect(mails).toHaveLength(1);
+    expect(mails[0]!.subject).toContain('Final notice');
+    await prisma.handoffRule.updateMany({ where: { ownerId: w.owner.id }, data: { reminded90At: null, reminded95At: null, reminded75At: null, state: 'active' } });
+    await prisma.handoffRule.updateMany({ where: { ownerId: w.owner.id }, data: { reminded95At: new Date() } });
+    await runHandoffTimer(() => new Date(t0.getTime() + 29.5 * DAY));
+    expect(reminders(w.owner).some((m) => m.subject === 'A handoff rule releases in 1 day')).toBe(true);
   });
 });

@@ -13,6 +13,7 @@ import { assertFileOwnership } from '../files/service';
 import { assertFolderOwnership, collectSubtree } from '../folders/service';
 import { RELEASED_STATES_FOR_ACCESS } from './access';
 import { ruleCoverageGaps } from './coverage';
+import { WARNING_FRACTIONS } from './thresholds';
 import type { addItemsSchema, createRuleSchema, replaceSharesSchema } from './schema';
 
 type Tx = Prisma.TransactionClient;
@@ -34,7 +35,7 @@ export function nextCheckInAt(lastActivityAt: Date, periodDays: number): Date {
 
 /** When the first reminder goes out: 75 % of the period after the last activity. */
 export function warningAt(lastActivityAt: Date, periodDays: number): Date {
-  return new Date(lastActivityAt.getTime() + periodDays * DAY_MS * 0.75);
+  return new Date(lastActivityAt.getTime() + periodDays * DAY_MS * WARNING_FRACTIONS[75]);
 }
 
 // ---------------------------------------------------------------------------

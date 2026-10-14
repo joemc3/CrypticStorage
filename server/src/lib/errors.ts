@@ -11,8 +11,8 @@ export class AppError extends Error {
 }
 
 export class BadRequestError extends AppError {
-  constructor(message = 'Bad request', details?: Record<string, unknown>) {
-    super(400, message, 'BAD_REQUEST', details);
+  constructor(message = 'Bad request', details?: Record<string, unknown>, code = 'BAD_REQUEST') {
+    super(400, message, code, details);
   }
 }
 
@@ -23,8 +23,8 @@ export class UnauthorizedError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message = 'Forbidden') {
-    super(403, message, 'FORBIDDEN');
+  constructor(message = 'Forbidden', code = 'FORBIDDEN') {
+    super(403, message, code);
   }
 }
 

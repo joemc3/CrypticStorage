@@ -71,9 +71,8 @@ export async function register(email: string, password: string): Promise<AuthUse
   const wrappedMasterKey = await CryptoService.wrapKey(masterKey, derived.wrappingKey);
   const encryptedPrivateKey = await CryptoService.encryptBytes(await CryptoService.exportPrivateKey(rsa.privateKey), masterKey);
 
-  let response: AuthResponse;
   try {
-    response = await ApiService.register({
+    await ApiService.register({
       email: normalizedEmail,
       passwordHash: derived.authHash,
       publicKey,
@@ -81,14 +80,14 @@ export async function register(email: string, password: string): Promise<AuthUse
       wrappedMasterKey: JSON.stringify(wrappedMasterKey),
       salt,
       kdfIterations: derived.iterations,
+      contractPhrase: 'I understand there is no way back', // task 5 rewrites this
     });
   } catch (error) {
     throw new Error(toApiError(error).message);
   }
 
-  persistTokens(response.tokens);
-  await openVault(response.user, derived.wrappingKey);
-  return toUserData(response.user);
+  // task 5 rewrites this: registration no longer returns tokens or opens the vault.
+  throw new Error('Check your email to verify your account');
 }
 
 // ============================================================================

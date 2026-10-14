@@ -64,6 +64,12 @@ export interface RegisterRequest {
   wrappedMasterKey: string;
   salt: string;
   kdfIterations: number;
+  contractPhrase: string;
+  displayName?: string;
+}
+
+export interface RegisterResponse {
+  verificationRequired: true;
 }
 
 export interface AuthResponse {
@@ -265,8 +271,14 @@ class ApiService {
 
   // --- Auth ------------------------------------------------------------------
 
-  register(data: RegisterRequest): Promise<AuthResponse> {
+  register(data: RegisterRequest): Promise<RegisterResponse> {
     return this.post('/auth/register', data);
+  }
+  verifyEmail(token: string): Promise<{ email: string }> {
+    return this.post('/auth/verify-email', { token });
+  }
+  async resendVerification(email: string): Promise<void> {
+    await this.post('/auth/resend-verification', { email });
   }
   login(email: string, passwordHash: string): Promise<AuthResponse> {
     return this.post('/auth/login', { email, passwordHash });

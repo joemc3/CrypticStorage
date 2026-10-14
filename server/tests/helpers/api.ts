@@ -5,6 +5,8 @@ import { randomBytes } from 'crypto';
 import { createApp } from '../../src/app';
 import { prisma } from '../../src/config/prisma';
 import { storage } from '../../src/storage';
+import { clearOutbox, outbox } from '../../src/lib/mail';
+import { CONTRACT_PHRASE } from '../../src/modules/auth/schema';
 
 let app: Express | null = null;
 
@@ -18,6 +20,15 @@ export async function prepareDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "audit_logs", "email_tokens", "sessions", "file_shares", "share_links", "files", "folders", "users" RESTART IDENTITY CASCADE'
   );
+  clearOutbox();
+}
+
+/** Token from the newest verification message sent to `to`. */
+export function verificationToken(to: string): string {
+  const mails = outbox().filter((m) => m.to === to);
+  const link = /\/verify\/([A-Za-z0-9_-]+)/.exec(mails[mails.length - 1]?.text ?? '');
+  if (!link) throw new Error(`no verification mail for ${to}`);
+  return link[1]!;
 }
 
 export async function closeDatabase(): Promise<void> {
@@ -43,6 +54,7 @@ export function registrationPayload(overrides: Partial<Record<string, unknown>> 
     encryptedPrivateKey: JSON.stringify({ data: randomBytes(64).toString('base64'), iv: randomBytes(12).toString('base64') }),
     wrappedMasterKey: JSON.stringify({ data: randomBytes(48).toString('base64'), iv: randomBytes(12).toString('base64') }),
     salt: randomBytes(16).toString('base64'),
+    contractPhrase: CONTRACT_PHRASE,
     ...overrides,
   };
 }
@@ -51,12 +63,17 @@ export async function registerUser(overrides: Partial<Record<string, unknown>> =
   const payload = registrationPayload(overrides);
   const res = await api().post('/api/auth/register').send(payload);
   if (res.status !== 201) throw new Error(`register failed: ${res.status} ${JSON.stringify(res.body)}`);
+  const email = payload.email as string;
+  const verify = await api().post('/api/auth/verify-email').send({ token: verificationToken(email) });
+  if (verify.status !== 200) throw new Error(`verify failed: ${verify.status} ${JSON.stringify(verify.body)}`);
+  const login = await api().post('/api/auth/login').send({ email, passwordHash: payload.passwordHash });
+  if (login.status !== 200) throw new Error(`login failed: ${login.status} ${JSON.stringify(login.body)}`);
   return {
-    id: res.body.data.user.id,
-    email: payload.email as string,
+    id: login.body.data.user.id,
+    email,
     passwordHash: payload.passwordHash as string,
-    accessToken: res.body.data.tokens.accessToken,
-    refreshToken: res.body.data.tokens.refreshToken,
+    accessToken: login.body.data.tokens.accessToken,
+    refreshToken: login.body.data.tokens.refreshToken,
   };
 }
 

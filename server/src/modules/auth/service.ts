@@ -4,13 +4,16 @@ import type { User } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
-import { ConflictError, UnauthorizedError } from '../../lib/errors';
+import { BadRequestError, ConflictError, ForbiddenError, UnauthorizedError } from '../../lib/errors';
 import { randomToken, safeEqual, sha256Hex, decryptAtRest } from '../../lib/crypto';
 import { signAccessToken } from '../../lib/jwt';
 import { verifyTotp } from '../../lib/totp';
 import { audit } from '../../lib/audit';
 import { clientIp, userAgent } from '../../lib/http';
 import { toAuthenticatedUser, toPublicUser } from '../dto';
+import { sendMail } from '../../lib/mail';
+import { verifyEmail as verifyEmailTemplate } from '../../mail/templates';
+import { CONTRACT_PHRASE } from './schema';
 import type { loginSchema, registerSchema } from './schema';
 
 const BCRYPT_ROUNDS = 12;
@@ -68,7 +71,21 @@ async function issueTwoFactorChallenge(user: User, req: Request): Promise<Tokens
   };
 }
 
+const VERIFY_TOKEN_TTL_MS = 24 * 3_600_000;
+
+/** Issue a fresh single-use verification token and mail the link. The raw token never touches the database. */
+async function sendVerification(user: Pick<User, 'id' | 'email'>): Promise<void> {
+  const token = randomToken(32);
+  await prisma.emailToken.create({
+    data: { userId: user.id, purpose: 'verify_email', tokenHash: sha256Hex(token), expiresAt: new Date(Date.now() + VERIFY_TOKEN_TTL_MS) },
+  });
+  await sendMail({ to: user.email, ...verifyEmailTemplate(`${env.APP_URL}/verify/${token}`) });
+}
+
 export async function register(input: z.infer<typeof registerSchema>, req: Request) {
+  if (input.contractPhrase !== CONTRACT_PHRASE) {
+    throw new BadRequestError('The contract phrase is required', undefined, 'CONTRACT_NOT_ACKNOWLEDGED');
+  }
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
   if (existing) throw new ConflictError('An account with this email already exists');
 
@@ -82,13 +99,42 @@ export async function register(input: z.infer<typeof registerSchema>, req: Reque
       publicKey: input.publicKey,
       encryptedPrivateKey: input.encryptedPrivateKey,
       storageQuota: BigInt(env.DEFAULT_STORAGE_QUOTA_BYTES),
-      lastLoginAt: new Date(),
+      displayName: input.displayName,
+      contractAcknowledgedAt: new Date(),
     },
   });
 
-  const tokens = await issueSession(user, req);
   audit(req, { userId: user.id, action: 'auth.register' });
-  return { user: toAuthenticatedUser(user), tokens };
+  audit(req, { userId: user.id, action: 'user.contract_acknowledged' });
+  await sendVerification(user);
+  return { verificationRequired: true as const };
+}
+
+export async function verifyEmail(token: string, req: Request) {
+  const record = await prisma.emailToken.findFirst({
+    where: { tokenHash: sha256Hex(token), purpose: 'verify_email', usedAt: null, expiresAt: { gt: new Date() } },
+    include: { user: { select: { id: true, email: true } } },
+  });
+  if (!record) throw new BadRequestError('This link is invalid or has expired', undefined, 'TOKEN_INVALID');
+
+  const now = new Date();
+  // updateMany on usedAt: null makes a concurrent double-click lose cleanly.
+  const claimed = await prisma.$transaction(async (tx) => {
+    const used = await tx.emailToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: now } });
+    if (used.count === 0) return false;
+    await tx.user.update({ where: { id: record.userId }, data: { emailVerifiedAt: now } });
+    return true;
+  });
+  if (!claimed) throw new BadRequestError('This link is invalid or has expired', undefined, 'TOKEN_INVALID');
+
+  audit(req, { userId: record.userId, action: 'user.email_verified' });
+  return { email: record.user.email };
+}
+
+/** Always resolves; callers answer 202 whether or not anything was sent. */
+export async function resendVerification(emailAddress: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { email: emailAddress }, select: { id: true, email: true, emailVerifiedAt: true } });
+  if (user && !user.emailVerifiedAt) await sendVerification(user);
 }
 
 export async function login(input: z.infer<typeof loginSchema>, req: Request) {
@@ -98,6 +144,10 @@ export async function login(input: z.infer<typeof loginSchema>, req: Request) {
   if (!user || !valid) {
     audit(req, { userId: user?.id, action: 'auth.login', success: false, metadata: { email: input.email } });
     throw new UnauthorizedError('Invalid email or password');
+  }
+  if (!user.emailVerifiedAt) {
+    audit(req, { userId: user.id, action: 'auth.login', success: false, metadata: { reason: 'email_unverified' } });
+    throw new ForbiddenError('Verify your email before signing in', 'EMAIL_UNVERIFIED');
   }
 
   if (user.twoFactorEnabled) {

@@ -117,7 +117,7 @@ jobs:
       - name: Create .env with throwaway secrets
         run: |
           cp .env.example .env
-          perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|; s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|" .env
+          perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|; s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
       - name: Build and start the stack, wait for health
         run: docker compose up -d --build --wait --wait-timeout 180
       - name: Health through nginx

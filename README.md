@@ -25,7 +25,7 @@ Both paths need a one-time setup that creates an env file with generated secrets
 ```bash
 cp .env.example .env
 perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|;
-             s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|" .env
+             s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 ```
 
 **Every time.**

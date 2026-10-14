@@ -22,7 +22,7 @@ describe('ShareDialog', () => {
   });
 
   it('looks up a key, shows its fingerprint, and shares', async () => {
-    const onLookupRecipient = vi.fn().mockResolvedValue({ email: 'sam@example.com', fingerprint: '3c61e0f79a24b1d87f3a91c20b4ed58a' });
+    const onLookupRecipient = vi.fn().mockResolvedValue({ email: 'sam@example.com', publicKey: 'SPKI-B64', fingerprint: '3c61e0f79a24b1d87f3a91c20b4ed58a' });
     const onShareWithUser = vi.fn().mockResolvedValue(undefined);
     render(<ShareDialog {...base} onLookupRecipient={onLookupRecipient} onShareWithUser={onShareWithUser} />);
 
@@ -37,7 +37,7 @@ describe('ShareDialog', () => {
     expect(screen.getByText('Verified')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-    await waitFor(() => expect(onShareWithUser).toHaveBeenCalledWith('sam@example.com'));
+    await waitFor(() => expect(onShareWithUser).toHaveBeenCalledWith('sam@example.com', 'SPKI-B64'));
   });
 
   it('draws the key-changed callout only when told a key changed', () => {

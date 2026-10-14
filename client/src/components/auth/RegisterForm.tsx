@@ -20,6 +20,8 @@ export interface RegisterFormProps {
   error?: string;
   /** Set by the page once the account exists; moves the wizard to "check your email". */
   sentTo?: string;
+  /** True after a resend went out; shows a one-line confirmation. */
+  resent?: boolean;
 }
 
 type Step = 1 | 2 | 3 | 4 | 'form';
@@ -72,7 +74,7 @@ const fieldClass =
 const labelClass = 'mb-1 block font-sans text-sm font-medium text-ink';
 const helpClass = 'mt-1 block font-sans text-sm text-ink-3';
 
-export const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, onResend, onCancel, isLoading = false, error, sentTo }) => {
+export const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, onResend, onCancel, isLoading = false, error, sentTo, resent = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [phrase, setPhrase] = useState('');
@@ -110,7 +112,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, onResend, 
           >
             Resend the email
           </button>
-          <p className="text-center font-sans text-sm text-ink-3">Nothing after a few minutes? Check spam, then resend.</p>
+          {resent ? (
+            <p role="status" className="text-center font-sans text-sm text-ink-3">Sent. Nothing after a few minutes? Check spam.</p>
+          ) : (
+            <p className="text-center font-sans text-sm text-ink-3">Nothing after a few minutes? Check spam, then resend.</p>
+          )}
         </div>
       </AuthLayout>
     );

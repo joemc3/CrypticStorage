@@ -151,17 +151,17 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
     const normalised = email.trim().toLowerCase();
     try {
       const { publicKey } = await ApiService.getPublicKey(normalised);
-      return { email: normalised, fingerprint: await CryptoService.publicKeyFingerprint(publicKey) };
+      return { email: normalised, publicKey, fingerprint: await CryptoService.publicKeyFingerprint(publicKey) };
     } catch (error) {
       const apiError = toApiError(error);
       throw new Error(apiError.statusCode === 404 ? 'No CrypticStorage account uses that email' : apiError.message);
     }
   };
 
-  const shareWithUser = async (email: string) => {
+  const shareWithUser = async (email: string, publicKey?: string) => {
     if (!shareTarget) return;
     try {
-      await ShareService.shareWithUser(shareTarget.id, email);
+      await ShareService.shareWithUser(shareTarget.id, email, publicKey);
       addToast({ type: 'success', message: `Shared with ${email}` });
       await loadUserShares(shareTarget.id);
     } catch (error) {

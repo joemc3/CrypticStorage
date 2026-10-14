@@ -13,6 +13,8 @@ export const RegisterPage: React.FC = () => {
   const { register, resendVerification, isLoading } = useAuth();
   const [error, setError] = useState<string | undefined>();
   const [sentTo, setSentTo] = useState<string | undefined>();
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const handleRegister = async (data: RegisterData) => {
     setError(undefined);
@@ -25,16 +27,19 @@ export const RegisterPage: React.FC = () => {
   };
 
   const handleResend = async () => {
-    if (!sentTo) return;
+    if (!sentTo || resending) return;
+    setResending(true);
     try {
       await resendVerification(sentTo);
     } catch {
-      /* the server answers the same either way; nothing to show */
+      /* the server answers the same either way */
     }
+    setResending(false);
+    setResent(true);
   };
 
   return (
-    <RegisterForm onSubmit={handleRegister} onResend={handleResend} onCancel={() => navigate('/')} isLoading={isLoading} error={error} sentTo={sentTo} />
+    <RegisterForm onSubmit={handleRegister} onResend={handleResend} onCancel={() => navigate('/')} isLoading={isLoading || resending} resent={resent} error={error} sentTo={sentTo} />
   );
 };
 

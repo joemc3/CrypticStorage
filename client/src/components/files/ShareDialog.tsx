@@ -9,6 +9,8 @@ export interface RecipientKey {
   email: string;
   /** Fingerprint of the recipient's public key, hex, with or without spaces. */
   fingerprint: string;
+  /** The looked-up key (base64 SPKI). The share wraps with exactly this key, the one whose fingerprint was shown. */
+  publicKey?: string;
 }
 
 export interface UserShareRow {
@@ -27,7 +29,7 @@ export interface ShareDialogProps {
   existingShares?: ShareLink[];
   /** The "with a person" tab appears when both of these are given. */
   onLookupRecipient?: (email: string) => Promise<RecipientKey>;
-  onShareWithUser?: (email: string) => Promise<void>;
+  onShareWithUser?: (email: string, publicKey?: string) => Promise<void>;
   /** People this file is already shared with. */
   userShares?: UserShareRow[];
   onRevokeUserShare?: (shareId: string) => Promise<void>;
@@ -140,7 +142,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     if (!onShareWithUser || !recipient) return;
     setIsSharing(true);
     try {
-      await onShareWithUser(recipient.email);
+      await onShareWithUser(recipient.email, recipient.publicKey);
       setEmail('');
       setRecipient(null);
       setVerified(false);

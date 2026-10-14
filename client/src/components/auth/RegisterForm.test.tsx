@@ -109,4 +109,15 @@ describe('RegisterForm wizard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resend the email' }));
     expect(onResend).toHaveBeenCalledTimes(1);
   });
+
+  it('disables resend while one is in flight and confirms once it went out', () => {
+    setup({ sentTo: 'm.hale@fastmail.com', isLoading: true });
+    expect(screen.getByRole('button', { name: 'Resend the email' })).toBeDisabled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('says "Sent." after a resend', () => {
+    setup({ sentTo: 'm.hale@fastmail.com', resent: true });
+    expect(screen.getByRole('status')).toHaveTextContent('Sent.');
+  });
 });

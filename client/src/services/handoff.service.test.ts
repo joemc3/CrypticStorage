@@ -96,18 +96,17 @@ describe('handoff.service', () => {
     const release = await createReleaseKey();
     const { fileKey, encrypted } = await sealedFile();
     const wrappedFileKey = await wrapFileKeyUnderRelease(fileKey, release);
-    const shares = await splitForWitnesses(release, witnessKeys(['w1', 'w2', 'w3']), 2);
+    // k=3 so two shares pass combine's own minimum-count guard and the failure is cryptographic.
+    const shares = await splitForWitnesses(release, witnessKeys(['w1', 'w2', 'w3']), 3);
 
-    const one = await rewrapShareForRecipient(shares.get('w2')!.wrappedShare, witnesses.w2.privateKey, recipientA.publicKey);
-    let decrypted: string | null = null;
-    try {
-      const wrong = await combineAndUnwrap([one], recipientA.privateKey);
-      const wrongFileKey = await unwrapFileKeyUnderRelease(wrappedFileKey, wrong);
-      decrypted = utf8Decode(await decryptBytes(encrypted, wrongFileKey));
-    } catch {
-      // Failing anywhere along the chain is the expected outcome.
-    }
-    expect(decrypted).toBeNull();
+    const two = await Promise.all(
+      ['w1', 'w2'].map((id) =>
+        rewrapShareForRecipient(shares.get(id)!.wrappedShare, witnesses[id].privateKey, recipientA.publicKey)
+      )
+    );
+    const wrong = await combineAndUnwrap(two, recipientA.privateKey);
+    await expect(unwrapFileKeyUnderRelease(wrappedFileKey, wrong)).rejects.toThrow();
+    await expect(decryptBytes(encrypted, wrong)).rejects.toThrow();
   });
 
   it('a share rewrapped for one recipient is useless to another', async () => {
@@ -123,7 +122,7 @@ describe('handoff.service', () => {
     const wrappedFileKey = await wrapFileKeyUnderRelease(fileKey, release);
     const ownerWrap = await wrapForOwner(release, masterKey);
 
-    // Witness set changes from 3 (k=2) to 2 (k=2), then to 3 with k=3.
+    // Witness set changes from 2 witnesses (k=2) to 3 witnesses (k=3).
     for (const [ids, k] of [[['w1', 'w2'], 2], [['w1', 'w2', 'w3'], 3]] as const) {
       const restored = await unwrapForOwner(ownerWrap, masterKey);
       const fresh = await splitForWitnesses(restored, witnessKeys([...ids]), k);

@@ -101,7 +101,11 @@ export async function rewrapShareForRecipient(
   return bytesToBase64(await crypto.subtle.wrapKey('raw', share, recipientPublicKey, RSA_OAEP));
 }
 
-/** Recipient side: unwrap each share with my private key, combine, and import the result as the release key. */
+/**
+ * Recipient side: unwrap each share with my private key, combine, and import the result as the release key.
+ * Below the threshold, or with stale and fresh shares mixed, this returns a wrong key without throwing;
+ * the failure only shows later as an AES-GCM OperationError when that key is used.
+ */
 export async function combineAndUnwrap(shares: string[], myPrivateKey: CryptoKey): Promise<CryptoKey> {
   const raw: Uint8Array[] = [];
   for (const wrapped of shares) {

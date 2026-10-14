@@ -31,6 +31,7 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 - [x] Open a PR from `ccr-1fec1232-1akfhk` to `master` and merge. (PR #2, merged 2026-10-13)
 - [ ] Review origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` (security fixes, UI redesign, spec compliance); merge or discard.
 - [x] Rename `master` to `main`, protect it, adopt the branch-and-PR convention (this session).
+- [ ] Owner reviews the product core spec (`docs/superpowers/specs/2026-10-14-product-core-design.md`, PR open); then the first stage spec and plan.
 - [ ] Add `docker compose build` (or a smoke `up`) to CI; the image had never been built before 2026-10-14 and had two startup bugs.
 - [ ] Recovery key at signup, so a forgotten password is not fatal.
 - [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
@@ -68,6 +69,8 @@ Session: Claude Code, local checkout · Branch: `master`, then `main` · Commits
 - Embedded Postgres (`server/scripts/embedded-db.mjs`, `server/tests/helpers/globalSetup.ts`): `createPostgresUser` is now `process.getuid?.() === 0`. It was hard-coded `true`, which only works as root (the cloud sandbox); on a normal macOS account `initdb` fails with "Failed to create and initialize a new user on this system", so neither `make dev-db` nor `make test` had ever worked locally.
 - Web image: nginx health check now targets `127.0.0.1` instead of `localhost`. nginx listens on IPv4 only and busybox wget tries `::1` first, so the container sat at "unhealthy" forever even though it served fine.
 - Branching: GitHub default branch renamed `master` → `main` via the API (open PRs and the local checkout retarget automatically). `main` protected: the three CI job names are required status checks, branch must be up to date before merge, no force-push or deletion, no review count (solo project, same as Gotcha and Am I). CI now runs on `pull_request` and on `push` to `main` only, instead of every push to every branch. `CLAUDE.md` Git section rewritten to the shared convention: `<type>/<topic>` branches, PR into `main`, owner merges with a merge commit. The Docker stack was shut down (`docker compose down`, volumes kept) before this.
+- Stale branch `claude/audit-and-redesign-ui-...` deleted after review: one commit from 2025-11-18 patching the dead generated server and restyling a client main has since rewritten; its audit list is covered by the new spec.
+- Product core brainstormed and written up as `docs/superpowers/specs/2026-10-14-product-core-design.md`: a safe, not a drive; no recovery by design; handoff rules per item released by dead-man timer or k-of-n witness quorum (Shamir shares under witness keys, release key under recipient keys); irreversibility shown one fact per screen; design produced in Claude Design and reconciled here; attacker 2 (server alters the served client) deferred but kept open. The 2025 PRD and technical spec are marked superseded.
 - Journal: ticked the stale "open a PR" item (PR #2 merged 2026-10-13), fixed the branch row, recorded the unmerged redesign branch and a "build the image in CI" item.
 
 **Verified**

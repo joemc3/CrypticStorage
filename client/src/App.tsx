@@ -19,6 +19,8 @@ const VerifyPage = lazy(() => import('./pages/VerifyPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const FilesPage = lazy(() => import('./pages/FilesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const WitnessesPage = lazy(() => import('./pages/WitnessesPage'));
+const WitnessInvitePage = lazy(() => import('./pages/WitnessInvitePage'));
 const SharedPage = lazy(() => import('./pages/SharedPage').then((m) => ({ default: m.SharedPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
@@ -110,6 +112,22 @@ const App: React.FC = () => (
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/witnesses"
+          element={
+            <ProtectedRoute>
+              <WitnessesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/witness/:id"
+          element={
+            <ProtectedRoute>
+              <WitnessInvitePage />
             </ProtectedRoute>
           }
         />

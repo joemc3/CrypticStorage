@@ -23,7 +23,7 @@ import { useUIStore } from '../stores/ui.store';
 import FileService, { formatFileSize } from '../services/file.service';
 import ShareService, { type ShareLinkWithKey } from '../services/share.service';
 import ApiService, { toApiError } from '../services/api.service';
-import CryptoService from '../services/crypto.service';
+import { lookupContact, setContactVerified } from '../services/witness.service';
 
 function toDialogLink(link: ShareLinkWithKey): DialogShareLink {
   return {
@@ -70,6 +70,7 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
   const [showUpload, setShowUpload] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
+  const [keyChangedFor, setKeyChangedFor] = useState<string | null>(null);
   const [existingLinks, setExistingLinks] = useState<DialogShareLink[]>([]);
   const [userShares, setUserShares] = useState<UserShareRow[]>([]);
   // Which file the share dialog is for right now. Late responses for another file are dropped.
@@ -149,13 +150,29 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
 
   const lookupRecipient = async (email: string) => {
     const normalised = email.trim().toLowerCase();
+    setKeyChangedFor(null);
     try {
-      const { publicKey } = await ApiService.getPublicKey(normalised);
-      return { email: normalised, publicKey, fingerprint: await CryptoService.publicKeyFingerprint(publicKey) };
+      const found = await lookupContact(normalised);
+      if (found.keyChanged) setKeyChangedFor(normalised);
+      return {
+        id: found.id,
+        email: normalised,
+        publicKey: found.publicKey,
+        fingerprint: found.localFingerprint,
+        keyChanged: found.keyChanged,
+        verifiedInPerson: found.verifiedInPerson,
+      };
     } catch (error) {
       const apiError = toApiError(error);
       throw new Error(apiError.statusCode === 404 ? 'No CrypticStorage account uses that email' : apiError.message);
     }
+  };
+
+  const setRecipientVerified = async (recipient: { id?: string }, verified: boolean) => {
+    if (!recipient.id) return;
+    await setContactVerified(recipient.id, verified);
+    // Marking a changed key as checked re-trusts it; the server stores the key now in use.
+    if (verified) setKeyChangedFor(null);
   };
 
   const shareWithUser = async (email: string, publicKey?: string) => {
@@ -351,6 +368,7 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
           onClose={() => {
             shareTargetRef.current = null;
             setShareTarget(null);
+            setKeyChangedFor(null);
           }}
           file={shareTarget}
           onCreateShare={createShare}
@@ -359,6 +377,8 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
           onShareWithUser={shareWithUser}
           userShares={userShares}
           onRevokeUserShare={revokeUserShare}
+          keyChangedFor={keyChangedFor}
+          onSetVerified={setRecipientVerified}
         />
       </div>
     </DashboardLayout>

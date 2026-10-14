@@ -62,4 +62,18 @@ describe('ShareDialog', () => {
     expect(await screen.findByDisplayValue('https://x/s/abc')).toBeInTheDocument();
     expect(screen.getByText(/Anyone with this URL can open the file/)).toBeInTheDocument();
   });
+
+  it('stores trust when the switch flips, starts from what was stored, and holds the share while a key is unverified', async () => {
+    const onLookupRecipient = vi.fn().mockResolvedValue({ id: 'u2', email: 'sam@example.com', publicKey: 'K', fingerprint: '3c61e0f79a24b1d87f3a91c20b4ed58a', keyChanged: true, verifiedInPerson: false });
+    const onSetVerified = vi.fn().mockResolvedValue(undefined);
+    render(<ShareDialog {...base} onLookupRecipient={onLookupRecipient} onShareWithUser={vi.fn()} onSetVerified={onSetVerified} keyChangedFor="sam@example.com" />);
+    fireEvent.change(screen.getByLabelText('Their account email'), { target: { value: 'sam@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check key' }));
+    await screen.findByRole('switch', { name: 'Mark as verified in person' });
+    expect(screen.getByRole('button', { name: 'Share' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Mark as verified in person' }));
+    await waitFor(() => expect(onSetVerified).toHaveBeenCalledWith(expect.objectContaining({ id: 'u2' }), true));
+    expect(screen.getByRole('button', { name: 'Share' })).toBeEnabled();
+  });
 });

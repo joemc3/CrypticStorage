@@ -3,7 +3,7 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { Fingerprint } from '../common/Fingerprint';
+import { ContactKey, KeyChangedCallout } from '../handoff/ContactKey';
 
 export interface RecipientKey {
   email: string;
@@ -11,6 +11,12 @@ export interface RecipientKey {
   fingerprint: string;
   /** The looked-up key (base64 SPKI). The share wraps with exactly this key, the one whose fingerprint was shown. */
   publicKey?: string;
+  /** Account id, needed to record that the key was checked. */
+  id?: string;
+  /** The key differs from the one last seen. The share waits until the person re-trusts it. */
+  keyChanged?: boolean;
+  /** Whether the key was already marked as checked in person. */
+  verifiedInPerson?: boolean;
 }
 
 export interface UserShareRow {
@@ -35,9 +41,10 @@ export interface ShareDialogProps {
   onRevokeUserShare?: (shareId: string) => Promise<void>;
   /**
    * Email of a recipient whose key changed since the last share. Draws the red callout above the tab.
-   * Nothing sets this yet: the handoff stage stores what was trusted and wires it.
    */
   keyChangedFor?: string | null;
+  /** Called when the person flips "verified in person"; this is where trust gets stored. */
+  onSetVerified?: (recipient: RecipientKey, verified: boolean) => Promise<void>;
 }
 
 export interface ShareOptions {
@@ -81,6 +88,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   userShares = [],
   onRevokeUserShare,
   keyChangedFor = null,
+  onSetVerified,
 }) => {
   const hasUserTab = Boolean(onLookupRecipient && onShareWithUser);
   const [tab, setTab] = useState<'user' | 'link'>(hasUserTab ? 'user' : 'link');
@@ -128,13 +136,25 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     setIsLookingUp(true);
     setLookupError(null);
     try {
-      setRecipient(await onLookupRecipient(email.trim()));
-      setVerified(false);
+      const found = await onLookupRecipient(email.trim());
+      setRecipient(found);
+      setVerified(found.verifiedInPerson ?? false);
     } catch (error) {
       setRecipient(null);
       setLookupError(error instanceof Error ? error.message : 'Could not look up that account');
     } finally {
       setIsLookingUp(false);
+    }
+  };
+
+  const handleVerifiedChange = async (next: boolean) => {
+    if (!recipient) return;
+    setVerified(next);
+    try {
+      await onSetVerified?.(recipient, next);
+    } catch (error) {
+      setVerified(!next);
+      setLookupError(error instanceof Error ? error.message : 'Could not save that');
     }
   };
 
@@ -184,15 +204,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
   const userPanel = (
     <div className="flex flex-col gap-5">
-      {keyChangedFor && (
-        <div role="alert" className="flex items-start gap-3 rounded-[10px] bg-danger-soft px-4 py-3.5 text-sm leading-5 text-danger-text">
-          <ExclamationTriangleIcon className="h-5 w-5 flex-none" aria-hidden="true" />
-          <div className="flex flex-col gap-1">
-            <span className="font-semibold">{keyChangedFor} has a new key.</span>
-            <span>It changed since you last shared with them. Check the fingerprint with them before you share again.</span>
-          </div>
-        </div>
-      )}
+      {keyChangedFor && <KeyChangedCallout name={keyChangedFor} />}
 
       <div className="flex items-end gap-2">
         <div className="flex-1">
@@ -213,24 +225,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       </div>
 
       {recipient && (
-        <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4">
-          <p className="break-all text-sm font-semibold text-ink">{recipient.email}</p>
-          <Fingerprint value={recipient.fingerprint} verified={verified} />
-          <p className="text-sm text-ink-2">Compare this with the Key fingerprint shown in their Settings, in person or on a call.</p>
-          <label className="flex items-center gap-3 text-sm text-ink">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={verified}
-              aria-label="Mark as verified in person"
-              onClick={() => setVerified((v) => !v)}
-              className={`relative h-6 w-10 flex-none rounded-full transition-colors ${focus} ${verified ? 'bg-accent' : 'bg-line-strong'}`}
-            >
-              <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-surface transition-transform ${verified ? 'translate-x-4' : ''}`} />
-            </button>
-            I have checked it with them
-          </label>
-        </div>
+        <ContactKey email={recipient.email} fingerprint={recipient.fingerprint} verified={verified} onVerifiedChange={(v) => void handleVerifiedChange(v)} />
       )}
 
       {userShares.length > 0 && (
@@ -374,7 +369,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               <Button variant="quiet" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={() => void handleShareWithUser()} isLoading={isSharing} disabled={!recipient}>
+              <Button onClick={() => void handleShareWithUser()} isLoading={isSharing} disabled={!recipient || (recipient.keyChanged === true && !verified)}>
                 Share
               </Button>
             </>

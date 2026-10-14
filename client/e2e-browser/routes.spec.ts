@@ -70,6 +70,22 @@ async function shot(page: Page, info: TestInfo, route: string) {
 const ok = (data: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
 const fail = (status: number, message: string) => ({ status, contentType: 'application/json', body: JSON.stringify({ success: false, message }) });
 
+const witnessUser = (id: string, email: string, fp: string) => ({ id, email, displayName: null, publicKey: 'fixture', fingerprint: fp.repeat(64 / fp.length) });
+const witnessSet = {
+  threshold: 2,
+  minN: 2,
+  maxN: 7,
+  witnesses: [
+    { id: 'w1', status: 'accepted', invitedAt: '2026-09-04T00:00:00.000Z', respondedAt: '2026-09-04T00:00:00.000Z', user: witnessUser('u-w1', 'priya.n@outlook.com', '91c27f3a') },
+    { id: 'w2', status: 'accepted', invitedAt: '2026-09-05T00:00:00.000Z', respondedAt: '2026-09-05T00:00:00.000Z', user: witnessUser('u-w2', 'tom.becker@icloud.com', 'e0f73c61') },
+    { id: 'w3', status: 'invited', invitedAt: '2026-10-12T00:00:00.000Z', respondedAt: null, user: witnessUser('u-w3', 'lena.ortiz@gmail.com', 'd04c7718') },
+  ],
+};
+const witnessInvitations = {
+  invitations: [{ id: 'inv1', owner: { id: 'o1', email: 'r.okafor@gmail.com', displayName: null }, invitedAt: '2026-10-13T00:00:00.000Z' }],
+  serving: [],
+};
+
 const vaultUser = { ...fx.user, ...fx.vault };
 
 /** Every request the signed-in screens make. Anything else answers 404, which the console check catches. */
@@ -84,6 +100,8 @@ async function mockVaultApi(page: Page) {
       if (path === '/files') return route.fulfill(ok(fx.files[url.searchParams.get('folderId') ?? 'root'] ?? []));
       if (path === '/folders') return route.fulfill(ok(url.searchParams.get('parentId') ? [] : fx.folders));
       if (path.startsWith('/folders/')) return route.fulfill(ok(fx.folders.find((f: { id: string }) => path.endsWith(f.id))));
+      if (path === '/witnesses') return route.fulfill(ok(witnessSet));
+      if (path === '/witnesses/invitations') return route.fulfill(ok(witnessInvitations));
       if (path === '/shares/with-me') return route.fulfill(ok(fx.sharedWithMe));
       if (/^\/files\/[^/]+\/(shares|links)$/.test(path)) return route.fulfill(ok([]));
       const one = path.match(/^\/files\/([^/]+)$/);
@@ -254,5 +272,27 @@ test('inside the safe: locked, dashboard, files, folder, shared, share dialog, s
     await page.getByRole('button', { name: /^Key fingerprint/ }).click();
     await expect(page.getByRole('group', { name: /^Key fingerprint/ })).toBeVisible();
     await shot(page, info, 'settings-fingerprint');
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: /^Witnesses/ }).click();
   }
+  await expect(page.getByText('Any 2 of 3 can release what you marked. 2 accepted, 1 pending.').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Manage witnesses' }).click();
+  await expect(page.getByRole('heading', { name: 'Witnesses' })).toBeVisible();
+  await expect(page.getByText('lena.ortiz@gmail.com')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'witnesses');
+
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('button', { name: 'Review and save' }).click();
+  await expect(page.getByRole('heading', { name: 'Any 3 of these 3 people, together, can release everything you have marked for handoff.' })).toBeVisible();
+  await shot(page, info, 'witnesses-confirm');
+
+  // The invitation arrives from an email link; move there inside the unlocked session, as a reload would lock it.
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/witness/inv1');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.getByRole('heading', { name: 'r.okafor@gmail.com is asking you to be a witness.' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'witness-invite');
 });

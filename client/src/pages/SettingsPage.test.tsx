@@ -36,6 +36,7 @@ describe('SettingsPage: Lock and look', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(ApiService, 'getStorageStats').mockResolvedValue({ used: 0, limit: 1000, fileCount: 0, folderCount: 0 } as never);
+    vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue({ threshold: 2, minN: 2, maxN: 7, witnesses: [] });
     useAuthStore.setState({ user, status: 'unlocked' });
     useUIStore.setState({ toasts: [], theme: 'system' });
   });
@@ -87,5 +88,28 @@ describe('SettingsPage: Key fingerprint', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /^Storage/ }));
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+  });
+});
+
+describe('SettingsPage: Witnesses', () => {
+  const w = (id: string, status: 'invited' | 'accepted') => ({ id, status, invitedAt: '', respondedAt: null, user: { id, email: `${id}@x.co`, displayName: null, publicKey: '', fingerprint: '' } });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(ApiService, 'getStorageStats').mockResolvedValue({ used: 0, limit: 1000, fileCount: 0, folderCount: 0 } as never);
+    useAuthStore.setState({ user, status: 'unlocked' });
+  });
+
+  it('summarises the set in one line', async () => {
+    vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue({ threshold: 2, minN: 2, maxN: 7, witnesses: [w('a', 'accepted'), w('b', 'accepted'), w('c', 'invited')] });
+    renderPage();
+    expect(await screen.findByText('Any 2 of 3 can release what you marked. 2 accepted, 1 pending.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage witnesses' })).toBeInTheDocument();
+  });
+
+  it('says so when there are no witnesses', async () => {
+    vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue({ threshold: 2, minN: 2, maxN: 7, witnesses: [] });
+    renderPage();
+    expect(await screen.findByText('No witnesses are set.')).toBeInTheDocument();
   });
 });

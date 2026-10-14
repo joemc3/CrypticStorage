@@ -9,6 +9,8 @@ export interface OneFactProps {
   /** Label for the quiet back button. Defaults to "Back". */
   backLabel?: string;
   cancel?: () => void;
+  /** Label for the top-right button. Defaults to "Cancel". */
+  cancelLabel?: string;
   /** Rendered between the supporting text and the action, for example a text field. */
   children?: React.ReactNode;
 }
@@ -17,12 +19,12 @@ const quiet =
   'rounded-lg px-3 py-2 text-sm font-medium text-ink-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
 
 /** Full-screen, chrome-free screen that states one fact and offers one action. */
-export const OneFact: React.FC<OneFactProps> = ({ fact, supporting, action, back, backLabel = 'Back', cancel, children }) => (
+export const OneFact: React.FC<OneFactProps> = ({ fact, supporting, action, back, backLabel = 'Back', cancel, cancelLabel = 'Cancel', children }) => (
   <main className="relative flex min-h-screen flex-col bg-bg text-ink">
     {cancel && (
       <div className="absolute right-4 top-4 md:right-8 md:top-6">
         <button type="button" className={quiet} onClick={cancel}>
-          Cancel
+          {cancelLabel}
         </button>
       </div>
     )}

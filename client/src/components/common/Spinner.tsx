@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
 export interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -8,58 +7,24 @@ export interface SpinnerProps {
 }
 
 const sizeClasses = {
-  sm: 'h-4 w-4',
-  md: 'h-8 w-8',
-  lg: 'h-12 w-12',
-  xl: 'h-16 w-16',
+  sm: 'h-3.5 w-3.5 border-2',
+  md: 'h-[18px] w-[18px] border-2',
+  lg: 'h-6 w-6 border-2',
+  xl: 'h-8 w-8 border-[3px]',
 };
 
-export const Spinner: React.FC<SpinnerProps> = ({ size = 'md', color = 'text-indigo-600', label }) => {
-  return (
-    <div className="flex flex-col items-center justify-center space-y-2">
-      <motion.div
-        className={`${sizeClasses[size]} ${color}`}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-      >
-        <svg
-          className="animate-spin"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          />
-        </svg>
-      </motion.div>
-      {label && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-sm text-gray-600 dark:text-gray-400"
-        >
-          {label}
-        </motion.p>
-      )}
-    </div>
-  );
-};
+/** A ring, always paired with words. */
+export const Spinner: React.FC<SpinnerProps> = ({ size = 'md', color = 'text-accent', label }) => (
+  <div className="flex flex-col items-center justify-center gap-3" role="status">
+    <span aria-hidden="true" className={`block animate-spin rounded-full border-line-strong border-t-current ${sizeClasses[size]} ${color}`} />
+    {label ? <p className="text-sm text-ink-2">{label}</p> : <span className="sr-only">Loading</span>}
+  </div>
+);
 
-export const SpinnerOverlay: React.FC<{ label?: string }> = ({ label }) => {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
-      <Spinner size="xl" color="text-white" label={label} />
+export const SpinnerOverlay: React.FC<{ label?: string }> = ({ label }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)]">
+    <div className="rounded-xl border border-line bg-surface px-6 py-5 shadow-[var(--shadow)]">
+      <Spinner size="lg" label={label} />
     </div>
-  );
-};
+  </div>
+);

@@ -196,7 +196,6 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         <div className="flex-1">
           <Input
             label="Their account email"
-            aria-label="Their account email"
             type="email"
             value={email}
             onChange={(e) => handleEmailChange(e.target.value)}
@@ -240,7 +239,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               <li key={s.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="break-all text-ink">{s.email}</span>
                 {onRevokeUserShare && (
-                  <Button variant="ghost" size="sm" onClick={() => void onRevokeUserShare(s.id)} aria-label={`Remove ${s.email}`}>
+                  <Button variant="quiet" size="sm" onClick={() => void onRevokeUserShare(s.id)} aria-label={`Remove ${s.email}`}>
                     Remove
                   </Button>
                 )}
@@ -254,7 +253,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
   const linkForm = (
     <div className="flex flex-col gap-5">
-      <Input label="Password (optional)" aria-label="Password (optional)" type="text" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} helperText="Send it separately from the link." />
+      <Input label="Password (optional)" type="text" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} helperText="Send it separately from the link." />
 
       <fieldset className="m-0 border-0 p-0">
         <legend className="mb-1.5 text-sm font-medium text-ink">Expires after</legend>
@@ -307,7 +306,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     {share.expiresAt && ` · Expires ${formatDate(share.expiresAt)}`}
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => void handleCopyLink(share.url)}>
+                <Button variant="quiet" size="sm" onClick={() => void handleCopyLink(share.url)}>
                   Copy
                 </Button>
               </li>
@@ -320,7 +319,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
   const linkMade = createdLink && (
     <div className="flex flex-col gap-4">
-      <Input label="Link" aria-label="Link" type="text" value={createdLink.url} readOnly className="font-mono" onFocus={(e) => e.currentTarget.select()} />
+      <Input label="Link" type="text" value={createdLink.url} readOnly mono onFocus={(e) => e.currentTarget.select()} />
       <div className="flex items-start gap-3 rounded-[10px] border border-warn-line bg-warn-soft px-4 py-3.5 text-sm leading-5 text-warn-text">
         <ExclamationTriangleIcon className="h-5 w-5 flex-none" aria-hidden="true" />
         <span>Anyone with this URL can open the file until it expires. Send it only where you would send the file itself.</span>
@@ -363,14 +362,14 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
           {createdLink ? (
             <>
-              <Button variant="ghost" onClick={onClose}>
+              <Button variant="quiet" onClick={onClose}>
                 Close
               </Button>
               <Button onClick={() => void handleCopyLink(createdLink.url)}>{copied ? 'Copied' : 'Copy link'}</Button>
             </>
           ) : showUser ? (
             <>
-              <Button variant="ghost" onClick={onClose}>
+              <Button variant="quiet" onClick={onClose}>
                 Cancel
               </Button>
               <Button onClick={() => void handleShareWithUser()} isLoading={isSharing} disabled={!recipient}>
@@ -379,7 +378,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             </>
           ) : (
             <>
-              <Button variant="ghost" onClick={onClose}>
+              <Button variant="quiet" onClick={onClose}>
                 Cancel
               </Button>
               <Button onClick={() => void handleCreateShare()} isLoading={isCreating}>

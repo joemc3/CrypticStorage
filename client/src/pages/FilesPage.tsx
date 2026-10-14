@@ -327,7 +327,7 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
               }}
             />
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setShowCreateFolder(false)}>
+              <Button variant="quiet" onClick={() => setShowCreateFolder(false)}>
                 Cancel
               </Button>
               <Button onClick={() => void handleCreateFolder()} disabled={!newFolderName.trim()}>

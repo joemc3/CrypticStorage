@@ -1,7 +1,6 @@
 import React, { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import { motion } from 'framer-motion';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -14,82 +13,72 @@ export interface ModalProps {
 }
 
 const sizeClasses = {
-  sm: 'max-w-md',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
-  full: 'max-w-7xl',
+  sm: 'md:max-w-[440px]',
+  md: 'md:max-w-[560px]',
+  lg: 'md:max-w-[560px]',
+  xl: 'md:max-w-[880px]',
+  full: 'md:max-w-[1100px]',
 };
 
-export const Modal: React.FC<ModalProps> = ({
-  isOpen,
-  onClose,
-  title,
-  description,
-  children,
-  size = 'md',
-  showCloseButton = true,
-}) => {
+/** Desktop: a centred sheet. Phone: a bottom sheet with a grab handle. */
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, description, children, size = 'md', showCloseButton = true }) => {
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
         <Transition.Child
           as={Fragment}
-          enter="ease-out duration-300"
+          enter="ease-out duration-150"
           enterFrom="opacity-0"
           enterTo="opacity-100"
-          leave="ease-in duration-200"
+          leave="ease-in duration-150"
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" />
+          <div className="fixed inset-0 bg-[var(--overlay)]" aria-hidden="true" />
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
+          <div className="flex min-h-full items-end justify-center md:items-center md:p-4">
             <Transition.Child
               as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
+              enter="ease-out duration-200"
+              enterFrom="translate-y-6 opacity-0 md:translate-y-0 md:scale-[.98]"
+              enterTo="translate-y-0 opacity-100 md:scale-100"
+              leave="ease-in duration-150"
+              leaveFrom="opacity-100"
+              leaveTo="opacity-0"
             >
               <Dialog.Panel
-                className={`w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all`}
+                className={`w-full max-h-[92vh] overflow-y-auto rounded-t-[18px] border border-line bg-surface text-left shadow-[var(--shadow)] md:rounded-[14px] ${sizeClasses[size]}`}
               >
-                {showCloseButton && (
-                  <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
+                <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-line-strong md:hidden" aria-hidden="true" />
+                {(title || showCloseButton) && (
+                  <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+                    {title ? (
+                      <Dialog.Title as="h2" className="text-base font-semibold leading-[22px] text-ink">
+                        {title}
+                      </Dialog.Title>
+                    ) : (
+                      <span />
+                    )}
+                    {showCloseButton && (
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Close"
+                        className="-mr-2 inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink"
+                      >
+                        <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 )}
-
-                {title && (
-                  <Dialog.Title
-                    as="h3"
-                    className="text-xl font-semibold leading-6 text-gray-900 dark:text-gray-100 mb-2"
-                  >
-                    {title}
-                  </Dialog.Title>
-                )}
-
-                {description && (
-                  <Dialog.Description className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    {description}
-                  </Dialog.Description>
-                )}
-
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
+                <div className="p-5">
+                  {description && (
+                    <Dialog.Description className="mb-4 text-sm text-ink-2">{description}</Dialog.Description>
+                  )}
                   {children}
-                </motion.div>
+                </div>
               </Dialog.Panel>
             </Transition.Child>
           </div>

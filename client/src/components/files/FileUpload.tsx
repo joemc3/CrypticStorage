@@ -100,7 +100,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onUpload, uploads = [], 
                 </span>
               </div>
               {u.status !== 'error' && u.status !== 'complete' && (
-                <ProgressBar progress={u.progress} size="sm" showPercentage={false} label={u.status === 'encrypting' ? 'Encrypting…' : 'Uploading…'} />
+                <ProgressBar progress={u.progress} showPercentage={false} label={u.status === 'encrypting' ? 'Encrypting…' : 'Uploading…'} />
               )}
             </li>
           ))}

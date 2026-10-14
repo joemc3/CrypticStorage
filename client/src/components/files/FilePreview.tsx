@@ -278,7 +278,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
                 <button type="button" onClick={handleZoomIn} disabled={zoom >= 3} aria-label="Zoom in" className={iconButton}>
                   <MagnifyingGlassPlusIcon className="h-5 w-5" aria-hidden="true" />
                 </button>
-                <Button variant="ghost" size="sm" onClick={handleResetZoom}>
+                <Button variant="quiet" size="sm" onClick={handleResetZoom}>
                   Reset
                 </Button>
               </div>

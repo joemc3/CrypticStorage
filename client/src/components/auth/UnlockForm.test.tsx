@@ -16,7 +16,7 @@ describe('UnlockForm', () => {
   it('calls onUnlock with the typed password', async () => {
     const onUnlock = vi.fn().mockResolvedValue(undefined);
     render(<UnlockForm email="m.hale@fastmail.com" onUnlock={onUnlock} />);
-    fireEvent.change(document.querySelector('input[type="password"]') as HTMLInputElement, { target: { value: 'lantern-orchard' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'lantern-orchard' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await waitFor(() => expect(onUnlock).toHaveBeenCalledWith('lantern-orchard'));
   });

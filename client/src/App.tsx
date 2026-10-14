@@ -38,7 +38,7 @@ const ToastContainer: React.FC = () => {
   const toasts = useUIStore((s) => s.toasts);
   const removeToast = useUIStore((s) => s.removeToast);
   return (
-    <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none">
+    <div className="pointer-events-none fixed inset-x-4 bottom-20 z-[60] flex flex-col items-center gap-2 md:inset-x-auto md:bottom-4 md:right-4 md:items-end">
       <AnimatePresence mode="popLayout">
         {toasts.map((t) => (
           <div key={t.id} className="pointer-events-auto">

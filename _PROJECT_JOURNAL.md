@@ -23,13 +23,14 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | End-to-end (register → upload → download → share) | 6 tests, runs in CI |
 | Crypto | per-file keys, chunked AES-GCM with per-chunk nonces, KDF-split auth, keys in link fragments |
 | Ops | Docker Compose (Postgres + API on a volume + nginx web), GitHub Actions, no-Docker path on embedded Postgres. Stack verified running locally 2026-10-14 |
-| Branch | `master`; PR #2 merged 2026-10-13. Origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` has one unmerged commit and no PR |
+| Branch | `main` (renamed from `master` 2026-10-14, protected, PR-only). Origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` has one unmerged commit and no PR |
 
 ## Next steps
 
 - [ ] Delete the old generated server sources (command in README under "Repository cleanup still pending"). A sandbox permission blocked it in the cloud session.
 - [x] Open a PR from `ccr-1fec1232-1akfhk` to `master` and merge. (PR #2, merged 2026-10-13)
 - [ ] Review origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` (security fixes, UI redesign, spec compliance); merge or discard.
+- [x] Rename `master` to `main`, protect it, adopt the branch-and-PR convention (this session).
 - [ ] Add `docker compose build` (or a smoke `up`) to CI; the image had never been built before 2026-10-14 and had two startup bugs.
 - [ ] Recovery key at signup, so a forgotten password is not fatal.
 - [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
@@ -48,13 +49,14 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | 2026-10-12 | Share links carry the file key in the URL fragment | Fragment never reaches the server, so the server can gate access without being able to decrypt |
 | 2026-10-12 | Redis dropped from the stack | Nothing needed it; fewer moving parts |
 | 2026-10-12 | Tests run against a real embedded Postgres, not mocks | The previous mocked suite had never executed and could not catch contract drift |
+| 2026-10-14 | `main` replaces `master`; all work on `<type>/<topic>` branches merged by PR with a merge commit; `main` requires the three CI jobs | Same convention as the owner's other repositories, so sessions and tooling behave the same everywhere |
 | 2026-10-14 | MinIO dropped from the Docker stack; the API's local driver on a named volume is the default | MinIO deleted its Docker Hub and Quay images in September 2026 and the last free release carries an auth-bypass CVE. The stack streamed through the API anyway, so MinIO added a service and two secrets for nothing. The S3 driver stays for external stores (S3, R2, Garage) via `STORAGE_DRIVER=s3` in `.env` |
 
 ## Session log
 
-### 2026-10-14 · local (Claude Code) · env setup documented; Docker stack made to actually start (MinIO gone, OpenSSL, empty env values, local Postgres)
+### 2026-10-14 · local (Claude Code) · env setup documented; Docker stack made to actually start; `main` replaces `master` with the PR convention
 
-Session: Claude Code, local checkout · Branch: `master` · Commits: `10497bb`, `aec80d1`, plus the stack fix below
+Session: Claude Code, local checkout · Branch: `master`, then `main` · Commits: `10497bb`, `aec80d1`, `4e48b23`, plus the branch `chore/main-branch-and-workflow`
 
 **Started with** the owner having copied `.env.example` to `.env` and asking what to put in it, then running `docker compose up` and hitting `pull access denied for minio/minio`.
 
@@ -65,6 +67,7 @@ Session: Claude Code, local checkout · Branch: `master` · Commits: `10497bb`, 
 - `server/src/config/env.ts`: empty-string env values are now treated as unset before zod parses. Compose templates like `S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}` pass `""`, which `z.string().url().optional()` rejected, so the API crash-looped with "S3_PUBLIC_ENDPOINT: Invalid url". This would have hit the old MinIO stack too.
 - Embedded Postgres (`server/scripts/embedded-db.mjs`, `server/tests/helpers/globalSetup.ts`): `createPostgresUser` is now `process.getuid?.() === 0`. It was hard-coded `true`, which only works as root (the cloud sandbox); on a normal macOS account `initdb` fails with "Failed to create and initialize a new user on this system", so neither `make dev-db` nor `make test` had ever worked locally.
 - Web image: nginx health check now targets `127.0.0.1` instead of `localhost`. nginx listens on IPv4 only and busybox wget tries `::1` first, so the container sat at "unhealthy" forever even though it served fine.
+- Branching: GitHub default branch renamed `master` → `main` via the API (open PRs and the local checkout retarget automatically). `main` protected: the three CI job names are required status checks, branch must be up to date before merge, no force-push or deletion, no review count (solo project, same as Gotcha and Am I). CI now runs on `pull_request` and on `push` to `main` only, instead of every push to every branch. `CLAUDE.md` Git section rewritten to the shared convention: `<type>/<topic>` branches, PR into `main`, owner merges with a merge commit. The Docker stack was shut down (`docker compose down`, volumes kept) before this.
 - Journal: ticked the stale "open a PR" item (PR #2 merged 2026-10-13), fixed the branch row, recorded the unmerged redesign branch and a "build the image in CI" item.
 
 **Verified**

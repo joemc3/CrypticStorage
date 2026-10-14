@@ -106,6 +106,8 @@ export interface FileMetadata {
   status: 'PENDING' | 'READY';
   createdAt: string;
   updatedAt: string;
+  /** Active user shares plus unexpired, unrevoked links. Present on listings and `getFile`. */
+  shareCount?: number;
 }
 
 export interface SharedFileMetadata extends FileMetadata {
@@ -113,6 +115,18 @@ export interface SharedFileMetadata extends FileMetadata {
   permissions: string;
   expiresAt?: string;
   sharedBy: { id: string; email: string };
+  /**
+   * Present when the file reached the caller through a released handoff rule. `encryptedFileKey` is then empty:
+   * the client unwraps `wrappedFileKey` with the release key (itself unwrapped from `wrappedReleaseKey`).
+   */
+  handoff?: {
+    ruleId: string;
+    from: { id: string; email: string; displayName: string | null };
+    releasedAt: string;
+    by: 'timer' | 'quorum';
+    wrappedReleaseKey?: string;
+    wrappedFileKey: string;
+  };
 }
 
 export interface UploadRequest {
@@ -142,6 +156,10 @@ export interface FolderMetadata {
   encryptedNameIV: string;
   createdAt: string;
   updatedAt: string;
+  /** Files under this folder that an active handoff rule covers but has no wrapped key for yet. Present on get and list. */
+  coverageGaps?: number;
+  /** Active or warning handoff rules on this folder or any ancestor. Present on get and list. */
+  ruleIds?: string[];
 }
 
 export interface ShareLink {
@@ -239,6 +257,81 @@ export interface WitnessInvitation {
 export interface WitnessInvitations {
   invitations: Array<{ id: string; owner: WitnessInvitation['owner']; invitedAt: string }>;
   serving: Array<{ id: string; owner: WitnessInvitation['owner']; respondedAt: string | null }>;
+}
+
+// --- Handoff rules -------------------------------------------------------------
+
+export type HandoffRuleState = 'active' | 'warning' | 'released_timer' | 'released_quorum' | 'revoked';
+
+export interface HandoffRecipient {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  notifiedAt: string | null;
+}
+
+export interface HandoffRule {
+  id: string;
+  fileId?: string;
+  folderId?: string;
+  periodDays: number;
+  state: HandoffRuleState;
+  createdAt: string;
+  /** Null once the rule is released or revoked. */
+  nextCheckInAt: string | null;
+  /** True when the witness set changed and the shares must be re-split (the client repairs at unlock). */
+  sharesStale: boolean;
+  /** Ready files under the target that have no wrapped key in the rule yet. */
+  coverageGaps: number;
+  recipients: HandoffRecipient[];
+  releasedAt?: string;
+  revokedAt?: string;
+}
+
+export interface HandoffRuleDetail extends HandoffRule {
+  /** Ids only. The owner holds their own file keys. */
+  items: Array<{ fileId: string }>;
+  /** Release key wrapped under the owner's master key (opaque client blob). */
+  wrappedReleaseKeyOwner: string;
+}
+
+export interface HandoffShareInput {
+  witnessUserId: string;
+  shareIndex: number;
+  wrappedShare: string;
+}
+
+export interface HandoffItemInput {
+  fileId: string;
+  wrappedFileKey: string;
+}
+
+export interface CreateHandoffRuleRequest {
+  fileId?: string;
+  folderId?: string;
+  periodDays: number;
+  recipients: Array<{ userId: string; wrappedReleaseKey: string }>;
+  items: HandoffItemInput[];
+  shares: HandoffShareInput[];
+  wrappedReleaseKeyOwner: string;
+}
+
+export interface HandoffForMe {
+  id: string;
+  owner: { id: string; email: string; displayName: string | null };
+  state: Exclude<HandoffRuleState, 'revoked'>;
+  createdAt: string;
+  releasedAt?: string;
+  releasedBy?: 'timer' | 'quorum';
+  /** Only after a timer release. */
+  wrappedReleaseKey?: string;
+  /** Only after a timer release. `file.encryptedFileKey` is empty; use `wrappedFileKey`. */
+  items?: Array<{ fileId: string; wrappedFileKey: string; file: FileMetadata }>;
+}
+
+export interface ActiveRuleRef {
+  id: string;
+  sharesStale: boolean;
 }
 
 export interface TrustedKey {
@@ -376,13 +469,13 @@ class ApiService {
   getWitnesses(): Promise<WitnessSet> {
     return this.get('/witnesses');
   }
-  setWitnessThreshold(k: number): Promise<WitnessSet & { activeRules: unknown[] }> {
+  setWitnessThreshold(k: number): Promise<WitnessSet & { activeRules: ActiveRuleRef[] }> {
     return this.put('/witnesses/threshold', { k });
   }
   inviteWitness(email: string): Promise<WitnessEntry> {
     return this.post('/witnesses', { email });
   }
-  removeWitness(id: string): Promise<{ threshold: number; activeRules: unknown[] }> {
+  removeWitness(id: string): Promise<{ threshold: number; activeRules: ActiveRuleRef[] }> {
     return this.delete(`/witnesses/${id}`);
   }
   getWitnessInvitations(): Promise<WitnessInvitations> {
@@ -393,6 +486,29 @@ class ApiService {
   }
   declineWitnessInvitation(id: string): Promise<WitnessInvitation> {
     return this.post(`/witnesses/invitations/${id}/decline`);
+  }
+  // --- Handoff rules -----------------------------------------------------------
+
+  createHandoffRule(input: CreateHandoffRuleRequest): Promise<HandoffRuleDetail> {
+    return this.post('/handoff/rules', input);
+  }
+  listHandoffRules(): Promise<HandoffRule[]> {
+    return this.get('/handoff/rules');
+  }
+  getHandoffRule(id: string): Promise<HandoffRuleDetail> {
+    return this.get(`/handoff/rules/${id}`);
+  }
+  revokeHandoffRule(id: string): Promise<HandoffRule> {
+    return this.delete(`/handoff/rules/${id}`);
+  }
+  replaceHandoffShares(id: string, shares: HandoffShareInput[]): Promise<HandoffRuleDetail> {
+    return this.put(`/handoff/rules/${id}/shares`, { shares });
+  }
+  addHandoffItems(id: string, items: HandoffItemInput[]): Promise<HandoffRuleDetail> {
+    return this.put(`/handoff/rules/${id}/items`, { items });
+  }
+  handoffForMe(): Promise<HandoffForMe[]> {
+    return this.get('/handoff/for-me');
   }
   setupTwoFactor(): Promise<{ secret: string; qrCode: string }> {
     return this.post('/users/2fa/setup');

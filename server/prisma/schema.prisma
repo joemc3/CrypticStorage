@@ -61,6 +61,10 @@ model User {
   trustedKeys     TrustedKey[] @relation("TrustOwner")
   trustedByOthers TrustedKey[] @relation("TrustContact")
 
+  handoffRules       HandoffRule[]          @relation("RuleOwner")
+  handoffAsRecipient HandoffRuleRecipient[]
+  handoffAsWitness   HandoffRuleShare[]
+
   @@map("users")
 }
 
@@ -78,6 +82,8 @@ model Folder {
   parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children Folder[] @relation("FolderTree")
   files    File[]
+
+  handoffRules HandoffRule[]
 
   @@index([userId, parentId])
   @@map("folders")
@@ -112,6 +118,9 @@ model File {
   folder     Folder?     @relation(fields: [folderId], references: [id], onDelete: Cascade)
   shareLinks ShareLink[]
   shares     FileShare[]
+
+  handoffRules HandoffRule[]
+  handoffItems HandoffRuleItem[]
 
   @@index([userId, folderId, status])
   @@map("files")
@@ -254,4 +263,86 @@ model TrustedKey {
 
   @@unique([userId, contactUserId])
   @@map("trusted_keys")
+}
+
+enum HandoffRuleState {
+  active
+  warning
+  released_timer
+  released_quorum
+  revoked
+}
+
+/// A rule that releases a file or a folder to named recipients. Exactly one of file_id and folder_id is set
+/// (checked in the service and by a CHECK constraint in the migration).
+model HandoffRule {
+  id                      String           @id @default(uuid())
+  ownerId                 String           @map("owner_id")
+  fileId                  String?          @map("file_id")
+  folderId                String?          @map("folder_id")
+  periodDays              Int              @map("period_days")
+  state                   HandoffRuleState @default(active)
+  /// Release key wrapped under the owner's master key (client JSON blob).
+  wrappedReleaseKeyOwner  String           @map("wrapped_release_key_owner")
+  /// The witness set changed since the shares were made; the owner's client re-splits at next unlock.
+  sharesStale             Boolean          @default(false) @map("shares_stale")
+  createdAt               DateTime         @default(now()) @map("created_at")
+  reminded75At            DateTime?        @map("reminded_75_at")
+  reminded90At            DateTime?        @map("reminded_90_at")
+  reminded95At            DateTime?        @map("reminded_95_at")
+  releasedAt              DateTime?        @map("released_at")
+  revokedAt               DateTime?        @map("revoked_at")
+
+  owner      User                   @relation("RuleOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  file       File?                  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  folder     Folder?                @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  recipients HandoffRuleRecipient[]
+  items      HandoffRuleItem[]
+  shares     HandoffRuleShare[]
+
+  @@index([ownerId, state])
+  @@map("handoff_rules")
+}
+
+model HandoffRuleRecipient {
+  ruleId            String    @map("rule_id")
+  userId            String    @map("user_id")
+  /// Release key wrapped under the recipient's RSA public key (base64).
+  wrappedReleaseKey String    @map("wrapped_release_key")
+  notifiedAt        DateTime? @map("notified_at")
+
+  rule HandoffRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([ruleId, userId])
+  @@index([userId])
+  @@map("handoff_rule_recipients")
+}
+
+model HandoffRuleItem {
+  ruleId         String @map("rule_id")
+  fileId         String @map("file_id")
+  /// File key wrapped under the rule's release key (client JSON blob).
+  wrappedFileKey String @map("wrapped_file_key")
+
+  rule HandoffRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  file File        @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([ruleId, fileId])
+  @@index([fileId])
+  @@map("handoff_rule_items")
+}
+
+model HandoffRuleShare {
+  ruleId        String @map("rule_id")
+  witnessUserId String @map("witness_user_id")
+  /// Shamir share wrapped under the witness's RSA public key (base64).
+  wrappedShare  String @map("wrapped_share")
+  shareIndex    Int    @map("share_index")
+
+  rule    HandoffRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  witness User        @relation(fields: [witnessUserId], references: [id], onDelete: Cascade)
+
+  @@id([ruleId, witnessUserId])
+  @@map("handoff_rule_shares")
 }

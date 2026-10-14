@@ -55,6 +55,8 @@ const schema = z
     /** Bounds on the size n of an owner's witness set. The threshold k is always between 2 and n. */
     WITNESS_MIN_N: z.coerce.number().int().min(2).default(2),
     WITNESS_MAX_N: z.coerce.number().int().min(2).default(7),
+    /** When false, a rule cannot name one of the owner's accepted witnesses as a recipient. */
+    WITNESS_MAY_BE_RECIPIENT: boolean.default(true),
 
     DEFAULT_STORAGE_QUOTA_BYTES: z.coerce.number().int().positive().default(10 * 1024 ** 3),
     MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(5 * 1024 ** 3),

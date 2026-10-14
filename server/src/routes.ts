@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { prisma } from './config/prisma';
-import { env } from './config/env';
+import { env, isTest } from './config/env';
 import { authRouter } from './modules/auth/router';
 import { activityRouter, storageRouter, usersRouter } from './modules/users/router';
 import { fileContentRouter, filesRouter } from './modules/files/router';
 import { foldersRouter } from './modules/folders/router';
 import { sharesRouter } from './modules/shares/router';
-import { handler } from './lib/http';
+import { handler, ok } from './lib/http';
+import { clearOutbox, outbox } from './lib/mail';
 
 export const apiRouter = Router();
 
@@ -36,3 +37,21 @@ apiRouter.use('/files', fileContentRouter);
 apiRouter.use('/files', filesRouter);
 apiRouter.use('/folders', foldersRouter);
 apiRouter.use('/shares', sharesRouter);
+
+if (isTest) {
+  // Lets the end-to-end run fetch verification links. Never mounted outside NODE_ENV=test.
+  apiRouter.get(
+    '/_test/mail',
+    handler(async (req, res) => {
+      const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+      ok(res, outbox().filter((m) => to === undefined || m.to === to));
+    })
+  );
+  apiRouter.delete(
+    '/_test/mail',
+    handler(async (_req, res) => {
+      clearOutbox();
+      ok(res, { cleared: true });
+    })
+  );
+}

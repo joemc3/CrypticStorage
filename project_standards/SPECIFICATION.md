@@ -1,3 +1,5 @@
+> **Superseded on 2026-10-14** by [`docs/superpowers/specs/2026-10-14-product-core-design.md`](../docs/superpowers/specs/2026-10-14-product-core-design.md). Kept as history of the original generated plan; do not build from it.
+
 # Technical Specification: CrypticStorage
 
 ## System Architecture

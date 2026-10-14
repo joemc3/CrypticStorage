@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FolderIcon, MagnifyingGlassIcon, TrashIcon } from '@heroicons/react/24/outline';
-import { FileItem, FileItemProps } from './FileItem';
+import { FileActionsMenu, FileItem, FileItemProps } from './FileItem';
 import { EmptyState } from '../common/EmptyState';
 import { ListRow, RowList } from '../common/ListRow';
 import { Spinner } from '../common/Spinner';
@@ -10,6 +10,10 @@ export interface FolderRowItem {
   name: string;
   /** Shown as the row meta when known, for example "3 items". */
   meta?: string;
+  /** Handoff marker for a folder a rule names directly (decision 5: children do not repeat it). */
+  marker?: React.ReactNode;
+  /** Given only when the folder has rules. */
+  onRules?: () => void;
 }
 
 export interface FileListProps {
@@ -25,6 +29,8 @@ export interface FileListProps {
   onFileShare?: (fileId: string) => void;
   onFolderOpen?: (folderId: string) => void;
   onFolderDelete?: (folderId: string) => void;
+  onFileHandoff?: (fileId: string) => void;
+  onFolderHandoff?: (folderId: string) => void;
 }
 
 type SortKey = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'size-desc' | 'size-asc';
@@ -54,6 +60,8 @@ export const FileList: React.FC<FileListProps> = ({
   onFileShare,
   onFolderOpen,
   onFolderDelete,
+  onFileHandoff,
+  onFolderHandoff,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('date-desc');
@@ -124,9 +132,14 @@ export const FileList: React.FC<FileListProps> = ({
                 meta={folder.meta ?? 'Folder'}
                 size=""
                 date=""
+                markers={folder.marker}
                 onClick={() => onFolderOpen?.(folder.id)}
                 actions={
-                  onFolderDelete && (
+                  <>
+                    {(onFolderHandoff || folder.onRules) && (
+                      <FileActionsMenu name={folder.name} onHandoff={onFolderHandoff && (() => onFolderHandoff(folder.id))} onRules={folder.onRules} />
+                    )}
+                    {onFolderDelete && (
                     <button
                       type="button"
                       onClick={() => onFolderDelete(folder.id)}
@@ -135,7 +148,8 @@ export const FileList: React.FC<FileListProps> = ({
                     >
                       <TrashIcon className="h-5 w-5" aria-hidden="true" />
                     </button>
-                  )
+                    )}
+                  </>
                 }
               />
             ))}
@@ -150,6 +164,7 @@ export const FileList: React.FC<FileListProps> = ({
                 onDownload={() => onFileDownload?.(file.id)}
                 onDelete={() => onFileDelete?.(file.id)}
                 onShare={() => onFileShare?.(file.id)}
+                onHandoff={onFileHandoff ? () => onFileHandoff(file.id) : undefined}
               />
             ))}
           </RowList>

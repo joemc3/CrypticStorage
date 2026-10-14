@@ -24,6 +24,10 @@ import FileService, { formatFileSize } from '../services/file.service';
 import ShareService, { type ShareLinkWithKey } from '../services/share.service';
 import ApiService, { toApiError } from '../services/api.service';
 import { lookupContact, setContactVerified } from '../services/witness.service';
+import { countFilesUnder, isOpen } from '../services/rules.service';
+import { useRules } from '../hooks/useRules';
+import { RuleFlows, type FlowIntent } from '../components/handoff/RuleFlows';
+import { FolderRuleBanner, FromHandoffMarker, HandoffMarker, ShareMarker } from '../components/handoff/Markers';
 
 function toDialogLink(link: ShareLinkWithKey): DialogShareLink {
   return {
@@ -63,6 +67,8 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
     toggleFileSelection,
   } = useFiles();
   const addToast = useUIStore((s) => s.addToast);
+  const rules = useRules();
+  const [flow, setFlow] = useState<FlowIntent | null>(null);
 
   const currentFolderId = routeFolderId ?? null;
   const [newFolderName, setNewFolderName] = useState('');
@@ -201,6 +207,28 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
     return URL.createObjectURL(file.blob);
   }, []);
 
+  const handOffFile = (id: string) => {
+    const file = files.find((f) => f.id === id);
+    if (file) setFlow({ kind: 'create', item: { target: { fileId: id }, name: file.name, detail: formatFileSize(file.size) } });
+  };
+
+  const handOffFolder = async (id: string) => {
+    const name = folders.find((f) => f.id === id)?.name ?? breadcrumbs.find((c) => c.id === id)?.name ?? 'Folder';
+    let count: number | null = null;
+    try {
+      count = await countFilesUnder(id);
+    } catch {
+      // The sheet still opens; it just cannot say how many files.
+    }
+    setFlow({ kind: 'create', item: { target: { folderId: id }, name, detail: count === null ? 'Folder' : `Folder · ${count} ${count === 1 ? 'file' : 'files'}` } });
+  };
+
+  const showRules = (name: string, list: typeof rules.rules, addTo?: Extract<FlowIntent, { kind: 'create' }>['item']) =>
+    setFlow({ kind: 'detail', itemName: name, rules: list, addTo });
+
+  const currentFolder = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1]! : null;
+  const bannerRules = currentFolder ? rules.rules.filter((r) => isOpen(r) && currentFolder.ruleIds?.includes(r.id)) : [];
+
   const previewFile = previewId ? files.find((f) => f.id === previewId) ?? null : null;
   const uploads = Array.from(uploadProgress.values());
 
@@ -235,8 +263,7 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
                     icon={<DocumentTextIcon className="h-5 w-5" />}
                     title={file.name}
                     meta={<span className="break-all">{`From ${file.sharedBy} · ${formatDate(file.createdAt)} · ${formatFileSize(file.size)}`}</span>}
-                    // The handoff stage draws its marker here, for items that were released to this account.
-                    markers={null}
+                    markers={file.handoff ? <FromHandoffMarker from={file.handoff.from} /> : null}
                     actions={
                       <button
                         type="button"
@@ -280,6 +307,13 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
           </div>
         </div>
 
+        {currentFolder && bannerRules.length > 0 && (
+          <FolderRuleBanner
+            rules={bannerRules}
+            onView={() => showRules(currentFolder.name, bannerRules, { target: { folderId: currentFolder.id }, name: currentFolder.name, detail: 'Folder' })}
+          />
+        )}
+
         {uploads.length > 0 && !showUpload && (
           <div role="status" className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-4 py-3.5 text-sm">
             {uploads.map((u) => (
@@ -303,8 +337,30 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
         )}
 
         <FileList
-          files={files.map((f) => ({ id: f.id, name: f.name, size: f.size, mimeType: f.mimeType, uploadedAt: f.createdAt }))}
-          folders={folders.map((f) => ({ id: f.id, name: f.name }))}
+          files={files.map((f) => {
+            const own = rules.byFile.get(f.id);
+            return {
+              id: f.id,
+              name: f.name,
+              size: f.size,
+              mimeType: f.mimeType,
+              uploadedAt: f.createdAt,
+              shareMarker: (f.shareCount ?? 0) > 0 ? <ShareMarker /> : undefined,
+              handoffMarker: own ? <HandoffMarker rules={own} /> : undefined,
+              onRules: own ? () => showRules(f.name, own, { target: { fileId: f.id }, name: f.name, detail: formatFileSize(f.size) }) : undefined,
+            };
+          })}
+          folders={folders.map((f) => {
+            const own = rules.byFolder.get(f.id);
+            return {
+              id: f.id,
+              name: f.name,
+              marker: own ? <HandoffMarker rules={own} /> : undefined,
+              onRules: own ? () => showRules(f.name, own, { target: { folderId: f.id }, name: f.name, detail: 'Folder' }) : undefined,
+            };
+          })}
+          onFileHandoff={handOffFile}
+          onFolderHandoff={(id) => void handOffFolder(id)}
           isLoading={isLoading}
           emptyMessage={currentFolderId ? 'Nothing in this folder yet.' : 'Nothing in your safe yet.'}
           selectedIds={selectedFileIds}
@@ -361,6 +417,8 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
           onDownload={previewFile ? () => void downloadFile(previewFile.id) : undefined}
           onShare={previewFile ? () => void openShare(previewFile.id) : undefined}
         />
+
+        <RuleFlows intent={flow} onClose={() => setFlow(null)} onChanged={() => void rules.reload()} />
 
         <ShareDialog
           isOpen={shareTarget !== null}

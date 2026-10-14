@@ -88,6 +88,31 @@ const witnessInvitations = {
 
 const vaultUser = { ...fx.user, ...fx.vault };
 
+// Handoff rules: one active rule on the Estate folder, one released by timer on the deed, and one notice for me.
+const rulePeople = [
+  { userId: 'u-daniel', email: 'daniel.hale@gmail.com', displayName: null, notifiedAt: null },
+  { userId: 'u-sam', email: 'sam.hale@proton.me', displayName: null, notifiedAt: null },
+];
+const handoffRules = [
+  {
+    id: 'rule-estate', folderId: 'folder-estate', periodDays: 365, state: 'active', createdAt: '2026-10-03T12:00:00.000Z',
+    nextCheckInAt: '2027-10-14T12:00:00.000Z', warningAt: '2027-07-15T12:00:00.000Z', sharesStale: false, coverageGaps: 0, recipients: rulePeople,
+  },
+  {
+    id: 'rule-deed', fileId: 'file-deed', periodDays: 90, state: 'released_timer', createdAt: '2026-05-01T12:00:00.000Z',
+    nextCheckInAt: null, warningAt: null, sharesStale: false, coverageGaps: 0, recipients: rulePeople.slice(0, 1), releasedAt: '2026-10-10T12:00:00.000Z',
+  },
+];
+const handoffForMe = [{ id: 'notice-1', owner: { id: 'o-tom', email: 'tom.becker@icloud.com', displayName: null }, state: 'active', createdAt: '2026-10-12T12:00:00.000Z' }];
+const recipientSpki: string = fx.vault.publicKey;
+const recipientLookup = {
+  id: 'u-daniel',
+  email: 'daniel.hale@gmail.com',
+  publicKey: recipientSpki,
+  fingerprint: createHash('sha256').update(Buffer.from(recipientSpki, 'base64')).digest('hex'),
+  trust: null,
+};
+
 /** Every request the signed-in screens make. Anything else answers 404, which the console check catches. */
 async function mockVaultApi(page: Page) {
   await page.route('**/api/**', async (route: Route) => {
@@ -97,9 +122,18 @@ async function mockVaultApi(page: Page) {
     if (method === 'GET') {
       if (path === '/users/profile') return route.fulfill(ok(fx.user));
       if (path === '/storage/stats') return route.fulfill(ok(fx.stats));
-      if (path === '/files') return route.fulfill(ok(fx.files[url.searchParams.get('folderId') ?? 'root'] ?? []));
+      if (path === '/files') {
+        const rows = fx.files[url.searchParams.get('folderId') ?? 'root'] ?? [];
+        return route.fulfill(ok(rows.map((f: { id: string }) => (f.id === 'file-deed' ? { ...f, shareCount: 1 } : f))));
+      }
+      if (path === '/handoff/rules') return route.fulfill(ok(handoffRules));
+      if (path === '/handoff/for-me') return route.fulfill(ok(handoffForMe));
+      if (path === '/users/public-key') return route.fulfill(ok(recipientLookup));
       if (path === '/folders') return route.fulfill(ok(url.searchParams.get('parentId') ? [] : fx.folders));
-      if (path.startsWith('/folders/')) return route.fulfill(ok(fx.folders.find((f: { id: string }) => path.endsWith(f.id))));
+      if (path.startsWith('/folders/')) {
+        const folder = fx.folders.find((f: { id: string }) => path.endsWith(f.id));
+        return route.fulfill(ok(folder?.id === 'folder-estate' ? { ...folder, ruleIds: ['rule-estate'] } : folder));
+      }
       if (path === '/witnesses') return route.fulfill(ok(witnessSet));
       if (path === '/witnesses/invitations') return route.fulfill(ok(witnessInvitations));
       if (path === '/shares/with-me') return route.fulfill(ok(fx.sharedWithMe));
@@ -107,6 +141,7 @@ async function mockVaultApi(page: Page) {
       const one = path.match(/^\/files\/([^/]+)$/);
       if (one) return route.fulfill(ok(Object.values<{ id: string }[]>(fx.files).flat().find((f) => f.id === one[1])));
     }
+    if (method === 'POST' && /^\/contacts\/[^/]+\/seen$/.test(path)) return route.fulfill(ok({ fingerprint: recipientLookup.fingerprint, verifiedInPerson: false, firstSeenAt: '', lastSeenAt: '' }));
     if (method === 'POST' && path === '/auth/refresh') return route.fulfill(ok({ accessToken: 'fixture-access', refreshToken: 'fixture-refresh', expiresIn: 900 }));
     return route.fulfill(fail(404, `Unmocked ${method} ${path}`));
   });
@@ -207,6 +242,21 @@ test.describe('public routes', () => {
     await shot(page, info, 'shared-link-expired');
   });
 
+  test('check-in link: clock reset, and an invalid link', async ({ page, watch }, info) => {
+    await page.route('**/api/auth/check-in', (route) => route.fulfill(ok({ ok: true })));
+    await page.goto('/check-in/some-token');
+    await expect(page.getByRole('heading', { name: 'Your clock is reset.' })).toBeVisible();
+    await expect(page.getByText('Nothing else is needed.')).toBeVisible();
+    await shot(page, info, 'check-in-ok');
+
+    watch.allowFailure('/check-in');
+    await page.unroute('**/api/auth/check-in');
+    await page.route('**/api/auth/check-in', (route) => route.fulfill(fail(400, 'invalid')));
+    await page.goto('/check-in/some-token');
+    await expect(page.getByRole('heading', { name: 'This link is invalid or has expired.' })).toBeVisible();
+    await shot(page, info, 'check-in-failed');
+  });
+
   test('not found', async ({ page, watch: _ }, info) => {
     await page.goto('/404');
     await expect(page.getByRole('heading').first()).toBeVisible();
@@ -299,4 +349,82 @@ test('inside the safe: locked, dashboard, files, folder, shared, share dialog, s
   await expect(page.getByRole('heading', { name: 'r.okafor@gmail.com is asking you to be a witness.' })).toBeVisible();
   await page.waitForLoadState('networkidle');
   await shot(page, info, 'witness-invite');
+});
+
+// ---------------------------------------------------------------------------
+// Handoff rules
+// ---------------------------------------------------------------------------
+
+test('handoff rules: dashboard, rule detail, revoke, sheet, confirmation, folder banner, notice', async ({ page, watch: _ }, info) => {
+  await seedSession(page);
+  await mockVaultApi(page);
+  const nav = page.getByRole('navigation', { name: 'Main' });
+
+  await page.goto('/dashboard');
+  await page.getByLabel('Password').fill(FIXTURE_PASSWORD);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(nav).toBeVisible({ timeout: 30_000 });
+
+  const forYou = page.getByRole('region', { name: 'For you' });
+  await expect(forYou.getByText('tom.becker@icloud.com has set something aside for you.')).toBeVisible();
+  const rulesList = page.getByRole('region', { name: 'Handoff rules' });
+  await expect(rulesList.getByText('Estate', { exact: true })).toBeVisible();
+  await expect(rulesList.getByText('Released by timer')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Witnesses: 2 of 3, 2 accepted/ })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'dashboard-handoff');
+
+  await rulesList.getByRole('button', { name: /Estate/ }).click();
+  const detail = page.getByRole('dialog');
+  await expect(detail.getByText('1 year without a sign-in')).toBeVisible();
+  await expect(detail.getByText('Any 2 of 3')).toBeVisible();
+  await shot(page, info, 'rule-detail');
+
+  await detail.getByRole('button', { name: 'Revoke this rule' }).click();
+  await expect(page.getByRole('heading', { name: 'daniel.hale@gmail.com and sam.hale@proton.me will no longer receive Estate.' })).toBeVisible();
+  await shot(page, info, 'rule-revoke');
+  await page.getByRole('button', { name: 'Keep the rule' }).click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Revoke this rule' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await nav.getByRole('link', { name: 'Files', exact: true }).click();
+  await expect(page.getByText('House deed scan.jpg').first()).toBeVisible();
+  const rows = page.locator('ul[role="list"]');
+  await expect(rows.getByText('Handoff', { exact: true })).toHaveCount(1); // the Estate row only; its children do not repeat it
+  await expect(rows.getByText('Shared', { exact: true })).toHaveCount(1);
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'files-markers');
+
+  await page.getByRole('button', { name: 'Actions for House deed scan.jpg' }).click();
+  await page.getByRole('menuitem', { name: 'Hand off…' }).click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByText('Who receives it')).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Review' })).toBeDisabled();
+  await shot(page, info, 'rule-sheet');
+  await sheet.getByLabel('Add a recipient by email').fill('daniel.hale@gmail.com');
+  await sheet.getByRole('button', { name: 'Check key' }).click();
+  await sheet.getByRole('button', { name: 'Add recipient' }).click();
+  await sheet.getByRole('button', { name: '1 year' }).click();
+  await expect(sheet.getByText(/any 2 of your 2 witnesses agree/)).toBeVisible();
+  await shot(page, info, 'rule-sheet-filled');
+  await sheet.getByRole('button', { name: 'Review' }).click();
+  await expect(page.getByRole('heading', { name: /^On \d+ \w+ \d{4}, or sooner if your witnesses agree, daniel\.hale@gmail\.com will receive House deed scan\.jpg\.$/ })).toBeVisible();
+  await shot(page, info, 'rule-confirm');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  await page.getByText('Estate', { exact: true }).first().click();
+  await expect(page.getByText('Property tax 2025.pdf').first()).toBeVisible();
+  await expect(page.getByText(/^Handed off to daniel\.hale@gmail\.com and sam\.hale@proton\.me on 14 Oct 2027 · Active$/)).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'files-folder-handoff');
+
+  // The notice is reached from the For-you row; move there inside the unlocked session, as a reload would lock it.
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/notice/notice-1');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.getByRole('heading', { name: 'tom.becker@icloud.com has set something aside for you.' })).toBeVisible();
+  await expect(page.getByText('If you do not know this person, you can ignore this.')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'notice');
 });

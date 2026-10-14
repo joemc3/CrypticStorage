@@ -16,17 +16,25 @@ Zero-knowledge, end-to-end encrypted file storage. Files, file names and folder 
 
 ## Run it
 
+Both paths need a one-time setup that creates an env file with generated secrets. After that, starting the app is one command. The two paths use different env files: Docker reads the root `.env`, the no-Docker path reads `server/.env`.
+
 ### Docker (recommended)
 
-The Docker stack reads the root `.env`. Three values are required and have no default; everything else in the file can stay as it is.
+**First time only.** Three values in `.env` are required and have no default; everything else can stay as it is.
 
 ```bash
 cp .env.example .env
 perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|;
              s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|;
              s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$(openssl rand -base64 24)|" .env
-docker compose up -d --build
+```
+
+**Every time.**
+
+```bash
+make up            # docker compose up -d --build
 open http://localhost:3000
+make down          # when finished
 ```
 
 The stack refuses to start with empty or placeholder secrets. MinIO's console is on http://localhost:9001.
@@ -35,22 +43,19 @@ The stack refuses to start with empty or placeholder secrets. MinIO's console is
 
 Node 22 is required.
 
+**First time only.** Install dependencies and create `server/.env`. Two values need setting: `JWT_SECRET` (at least 32 characters) and the `DATABASE_URL` of the embedded Postgres that `make dev-db` serves on port 54321 (the example file's 5432 is for a regular local Postgres). Keep `STORAGE_DRIVER=local`; files go under `server/data/storage` and no S3 values are needed. The client needs no env file.
+
 ```bash
 make install
-make dev-db        # terminal 1: embedded Postgres, prints a DATABASE_URL
-```
-
-This path does not read the root `.env`; the API reads `server/.env`. Two values need setting: `JWT_SECRET` (at least 32 characters) and the `DATABASE_URL` that `make dev-db` printed (it is on port 54321, not the 5432 in the example). Keep `STORAGE_DRIVER=local`; files go under `server/data/storage` and no S3 values are needed. The client needs no env file.
-
-```bash
 cp server/.env.example server/.env
 perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|;
              s|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres\@127.0.0.1:54321/crypticstorage|" server/.env
 ```
 
-Then:
+**Every time**, three terminals:
 
 ```bash
+make dev-db        # terminal 1: embedded Postgres on :54321
 make dev-api       # terminal 2: API on :4000
 make dev-web       # terminal 3: web app on :3000, proxies /api to :4000
 ```

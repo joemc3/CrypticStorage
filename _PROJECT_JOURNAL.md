@@ -52,12 +52,12 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 
 ### 2026-10-14 · local (Claude Code) · env setup documented in README and both example env files
 
-Session: Claude Code, local checkout · Branch: `master`
+Session: Claude Code, local checkout · Branch: `master` · Commits: `10497bb`, plus the follow-up that split first-time from every-time
 
 **Started with** the owner having copied `.env.example` to `.env` and asking what to put in it. The answer was not in one place: the root `.env` is only for Docker Compose, `server/.env` is only for `make dev-api`, and the example's `DATABASE_URL` points at port 5432 while `make dev-db` serves on 54321.
 
 **Did**
-- README "Run it": each path now says which env file it reads, which values are required, and gives a one-shot `perl -pi` + `openssl rand` command that fills them in (three secrets for Docker; `JWT_SECRET` and the embedded-Postgres `DATABASE_URL` for the no-Docker path).
+- README "Run it": each path is split into **First time only** (copy the example env file and fill it with a one-shot `perl -pi` + `openssl rand` command; three secrets for Docker, `JWT_SECRET` and the embedded-Postgres `DATABASE_URL` for the no-Docker path) and **Every time** (`make up` / the three `make dev-*` terminals). The first draft mixed the two in one code block and read as if the env file had to be recreated on every start; the owner caught that.
 - Same explanation and command added as a header comment in `.env.example` and `server/.env.example`.
 - Journal: ticked the stale "open a PR" item (PR #2 merged 2026-10-13), fixed the branch row, added the unmerged redesign branch as a next step.
 

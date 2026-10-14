@@ -23,6 +23,7 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | End-to-end (register → upload → download → share) | 6 tests, runs in CI |
 | Crypto | per-file keys, chunked AES-GCM with per-chunk nonces, KDF-split auth, keys in link fragments |
 | Ops | Docker Compose (Postgres + API on a volume + nginx web), GitHub Actions with four jobs including a Docker build and smoke, no-Docker path on embedded Postgres |
+| Design | Proposal from the Claude Design session under `docs/design/output/` (branch `design/visual-proposal`), not yet reconciled |
 | Branch | `main` (renamed from `master` 2026-10-14, protected, PR-only). No other branches on origin |
 
 ## Next steps
@@ -33,7 +34,8 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 - [x] Rename `master` to `main`, protect it, adopt the branch-and-PR convention (this session).
 - [x] Product core spec reviewed and merged (PR #4); stage 1 plan merged (PR #5).
 - [x] Add a Docker build and smoke job to CI. (2026-10-14, stage 1)
-- [ ] Owner runs the Claude Design session against `docs/design/brief/` and places the output under `docs/design/output/`; then reconcile here into `docs/design/decisions.md` (spec section 11).
+- [x] Claude Design session run against `docs/design/brief/`; output under `docs/design/output/` on `design/visual-proposal`. (2026-10-14)
+- [ ] Reconcile `docs/design/output/` against the spec into `docs/design/decisions.md`, starting from `docs/design/output/open-questions.md` (spec section 11, step 3).
 - [ ] Stage 2: signup as a contract, mandatory email verification, auto-lock; email service enters the stack. Write spec and plan together in one PR.
 - [ ] Recovery key at signup, so a forgotten password is not fatal.
 - [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
@@ -56,6 +58,21 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | 2026-10-14 | MinIO dropped from the Docker stack; the API's local driver on a named volume is the default | MinIO deleted its Docker Hub and Quay images in September 2026 and the last free release carries an auth-bypass CVE. The stack streamed through the API anyway, so MinIO added a service and two secrets for nothing. The S3 driver stays for external stores (S3, R2, Garage) via `STORAGE_DRIVER=s3` in `.env` |
 
 ## Session log
+
+### 2026-10-14 · Claude Design (cloud, linked to local checkout) · design proposal written to docs/design/output
+
+Session: https://claude.ai/code/session_01X2wVZKrUVyoTw8L6FuugFm · Branch: `design/visual-proposal` (from `chore/stage-1-cleanup-and-brief`, which is not yet merged) · Commits: `0fcf592`, plus this journal commit
+
+**Did**
+- Read the brief, the product core spec and the decisions file; produced the design on a private Claude Design canvas owned by the owner (24 artboards: design system, component sheet, every screen in A to F at desktop 1280 light, phone 390 light and phone 390 dark, with extra phones for multi-step flows).
+- Wrote to `docs/design/output/`: `README.md` (what to hold on to, where implementers have latitude), `design-system.md`, `tokens.css` (`:root`, `prefers-color-scheme`, `data-theme` override, Tailwind mapping in a comment), `screens.md` (one paragraph per screen), `emails.md` (13 templates), `open-questions.md` (12 reconciliation candidates), and `canvas/` with the artboard sources and `cs.css`.
+- Direction: "document of record". Newsreader serif only for sentences that carry consequences; Instrument Sans for everything operational; IBM Plex Mono for fingerprints and codes; one vault-green accent; every irreversible act is the same full-screen one-fact layout, never a modal.
+
+**Verified**: a script over the artboard sources finds every verbatim sentence from `03-screens-and-flows.md` unchanged. No code touched, so no test run. Text tokens checked for 4.5:1 against their grounds by calculation, not by tool.
+
+**Open**: reconcile into `docs/design/decisions.md`. The biggest questions: `{name}` renders as an email because accounts have no display name; the brief fixes auto-lock at five minutes while the spec makes it configurable; two emails were added beyond the brief's list.
+
+**Worth remembering**: no email can name an item, because the server cannot read names; the email copy says "what the rule covers". The `.dc.html` files under `canvas/` render only inside Claude Design (they need its runtime); read them as annotated HTML.
 
 ### 2026-10-14 · local (Claude Code) · stage 1: dead sources deleted, Docker smoke in CI, design brief written
 

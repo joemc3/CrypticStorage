@@ -14,6 +14,7 @@ import { Modal } from '../components/common/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { useEncryption } from '../hooks/useEncryption';
 import { useToast } from '../hooks/useToast';
+import { useUIStore, type Theme } from '../stores/ui.store';
 import ApiService, { type StorageStats } from '../services/api.service';
 import { formatFileSize } from '../services/file.service';
 
@@ -26,9 +27,18 @@ const tabs: { id: SettingsTab; name: string; icon: React.ComponentType<{ classNa
   { id: 'storage', name: 'Storage', icon: CircleStackIcon },
 ];
 
+const LOCK_OPTIONS = [1, 2, 5, 10, 15, 30];
+const THEME_OPTIONS: { id: Theme; name: string }[] = [
+  { id: 'system', name: 'System' },
+  { id: 'light', name: 'Light' },
+  { id: 'dark', name: 'Dark' },
+];
+
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isLoading, changePassword, deleteAccount, lock } = useAuth();
+  const { user, isLoading, changePassword, deleteAccount, refreshProfile } = useAuth();
+  const theme = useUIStore((state) => state.theme);
+  const setTheme = useUIStore((state) => state.setTheme);
   const { generatePassword, generateFingerprint } = useEncryption();
   const { success, error } = useToast();
 
@@ -40,12 +50,36 @@ export const SettingsPage: React.FC = () => {
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [deletePassword, setDeletePassword] = useState('');
   const [showDelete, setShowDelete] = useState(false);
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     ApiService.getStorageStats()
       .then(setStats)
       .catch(() => undefined);
   }, []);
+
+  const saveDisplayName = async () => {
+    setSavingName(true);
+    try {
+      await ApiService.updateProfile({ displayName: displayName.trim() || null });
+      await refreshProfile();
+      success('Name saved');
+    } catch {
+      error('Could not save your name');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const saveLockAfter = async (minutes: number) => {
+    try {
+      await ApiService.updateProfile({ lockAfterMinutes: minutes });
+      await refreshProfile();
+    } catch {
+      error('Could not save the lock period');
+    }
+  };
 
   const handleChangePassword = async () => {
     if (newPassword.length < 8) return error('New password must be at least 8 characters');
@@ -114,11 +148,71 @@ export const SettingsPage: React.FC = () => {
             <Card variant="bordered" padding="lg">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Profile</h2>
               <div className="space-y-4">
-                <Input label="Email" type="email" value={user?.email ?? ''} disabled helperText="Your email is also the salt for your key derivation, so it cannot be changed here." />
+                <Input label="Email" type="email" value={user?.email ?? ''} readOnly helperText="Your email is part of how your keys are derived, so it cannot be changed." />
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 flex flex-col gap-1">
+                    <label htmlFor="display-name" className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Display name</label>
+                    <input
+                      id="display-name"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      maxLength={64}
+                      className="rounded-lg border px-3 py-2"
+                      style={{ background: 'var(--surface)', color: 'var(--ink)', borderColor: 'var(--line-strong)' }}
+                    />
+                    <span className="text-sm" style={{ color: 'var(--ink-3)' }}>Visible to people you share with.</span>
+                  </div>
+                  <Button onClick={() => void saveDisplayName()} isLoading={savingName}>
+                    Save
+                  </Button>
+                </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</p>
-                <Button variant="secondary" onClick={lock}>
-                  Lock vault
-                </Button>
+              </div>
+            </Card>
+          )}
+
+          {activeTab === 'profile' && (
+            <Card variant="bordered" padding="lg" className="mt-6">
+              <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--ink)' }}>Lock and look</h2>
+              <div className="space-y-6" style={{ maxWidth: 420 }}>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="lock-after" className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Lock after</label>
+                  <select
+                    id="lock-after"
+                    value={user?.lockAfterMinutes ?? 5}
+                    onChange={(e) => void saveLockAfter(Number(e.target.value))}
+                    className="rounded-lg border px-3 py-2"
+                    style={{ background: 'var(--surface)', color: 'var(--ink)', borderColor: 'var(--line-strong)' }}
+                  >
+                    {LOCK_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m === 1 ? '1 minute idle' : `${m} minutes idle`}</option>
+                    ))}
+                  </select>
+                  <span className="text-sm" style={{ color: 'var(--ink-3)' }}>It also locks when you close the tab.</span>
+                </div>
+                <div role="radiogroup" aria-label="Theme" className="flex flex-col gap-1">
+                  <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Theme</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {THEME_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={theme === opt.id}
+                        onClick={() => setTheme(opt.id)}
+                        className="rounded-lg border px-3 py-2 text-sm"
+                        style={{
+                          borderColor: theme === opt.id ? 'var(--accent)' : 'var(--line-strong)',
+                          background: theme === opt.id ? 'var(--accent-soft)' : 'var(--surface)',
+                          color: 'var(--ink)',
+                          fontWeight: theme === opt.id ? 600 : 400,
+                        }}
+                      >
+                        {opt.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </Card>
           )}

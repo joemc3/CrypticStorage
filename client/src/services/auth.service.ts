@@ -208,6 +208,9 @@ export async function refreshProfile(): Promise<AuthUser> {
     storageUsed: profile.storageUsed,
     storageLimit: profile.storageLimit,
     twoFactorEnabled: profile.twoFactorEnabled,
+    displayName: profile.displayName,
+    lockAfterMinutes: profile.lockAfterMinutes,
+    emailVerifiedAt: profile.emailVerifiedAt,
   });
   return StorageService.getUserData()!;
 }

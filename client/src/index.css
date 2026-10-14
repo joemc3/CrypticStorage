@@ -1,86 +1,11 @@
 /**
  * CrypticStorage Global Styles
- * Zero-knowledge encrypted file storage
  */
+@import './styles/tokens.css';
 
-/* Tailwind Base Directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* CSS Custom Properties (Variables) */
-:root {
-  /* Color Palette - Light Mode */
-  --color-primary: 99 102 241; /* Indigo */
-  --color-primary-hover: 79 70 229;
-  --color-secondary: 139 92 246; /* Purple */
-  --color-accent: 16 185 129; /* Green */
-  --color-danger: 239 68 68; /* Red */
-  --color-warning: 245 158 11; /* Amber */
-  --color-info: 59 130 246; /* Blue */
-
-  /* Background Colors */
-  --color-bg-primary: 255 255 255;
-  --color-bg-secondary: 249 250 251;
-  --color-bg-tertiary: 243 244 246;
-
-  /* Text Colors */
-  --color-text-primary: 17 24 39;
-  --color-text-secondary: 75 85 99;
-  --color-text-tertiary: 156 163 175;
-
-  /* Border Colors */
-  --color-border: 229 231 235;
-  --color-border-hover: 209 213 219;
-
-  /* Shadow */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-
-  /* Spacing */
-  --spacing-unit: 0.25rem;
-
-  /* Border Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-
-  /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* Z-Index Scale */
-  --z-dropdown: 1000;
-  --z-sticky: 1020;
-  --z-fixed: 1030;
-  --z-modal-backdrop: 1040;
-  --z-modal: 1050;
-  --z-popover: 1060;
-  --z-tooltip: 1070;
-}
-
-/* Dark Mode Variables */
-.dark {
-  --color-bg-primary: 17 24 39;
-  --color-bg-secondary: 31 41 55;
-  --color-bg-tertiary: 55 65 81;
-
-  --color-text-primary: 243 244 246;
-  --color-text-secondary: 209 213 219;
-  --color-text-tertiary: 156 163 175;
-
-  --color-border: 55 65 81;
-  --color-border-hover: 75 85 99;
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-}
 
 /* Base Styles */
 @layer base {
@@ -96,16 +21,14 @@
     @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
     @apply antialiased;
     @apply min-h-screen;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   code,
   pre {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+    font-family: var(--font-mono);
   }
 
   h1, h2, h3, h4, h5, h6 {

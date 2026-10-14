@@ -3,7 +3,7 @@
  * Router, auth gating, theme application and global toasts.
  */
 
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Spinner } from './components/common/Spinner';
@@ -49,22 +49,6 @@ const ToastContainer: React.FC = () => {
   );
 };
 
-/** Applies the persisted theme preference to <html>. */
-const ThemeEffect: React.FC = () => {
-  const theme = useUIStore((s) => s.theme);
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = () => {
-      const dark = theme === 'dark' || (theme === 'system' && media.matches);
-      document.documentElement.classList.toggle('dark', dark);
-    };
-    apply();
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, [theme]);
-  return null;
-};
-
 const PublicOnly: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const status = useAuthStore((s) => s.status);
   return status === 'unlocked' ? <Navigate to="/dashboard" replace /> : <>{children}</>;
@@ -72,7 +56,6 @@ const PublicOnly: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const App: React.FC = () => (
   <BrowserRouter>
-    <ThemeEffect />
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route

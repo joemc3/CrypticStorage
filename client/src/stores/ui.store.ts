@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -50,6 +50,39 @@ export interface UIState {
   clearLoading: () => void;
 }
 
+/** Explicit themes set data-theme on <html>; system removes it so the media query decides. */
+function applyTheme(theme: Theme): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (theme === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', theme);
+}
+
+/** localStorage that degrades to a no-op when it is missing or throws (private mode, quota, blocked). */
+const safeStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      localStorage.setItem(name, value);
+    } catch {
+      /* keep working in memory */
+    }
+  },
+  removeItem: (name) => {
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
@@ -61,7 +94,10 @@ export const useUIStore = create<UIState>()(
       isLoading: {},
 
       // Theme actions
-      setTheme: (theme) => set({ theme }),
+      setTheme: (theme) => {
+        applyTheme(theme);
+        set({ theme });
+      },
 
       // Sidebar actions
       toggleSidebar: () =>
@@ -105,7 +141,8 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'cryptic-storage-ui', // localStorage key
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeStorage),
+      onRehydrateStorage: () => (state) => applyTheme(state?.theme ?? 'system'),
       // Only persist UI preferences, not runtime state
       partialize: (state) => ({
         theme: state.theme,

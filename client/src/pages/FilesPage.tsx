@@ -3,7 +3,7 @@
  * Folder navigation, upload, download, preview, sharing and deletion.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowUpTrayIcon, FolderPlusIcon, TrashIcon, ArrowDownTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import { DashboardLayout } from '../layouts/DashboardLayout';
@@ -72,8 +72,8 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
   const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
   const [existingLinks, setExistingLinks] = useState<DialogShareLink[]>([]);
   const [userShares, setUserShares] = useState<UserShareRow[]>([]);
-  // The list endpoint does not say what is shared, so the marker knows only what the share dialog has seen this session.
-  const [sharedCounts, setSharedCounts] = useState<Record<string, number>>({});
+  // Which file the share dialog is for right now. Late responses for another file are dropped.
+  const shareTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (view === 'shared') {
@@ -113,22 +113,25 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
   const loadUserShares = async (fileId: string) => {
     try {
       const shares = await ShareService.listUserShares(fileId);
+      if (shareTargetRef.current !== fileId) return;
       setUserShares(shares.map((s) => ({ id: s.id, email: s.recipientEmail ?? 'Unknown account' })));
-      setSharedCounts((c) => ({ ...c, [fileId]: shares.length }));
     } catch {
-      setUserShares([]);
+      if (shareTargetRef.current === fileId) setUserShares([]);
     }
   };
 
   const openShare = async (fileId: string) => {
     const file = files.find((f) => f.id === fileId);
     if (!file) return;
+    shareTargetRef.current = fileId;
     setShareTarget({ id: file.id, name: file.name });
     setUserShares([]);
+    setExistingLinks([]);
     try {
-      setExistingLinks((await ShareService.listShareLinks(fileId)).map(toDialogLink));
+      const links = (await ShareService.listShareLinks(fileId)).map(toDialogLink);
+      if (shareTargetRef.current === fileId) setExistingLinks(links);
     } catch {
-      setExistingLinks([]);
+      if (shareTargetRef.current === fileId) setExistingLinks([]);
     }
     void loadUserShares(fileId);
   };
@@ -284,7 +287,7 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
         )}
 
         <FileList
-          files={files.map((f) => ({ id: f.id, name: f.name, size: f.size, mimeType: f.mimeType, uploadedAt: f.createdAt, sharedWith: sharedCounts[f.id] }))}
+          files={files.map((f) => ({ id: f.id, name: f.name, size: f.size, mimeType: f.mimeType, uploadedAt: f.createdAt }))}
           folders={folders.map((f) => ({ id: f.id, name: f.name }))}
           isLoading={isLoading}
           emptyMessage={currentFolderId ? 'Nothing in this folder yet.' : 'Nothing in your safe yet.'}
@@ -345,7 +348,10 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
 
         <ShareDialog
           isOpen={shareTarget !== null}
-          onClose={() => setShareTarget(null)}
+          onClose={() => {
+            shareTargetRef.current = null;
+            setShareTarget(null);
+          }}
           file={shareTarget}
           onCreateShare={createShare}
           existingShares={existingLinks}

@@ -215,7 +215,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4">
           <p className="break-all text-sm font-semibold text-ink">{recipient.email}</p>
           <Fingerprint value={recipient.fingerprint} verified={verified} />
-          <p className="text-sm text-ink-2">Compare this with the fingerprint in their Settings, in person or on a call.</p>
+          <p className="text-sm text-ink-2">Compare this with the Key fingerprint shown in their Settings, in person or on a call.</p>
           <label className="flex items-center gap-3 text-sm text-ink">
             <button
               type="button"

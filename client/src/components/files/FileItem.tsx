@@ -11,10 +11,9 @@ import {
   ShareIcon,
   TrashIcon,
   EyeIcon,
-  UserIcon,
 } from '@heroicons/react/24/outline';
 import { Menu, Transition } from '@headlessui/react';
-import { ListRow, RowMarker } from '../common/ListRow';
+import { ListRow } from '../common/ListRow';
 
 export interface FileItemProps {
   id: string;
@@ -22,8 +21,8 @@ export interface FileItemProps {
   size: number;
   mimeType: string;
   uploadedAt: string;
-  /** Number of people this file is shared with. Draws the shared marker when above zero. */
-  sharedWith?: number;
+  /** Slot for the share marker. Nothing is drawn until the file listing carries share data. */
+  shareMarker?: React.ReactNode;
   /** Slot for the handoff marker. Nothing is drawn until the handoff stage supplies one. */
   handoffMarker?: React.ReactNode;
   /** Optional checkbox state. The checkbox is drawn only when `onToggleSelect` is given. */
@@ -65,7 +64,7 @@ export const FileItem: React.FC<FileItemProps> = ({
   size,
   mimeType,
   uploadedAt,
-  sharedWith = 0,
+  shareMarker,
   handoffMarker,
   selected = false,
   onToggleSelect,
@@ -77,14 +76,10 @@ export const FileItem: React.FC<FileItemProps> = ({
 }) => {
   const Icon = getFileIcon(mimeType);
   const markers =
-    sharedWith > 0 || handoffMarker ? (
+    shareMarker || handoffMarker ? (
       <>
         {handoffMarker}
-        {sharedWith > 0 && (
-          <RowMarker tone="shared" icon={<UserIcon className="h-3.5 w-3.5" />}>
-            Shared with {sharedWith}
-          </RowMarker>
-        )}
+        {shareMarker}
       </>
     ) : undefined;
 

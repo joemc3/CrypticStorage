@@ -60,9 +60,14 @@ describe('FileList', () => {
     expect(onToggleSelect).toHaveBeenCalledWith('f1');
   });
 
-  it('draws a shared marker and leaves the handoff slot empty', () => {
-    render(<FileList files={[{ ...files[0]!, sharedWith: 2 }, files[1]!]} />);
-    expect(screen.getByText('Shared with 2')).toBeInTheDocument();
+  it('draws no share or handoff marker until a slot is filled', () => {
+    render(<FileList files={files} />);
+    expect(screen.queryByText(/shared with/i)).toBeNull();
     expect(screen.queryByText(/handoff/i)).toBeNull();
+  });
+
+  it('draws a marker that is passed in the slot', () => {
+    render(<FileList files={[{ ...files[0]!, shareMarker: <span>Marker here</span> }, files[1]!]} />);
+    expect(screen.getByText('Marker here')).toBeInTheDocument();
   });
 });

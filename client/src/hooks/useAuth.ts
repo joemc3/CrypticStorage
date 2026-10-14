@@ -1,267 +1,169 @@
 /**
  * CrypticStorage - useAuth Hook
- * Custom hook for authentication operations
+ * Binds the auth service to the auth store and surfaces toasts for outcomes.
  */
 
+import { useCallback } from 'react';
 import { useAuthStore } from '../stores/auth.store';
 import { useUIStore } from '../stores/ui.store';
 import AuthService from '../services/auth.service';
-import type { LoginData, RegisterData } from '../services/auth.service';
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
 
 export const useAuth = () => {
-  const { user, isAuthenticated, masterKey, isLoading, login, logout, setLoading } = useAuthStore();
-  const { addToast } = useUIStore();
+  const { user, status, isLoading, pendingTwoFactorEmail, setUnlocked, setLocked, setAnonymous, setPendingTwoFactor, updateUser, setLoading } =
+    useAuthStore();
+  const addToast = useUIStore((s) => s.addToast);
 
-  /**
-   * Register a new user
-   */
-  const register = async (data: RegisterData) => {
-    try {
+  const run = useCallback(
+    async <T,>(action: () => Promise<T>, failure: string): Promise<T> => {
       setLoading(true);
-      const user = await AuthService.register(data);
-
-      // Get the master key from storage service
-      const StorageService = (await import('../services/storage.service')).default;
-      const masterKey = StorageService.getMasterKey();
-
-      if (!masterKey) {
-        throw new Error('Failed to retrieve master key');
+      try {
+        return await action();
+      } catch (error) {
+        addToast({ type: 'error', message: failure, description: error instanceof Error ? error.message : undefined });
+        throw error;
+      } finally {
+        setLoading(false);
       }
+    },
+    [addToast, setLoading]
+  );
 
-      // Export master key as base64 for storage
-      const CryptoService = (await import('../services/crypto.service')).default;
-      const masterKeyRaw = await CryptoService.exportMasterKey(masterKey);
-      const masterKeyBase64 = CryptoService.arrayBufferToBase64(masterKeyRaw);
+  const register = useCallback(
+    (email: string, password: string) =>
+      run(async () => {
+        const created = await AuthService.register(email, password);
+        setUnlocked(created);
+        addToast({ type: 'success', message: 'Welcome to CrypticStorage', description: 'Your keys were generated on this device.' });
+        return created;
+      }, 'Registration failed'),
+    [run, setUnlocked, addToast]
+  );
 
-      login(
-        {
-          id: user.id,
-          email: user.email,
-          username: user.email.split('@')[0],
-          createdAt: user.createdAt,
-          updatedAt: user.createdAt,
-        },
-        masterKeyBase64
-      );
+  const loginUser = useCallback(
+    (input: LoginInput) =>
+      run(async () => {
+        const result = await AuthService.login(input.email, input.password);
+        if (result.requiresTwoFactor) {
+          setPendingTwoFactor(input.email);
+          return { requiresTwoFactor: true as const };
+        }
+        setUnlocked(result.user);
+        addToast({ type: 'success', message: 'Signed in' });
+        return { requiresTwoFactor: false as const };
+      }, 'Sign in failed'),
+    [run, setPendingTwoFactor, setUnlocked, addToast]
+  );
 
-      addToast({
-        type: 'success',
-        message: 'Account created successfully',
-        description: 'Welcome to CrypticStorage!',
-      });
-    } catch (error: any) {
-      console.error('Registration error:', error);
-      addToast({
-        type: 'error',
-        message: 'Registration failed',
-        description: error.message || 'An error occurred during registration',
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+  const verifyTwoFactor = useCallback(
+    (code: string) =>
+      run(async () => {
+        const verified = await AuthService.completeTwoFactor(code);
+        setUnlocked(verified);
+        addToast({ type: 'success', message: 'Signed in' });
+      }, 'Verification failed'),
+    [run, setUnlocked, addToast]
+  );
 
-  /**
-   * Login user
-   */
-  const loginUser = async (data: LoginData) => {
-    try {
-      setLoading(true);
-      const result = await AuthService.login({
-        email: data.email,
-        password: data.password,
-        rememberMe: data.rememberMe,
-      });
+  const cancelTwoFactor = useCallback(() => {
+    AuthService.cancelTwoFactor();
+    setPendingTwoFactor(null);
+  }, [setPendingTwoFactor]);
 
-      if (result.requiresTwoFactor) {
-        addToast({
-          type: 'info',
-          message: 'Two-factor authentication required',
-          description: 'Please enter your 2FA code',
-        });
-        return { requiresTwoFactor: true };
-      }
+  const unlock = useCallback(
+    (password: string) =>
+      run(async () => {
+        setUnlocked(await AuthService.unlock(password));
+      }, 'Could not unlock'),
+    [run, setUnlocked]
+  );
 
-      // Get the master key from storage service
-      const StorageService = (await import('../services/storage.service')).default;
-      const masterKey = StorageService.getMasterKey();
+  const lock = useCallback(() => {
+    AuthService.lock();
+    setLocked();
+  }, [setLocked]);
 
-      if (!masterKey) {
-        throw new Error('Failed to retrieve master key');
-      }
+  const logoutUser = useCallback(async () => {
+    await AuthService.logout();
+    setAnonymous();
+    addToast({ type: 'info', message: 'Signed out' });
+  }, [setAnonymous, addToast]);
 
-      // Export master key as base64 for storage
-      const CryptoService = (await import('../services/crypto.service')).default;
-      const masterKeyRaw = await CryptoService.exportMasterKey(masterKey);
-      const masterKeyBase64 = CryptoService.arrayBufferToBase64(masterKeyRaw);
+  const refreshProfile = useCallback(async () => {
+    const profile = await AuthService.refreshProfile();
+    updateUser(profile);
+    return profile;
+  }, [updateUser]);
 
-      login(
-        {
-          id: result.user.id,
-          email: result.user.email,
-          username: result.user.email.split('@')[0],
-          createdAt: result.user.createdAt,
-          updatedAt: result.user.createdAt,
-        },
-        masterKeyBase64
-      );
+  const changePassword = useCallback(
+    (currentPassword: string, newPassword: string) =>
+      run(async () => {
+        await AuthService.changePassword(currentPassword, newPassword);
+        addToast({ type: 'success', message: 'Password changed', description: 'Other sessions have been signed out.' });
+      }, 'Password change failed'),
+    [run, addToast]
+  );
 
-      addToast({
-        type: 'success',
-        message: 'Welcome back!',
-        description: 'You have been logged in successfully',
-      });
+  const deleteAccount = useCallback(
+    (password: string) =>
+      run(async () => {
+        await AuthService.deleteAccount(password);
+        setAnonymous();
+      }, 'Account deletion failed'),
+    [run, setAnonymous]
+  );
 
-      return { requiresTwoFactor: false };
-    } catch (error: any) {
-      console.error('Login error:', error);
-      addToast({
-        type: 'error',
-        message: 'Login failed',
-        description: error.message || 'Invalid credentials',
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+  const setupTwoFactor = useCallback(() => run(() => AuthService.setupTwoFactor(), 'Could not start 2FA setup'), [run]);
 
-  /**
-   * Logout user
-   */
-  const logoutUser = async () => {
-    try {
-      await AuthService.logout();
-      logout();
-      addToast({
-        type: 'success',
-        message: 'Logged out',
-        description: 'You have been logged out successfully',
-      });
-    } catch (error: any) {
-      console.error('Logout error:', error);
-      addToast({
-        type: 'error',
-        message: 'Logout failed',
-        description: error.message || 'An error occurred during logout',
-      });
-    }
-  };
+  const enableTwoFactor = useCallback(
+    (token: string) =>
+      run(async () => {
+        const codes = await AuthService.enableTwoFactor(token);
+        updateUser({ twoFactorEnabled: true });
+        addToast({ type: 'success', message: 'Two-factor authentication enabled' });
+        return codes;
+      }, 'Could not enable 2FA'),
+    [run, updateUser, addToast]
+  );
 
-  /**
-   * Get current user profile
-   */
-  const refreshProfile = async () => {
-    try {
-      const profile = await AuthService.getProfile();
-      // Update user in store if needed
-      return profile;
-    } catch (error: any) {
-      console.error('Failed to refresh profile:', error);
-      throw error;
-    }
-  };
+  const disableTwoFactor = useCallback(
+    (token: string, password: string) =>
+      run(async () => {
+        await AuthService.disableTwoFactor(token, password);
+        updateUser({ twoFactorEnabled: false });
+        addToast({ type: 'success', message: 'Two-factor authentication disabled' });
+      }, 'Could not disable 2FA'),
+    [run, updateUser, addToast]
+  );
 
-  /**
-   * Setup two-factor authentication
-   */
-  const setupTwoFactor = async () => {
-    try {
-      return await AuthService.setupTwoFactor();
-    } catch (error: any) {
-      console.error('2FA setup error:', error);
-      addToast({
-        type: 'error',
-        message: '2FA setup failed',
-        description: error.message || 'Failed to setup two-factor authentication',
-      });
-      throw error;
-    }
-  };
-
-  /**
-   * Enable two-factor authentication
-   */
-  const enableTwoFactor = async (token: string) => {
-    try {
-      const backupCodes = await AuthService.enableTwoFactor(token);
-      addToast({
-        type: 'success',
-        message: '2FA enabled',
-        description: 'Two-factor authentication has been enabled',
-      });
-      return backupCodes;
-    } catch (error: any) {
-      console.error('Enable 2FA error:', error);
-      addToast({
-        type: 'error',
-        message: 'Failed to enable 2FA',
-        description: error.message || 'Invalid token',
-      });
-      throw error;
-    }
-  };
-
-  /**
-   * Disable two-factor authentication
-   */
-  const disableTwoFactor = async (token: string, password: string) => {
-    try {
-      await AuthService.disableTwoFactor(token, password);
-      addToast({
-        type: 'success',
-        message: '2FA disabled',
-        description: 'Two-factor authentication has been disabled',
-      });
-    } catch (error: any) {
-      console.error('Disable 2FA error:', error);
-      addToast({
-        type: 'error',
-        message: 'Failed to disable 2FA',
-        description: error.message || 'Invalid credentials',
-      });
-      throw error;
-    }
-  };
-
-  /**
-   * Change password
-   */
-  const changePassword = async (currentPassword: string, newPassword: string) => {
-    try {
-      await AuthService.changePassword({ currentPassword, newPassword });
-      addToast({
-        type: 'success',
-        message: 'Password changed',
-        description: 'Your password has been updated successfully',
-      });
-    } catch (error: any) {
-      console.error('Change password error:', error);
-      addToast({
-        type: 'error',
-        message: 'Failed to change password',
-        description: error.message || 'Invalid current password',
-      });
-      throw error;
-    }
-  };
+  const regenerateBackupCodes = useCallback(
+    (password: string) => run(() => AuthService.regenerateBackupCodes(password), 'Could not regenerate backup codes'),
+    [run]
+  );
 
   return {
-    // State
     user,
-    isAuthenticated,
-    masterKey,
+    status,
+    isAuthenticated: status === 'unlocked',
     isLoading,
-
-    // Actions
+    pendingTwoFactorEmail,
     register,
     loginUser,
+    verifyTwoFactor,
+    cancelTwoFactor,
+    unlock,
+    lock,
     logoutUser,
     refreshProfile,
+    changePassword,
+    deleteAccount,
     setupTwoFactor,
     enableTwoFactor,
     disableTwoFactor,
-    changePassword,
+    regenerateBackupCodes,
   };
 };

@@ -1,59 +1,54 @@
 /**
  * CrypticStorage - Login Page
- * User login page with 2FA support
  */
 
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../layouts/AuthLayout';
-import { LoginForm, LoginData } from '../components/auth/LoginForm';
+import { LoginForm, type LoginData } from '../components/auth/LoginForm';
 import { useAuth } from '../hooks/useAuth';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loginUser, isLoading } = useAuth();
+  const { loginUser, verifyTwoFactor, cancelTwoFactor, isLoading, pendingTwoFactorEmail } = useAuth();
   const [error, setError] = useState<string | undefined>();
 
-  // Get the redirect URL from location state, default to dashboard
-  const from = (location.state as any)?.from?.pathname || '/dashboard';
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/dashboard';
 
-  const handleLogin = async (data: LoginData) => {
+  const handleSubmit = async (data: LoginData) => {
+    setError(undefined);
     try {
-      setError(undefined);
-      const result = await loginUser({
-        email: data.email,
-        password: data.password,
-        rememberMe: false,
-      });
-
-      if (!result.requiresTwoFactor) {
-        // Redirect to the page they were trying to access or dashboard
+      if (pendingTwoFactorEmail) {
+        await verifyTwoFactor(data.twoFactorCode ?? '');
         navigate(from, { replace: true });
+        return;
       }
-    } catch (err: any) {
-      setError(err.message || 'Login failed. Please try again.');
+      const result = await loginUser({ email: data.email, password: data.password });
+      if (!result.requiresTwoFactor) navigate(from, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign in failed');
     }
-  };
-
-  const handleRegister = () => {
-    navigate('/register', { state: { from } });
-  };
-
-  const handleForgotPassword = () => {
-    // TODO: Implement forgot password flow
-    alert('Password reset functionality coming soon!');
   };
 
   return (
     <AuthLayout>
       <LoginForm
-        onSubmit={handleLogin}
-        onRegister={handleRegister}
-        onForgotPassword={handleForgotPassword}
+        onSubmit={handleSubmit}
+        onRegister={() => navigate('/register', { state: { from } })}
+        twoFactorRequired={pendingTwoFactorEmail !== null}
+        onCancelTwoFactor={() => {
+          cancelTwoFactor();
+          setError(undefined);
+        }}
         isLoading={isLoading}
         error={error}
       />
+      {!pendingTwoFactorEmail && (
+        <p className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">
+          Zero-knowledge means there is no password reset. If you lose your password, your files cannot be recovered.
+        </p>
+      )}
     </AuthLayout>
   );
 };

@@ -1,12 +1,11 @@
 /**
  * CrypticStorage - Register Page
- * User registration page
  */
 
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../layouts/AuthLayout';
-import { RegisterForm, RegisterData } from '../components/auth/RegisterForm';
+import { RegisterForm, type RegisterData } from '../components/auth/RegisterForm';
 import { useAuth } from '../hooks/useAuth';
 
 export const RegisterPage: React.FC = () => {
@@ -15,36 +14,24 @@ export const RegisterPage: React.FC = () => {
   const { register, isLoading } = useAuth();
   const [error, setError] = useState<string | undefined>();
 
-  // Get the redirect URL from location state, default to dashboard
-  const from = (location.state as any)?.from?.pathname || '/dashboard';
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/dashboard';
 
   const handleRegister = async (data: RegisterData) => {
+    setError(undefined);
     try {
-      setError(undefined);
-      await register({
-        email: data.email,
-        password: data.password,
-      });
-
-      // Redirect to the page they were trying to access or dashboard
+      await register(data.email, data.password);
       navigate(from, { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
     }
-  };
-
-  const handleLogin = () => {
-    navigate('/login', { state: { from } });
   };
 
   return (
     <AuthLayout>
-      <RegisterForm
-        onSubmit={handleRegister}
-        onLogin={handleLogin}
-        isLoading={isLoading}
-        error={error}
-      />
+      <RegisterForm onSubmit={handleRegister} onLogin={() => navigate('/login', { state: { from } })} isLoading={isLoading} error={error} />
+      <p className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">
+        Your encryption keys are generated in this browser. The server only ever stores them encrypted with your password.
+      </p>
     </AuthLayout>
   );
 };

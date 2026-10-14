@@ -11,7 +11,7 @@ import {
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Spinner } from '../common/Spinner';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 export interface FilePreviewProps {
   isOpen: boolean;

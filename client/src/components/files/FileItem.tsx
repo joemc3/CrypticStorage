@@ -12,7 +12,7 @@ import {
   TrashIcon,
   EyeIcon,
 } from '@heroicons/react/24/outline';
-import { Menu, Transition } from '@headlessui/ui';
+import { Menu, Transition } from '@headlessui/react';
 import { motion } from 'framer-motion';
 import { Fragment } from 'react';
 
@@ -73,7 +73,6 @@ const getFileIconColor = (mimeType: string) => {
 };
 
 export const FileItem: React.FC<FileItemProps> = ({
-  id,
   name,
   size,
   mimeType,

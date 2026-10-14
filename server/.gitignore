@@ -14,4 +14,6 @@ coverage
 *.tgz
 .yarn-integrity
 .cache
-prisma/migrations
+
+# local storage driver
+data/

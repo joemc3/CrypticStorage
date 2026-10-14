@@ -1,23 +1,18 @@
+/** @type {import('jest').Config} */
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/src', '<rootDir>/tests'],
-  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+  roots: ['<rootDir>/tests/api', '<rootDir>/tests/lib'],
+  testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.test.json' }],
   },
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/**/*.interface.ts',
-  ],
+  globalSetup: '<rootDir>/tests/helpers/globalSetup.ts',
+  globalTeardown: '<rootDir>/tests/helpers/globalTeardown.ts',
+  setupFilesAfterEnv: ['<rootDir>/tests/helpers/setup.ts'],
+  collectCoverageFrom: ['src/**/*.ts', '!src/server.ts'],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
-  moduleFileExtensions: ['ts', 'js', 'json'],
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
-  verbose: true,
-  testTimeout: 10000,
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-  },
+  testTimeout: 30000,
+  // All suites share one database; run them sequentially.
+  maxWorkers: 1,
 };

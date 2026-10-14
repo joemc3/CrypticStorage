@@ -1,22 +1,24 @@
 /**
  * CrypticStorage - API Service
- * Axios-based API client with interceptors and type-safe methods
+ * Typed HTTP client for the CrypticStorage API. Every field that starts with
+ * "encrypted" or "wrapped" is ciphertext produced by crypto.service.
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import StorageService from './storage.service';
 
 // ============================================================================
-// Types and Interfaces
+// Types
 // ============================================================================
 
 export interface ApiError {
   message: string;
   statusCode: number;
+  code?: string;
   errors?: Record<string, string[]>;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
@@ -30,121 +32,12 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-// Auth types
-export interface RegisterRequest {
-  email: string;
-  passwordHash: string;
-  publicKey: string;
-  encryptedPrivateKey: string;
-  wrappedMasterKey: string;
-  salt: string;
-}
-
-export interface RegisterResponse {
-  user: {
-    id: string;
-    email: string;
-    publicKey: string;
-    createdAt: string;
-  };
-  tokens: {
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
-  };
-}
-
-export interface LoginRequest {
-  email: string;
-  passwordHash: string;
-}
-
-export interface LoginResponse {
-  user: {
-    id: string;
-    email: string;
-    publicKey: string;
-    encryptedPrivateKey: string;
-    wrappedMasterKey: string;
-    salt: string;
-    storageUsed: number;
-    storageLimit: number;
-    twoFactorEnabled: boolean;
-    createdAt: string;
-  };
-  tokens: {
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
-  };
-  requiresTwoFactor?: boolean;
-}
-
-export interface TwoFactorSetupResponse {
-  secret: string;
-  qrCode: string;
-  backupCodes: string[];
-}
-
-export interface TwoFactorVerifyRequest {
-  token: string;
-  backupCode?: string;
-}
-
-export interface RefreshTokenResponse {
+export interface Tokens {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
 }
 
-// File types
-export interface FileMetadata {
-  id: string;
-  encryptedName: string;
-  encryptedNameIV: string;
-  encryptedSize: number;
-  mimeType: string;
-  storageKey: string;
-  iv: string;
-  folderId?: string;
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface UploadRequest {
-  encryptedName: string;
-  encryptedNameIV: string;
-  encryptedSize: number;
-  mimeType: string;
-  iv: string;
-  folderId?: string;
-}
-
-export interface UploadUrlResponse {
-  uploadUrl: string;
-  fileId: string;
-  storageKey: string;
-}
-
-// Folder types
-export interface FolderMetadata {
-  id: string;
-  encryptedName: string;
-  encryptedNameIV: string;
-  parentId?: string;
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateFolderRequest {
-  encryptedName: string;
-  encryptedNameIV: string;
-  parentId?: string;
-}
-
-// User types
 export interface UserProfile {
   id: string;
   email: string;
@@ -156,474 +49,379 @@ export interface UserProfile {
   updatedAt: string;
 }
 
+export interface VaultUser extends UserProfile {
+  encryptedPrivateKey: string;
+  wrappedMasterKey: string;
+  salt: string;
+  kdfIterations: number;
+}
+
+export interface RegisterRequest {
+  email: string;
+  passwordHash: string;
+  publicKey: string;
+  encryptedPrivateKey: string;
+  wrappedMasterKey: string;
+  salt: string;
+  kdfIterations: number;
+}
+
+export interface AuthResponse {
+  user: VaultUser;
+  tokens: Tokens;
+  requiresTwoFactor?: boolean;
+}
+
 export interface UpdateProfileRequest {
   email?: string;
   currentPasswordHash?: string;
   newPasswordHash?: string;
   salt?: string;
+  kdfIterations?: number;
   wrappedMasterKey?: string;
   encryptedPrivateKey?: string;
 }
 
-// Share types
-export interface ShareFileRequest {
-  fileId: string;
-  recipientEmail: string;
+export interface FileMetadata {
+  id: string;
+  userId: string;
+  folderId?: string;
+  encryptedName: string;
+  encryptedNameIV: string;
   encryptedFileKey: string;
-  permissions: 'read' | 'write';
-  expiresAt?: string;
+  fileKeyIV: string;
+  iv: string;
+  encryptedSize: number;
+  mimeType: string;
+  status: 'PENDING' | 'READY';
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ShareResponse {
+export interface SharedFileMetadata extends FileMetadata {
+  shareId: string;
+  permissions: string;
+  expiresAt?: string;
+  sharedBy: { id: string; email: string };
+}
+
+export interface UploadRequest {
+  encryptedName: string;
+  encryptedNameIV: string;
+  encryptedFileKey: string;
+  fileKeyIV: string;
+  iv: string;
+  encryptedSize: number;
+  mimeType: string;
+  folderId?: string;
+}
+
+export interface UploadUrlResponse {
+  fileId: string;
+  uploadUrl: string;
+  storageKey: string;
+  method: 'PUT';
+  expiresIn: number;
+}
+
+export interface FolderMetadata {
+  id: string;
+  userId: string;
+  parentId?: string;
+  encryptedName: string;
+  encryptedNameIV: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShareLink {
   id: string;
   fileId: string;
+  token: string;
+  url: string;
+  passwordProtected: boolean;
+  expiresAt?: string;
+  maxDownloads?: number;
+  downloadCount: number;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+export interface PublicShareInfo {
+  token: string;
+  fileId: string;
+  encryptedName: string;
+  encryptedNameIV: string;
+  encryptedSize: number;
+  mimeType: string;
+  iv: string;
+  passwordProtected: boolean;
+  expiresAt?: string;
+  downloadsRemaining?: number;
+  sharedBy: string;
+}
+
+export interface UserShare {
+  id: string;
+  fileId: string;
+  ownerId: string;
   recipientId: string;
+  recipientEmail?: string;
   permissions: string;
   expiresAt?: string;
   createdAt: string;
 }
 
+export interface StorageStats {
+  used: number;
+  limit: number;
+  fileCount: number;
+  folderCount: number;
+}
+
+export interface ActivityEntry {
+  id: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  metadata: Record<string, unknown>;
+  ipAddress: string;
+  userAgent: string;
+  success: boolean;
+  createdAt: string;
+}
+
+export type ProgressHandler = (loaded: number, total: number) => void;
+
 // ============================================================================
-// API Configuration
+// Client
 // ============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-const API_TIMEOUT = 30000; // 30 seconds
-
-// ============================================================================
-// Axios Instance
-// ============================================================================
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 class ApiService {
-  private client: AxiosInstance;
-  private isRefreshing = false;
-  private refreshSubscribers: ((token: string) => void)[] = [];
+  private readonly client: AxiosInstance;
+  private refreshing: Promise<Tokens> | null = null;
 
   constructor() {
-    this.client = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: API_TIMEOUT,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    this.client = axios.create({ baseURL: API_BASE_URL, timeout: 30_000, headers: { 'Content-Type': 'application/json' } });
+
+    this.client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+      const token = StorageService.getAccessToken();
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+      return config;
     });
 
-    this.setupInterceptors();
-  }
-
-  // ============================================================================
-  // Interceptors
-  // ============================================================================
-
-  private setupInterceptors(): void {
-    // Request interceptor
-    this.client.interceptors.request.use(
-      (config: InternalAxiosRequestConfig) => {
-        const token = StorageService.getAccessToken();
-
-        if (token && config.headers) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-
-        return config;
-      },
-      (error: AxiosError) => {
-        return Promise.reject(this.handleError(error));
-      }
-    );
-
-    // Response interceptor
     this.client.interceptors.response.use(
-      (response: AxiosResponse) => response,
+      (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & {
-          _retry?: boolean;
-        };
-
-        // Handle 401 Unauthorized errors
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          if (this.isRefreshing) {
-            // Wait for token refresh
-            return new Promise((resolve) => {
-              this.refreshSubscribers.push((token: string) => {
-                if (originalRequest.headers) {
-                  originalRequest.headers.Authorization = `Bearer ${token}`;
-                }
-                resolve(this.client(originalRequest));
-              });
-            });
-          }
-
-          originalRequest._retry = true;
-          this.isRefreshing = true;
-
-          try {
-            const refreshToken = StorageService.getRefreshToken();
-
-            if (!refreshToken) {
-              throw new Error('No refresh token available');
+        const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined;
+        const isAuthRoute = original?.url?.startsWith('/auth/') ?? false;
+        if (error.response?.status === 401 && original && !original._retried && !isAuthRoute) {
+          const refreshToken = StorageService.getRefreshToken();
+          if (refreshToken) {
+            try {
+              const tokens = await this.refreshOnce(refreshToken);
+              original._retried = true;
+              original.headers.Authorization = `Bearer ${tokens.accessToken}`;
+              return this.client(original);
+            } catch {
+              StorageService.clearAllData();
+              window.dispatchEvent(new CustomEvent('cs:session-expired'));
             }
-
-            const response = await this.refreshToken(refreshToken);
-
-            const { accessToken, refreshToken: newRefreshToken, expiresIn } = response;
-
-            // Store new tokens
-            StorageService.setTokens({
-              accessToken,
-              refreshToken: newRefreshToken,
-              expiresAt: Date.now() + expiresIn * 1000,
-            });
-
-            // Retry all queued requests
-            this.refreshSubscribers.forEach((callback) => callback(accessToken));
-            this.refreshSubscribers = [];
-
-            // Retry original request
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-            }
-
-            return this.client(originalRequest);
-          } catch (refreshError) {
-            // Refresh failed, logout user
-            StorageService.clearAllData();
-            window.location.href = '/login';
-            return Promise.reject(this.handleError(error));
-          } finally {
-            this.isRefreshing = false;
           }
         }
-
-        return Promise.reject(this.handleError(error));
+        return Promise.reject(toApiError(error));
       }
     );
   }
 
-  // ============================================================================
-  // Error Handling
-  // ============================================================================
-
-  private handleError(error: AxiosError): ApiError {
-    if (error.response) {
-      // Server responded with error
-      const data = error.response.data as any;
-
-      return {
-        message: data?.message || error.message || 'An error occurred',
-        statusCode: error.response.status,
-        errors: data?.errors,
-      };
-    } else if (error.request) {
-      // No response received
-      return {
-        message: 'No response from server. Please check your connection.',
-        statusCode: 0,
-      };
-    } else {
-      // Request setup error
-      return {
-        message: error.message || 'An error occurred',
-        statusCode: 0,
-      };
+  private refreshOnce(refreshToken: string): Promise<Tokens> {
+    if (!this.refreshing) {
+      this.refreshing = this.refresh(refreshToken)
+        .then((tokens) => {
+          StorageService.setTokens({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, expiresAt: Date.now() + tokens.expiresIn * 1000 });
+          return tokens;
+        })
+        .finally(() => {
+          this.refreshing = null;
+        });
     }
+    return this.refreshing;
   }
 
-  // ============================================================================
-  // Authentication Endpoints
-  // ============================================================================
-
-  async register(data: RegisterRequest): Promise<RegisterResponse> {
-    const response = await this.client.post<ApiResponse<RegisterResponse>>(
-      '/auth/register',
-      data
-    );
-    return response.data.data;
+  private async get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
+    return (await this.client.get<ApiResponse<T>>(url, { params })).data.data;
+  }
+  private async post<T>(url: string, body?: unknown): Promise<T> {
+    return (await this.client.post<ApiResponse<T>>(url, body)).data.data;
+  }
+  private async patch<T>(url: string, body?: unknown): Promise<T> {
+    return (await this.client.patch<ApiResponse<T>>(url, body)).data.data;
+  }
+  private async delete<T>(url: string, body?: unknown): Promise<T> {
+    return (await this.client.delete<ApiResponse<T>>(url, { data: body })).data.data;
   }
 
-  async login(data: LoginRequest): Promise<LoginResponse> {
-    const response = await this.client.post<ApiResponse<LoginResponse>>('/auth/login', data);
-    return response.data.data;
+  // --- Auth ------------------------------------------------------------------
+
+  register(data: RegisterRequest): Promise<AuthResponse> {
+    return this.post('/auth/register', data);
+  }
+  login(email: string, passwordHash: string): Promise<AuthResponse> {
+    return this.post('/auth/login', { email, passwordHash });
+  }
+  verifyTwoFactor(data: { token?: string; backupCode?: string }): Promise<AuthResponse> {
+    return this.post('/auth/verify-2fa', data);
+  }
+  refresh(refreshToken: string): Promise<Tokens> {
+    return this.post('/auth/refresh', { refreshToken });
+  }
+  logout(): Promise<unknown> {
+    return this.post('/auth/logout');
   }
 
-  async verifyTwoFactor(data: TwoFactorVerifyRequest): Promise<LoginResponse> {
-    const response = await this.client.post<ApiResponse<LoginResponse>>(
-      '/auth/verify-2fa',
-      data
-    );
-    return response.data.data;
+  // --- Users -----------------------------------------------------------------
+
+  getProfile(): Promise<UserProfile> {
+    return this.get('/users/profile');
+  }
+  updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
+    return this.patch('/users/profile', data);
+  }
+  deleteAccount(passwordHash: string): Promise<unknown> {
+    return this.delete('/users/profile', { passwordHash });
+  }
+  getPublicKey(email: string): Promise<{ id: string; email: string; publicKey: string }> {
+    return this.get('/users/public-key', { email });
+  }
+  setupTwoFactor(): Promise<{ secret: string; qrCode: string }> {
+    return this.post('/users/2fa/setup');
+  }
+  enableTwoFactor(token: string): Promise<{ backupCodes: string[] }> {
+    return this.post('/users/2fa/enable', { token });
+  }
+  disableTwoFactor(token: string, passwordHash: string): Promise<unknown> {
+    return this.post('/users/2fa/disable', { token, passwordHash });
+  }
+  regenerateBackupCodes(passwordHash: string): Promise<{ backupCodes: string[] }> {
+    return this.post('/users/2fa/backup-codes', { passwordHash });
+  }
+  getStorageStats(): Promise<StorageStats> {
+    return this.get('/storage/stats');
+  }
+  getActivity(page = 1, pageSize = 50): Promise<PaginatedResponse<ActivityEntry>> {
+    return this.get('/activity', { page, pageSize });
   }
 
-  async logout(): Promise<void> {
-    await this.client.post('/auth/logout');
+  // --- Files -----------------------------------------------------------------
+
+  getFiles(folderId?: string): Promise<FileMetadata[]> {
+    return this.get('/files', { folderId });
   }
-
-  async refreshToken(refreshToken: string): Promise<RefreshTokenResponse> {
-    const response = await this.client.post<ApiResponse<RefreshTokenResponse>>(
-      '/auth/refresh',
-      { refreshToken }
-    );
-    return response.data.data;
+  getFile(fileId: string): Promise<FileMetadata> {
+    return this.get(`/files/${fileId}`);
   }
-
-  // ============================================================================
-  // User Endpoints
-  // ============================================================================
-
-  async getProfile(): Promise<UserProfile> {
-    const response = await this.client.get<ApiResponse<UserProfile>>('/users/profile');
-    return response.data.data;
+  createUploadUrl(data: UploadRequest): Promise<UploadUrlResponse> {
+    return this.post('/files/upload-url', data);
   }
-
-  async updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
-    const response = await this.client.patch<ApiResponse<UserProfile>>('/users/profile', data);
-    return response.data.data;
-  }
-
-  async deleteAccount(passwordHash: string): Promise<void> {
-    await this.client.delete('/users/profile', {
-      data: { passwordHash },
+  async uploadContent(uploadUrl: string, blob: Blob, onProgress?: ProgressHandler): Promise<void> {
+    await axios.put(uploadUrl, blob, {
+      headers: { 'Content-Type': 'application/octet-stream' },
+      timeout: 0,
+      onUploadProgress: (e) => onProgress?.(e.loaded, e.total ?? blob.size),
     });
   }
-
-  // ============================================================================
-  // Two-Factor Authentication Endpoints
-  // ============================================================================
-
-  async setupTwoFactor(): Promise<TwoFactorSetupResponse> {
-    const response = await this.client.post<ApiResponse<TwoFactorSetupResponse>>(
-      '/users/2fa/setup'
-    );
-    return response.data.data;
+  confirmUpload(fileId: string): Promise<FileMetadata> {
+    return this.post(`/files/${fileId}/confirm`);
   }
-
-  async enableTwoFactor(token: string): Promise<{ backupCodes: string[] }> {
-    const response = await this.client.post<ApiResponse<{ backupCodes: string[] }>>(
-      '/users/2fa/enable',
-      { token }
-    );
-    return response.data.data;
+  getDownloadUrl(fileId: string): Promise<{ downloadUrl: string; expiresIn: number }> {
+    return this.get(`/files/${fileId}/download-url`);
   }
-
-  async disableTwoFactor(token: string, passwordHash: string): Promise<void> {
-    await this.client.post('/users/2fa/disable', { token, passwordHash });
-  }
-
-  async regenerateBackupCodes(passwordHash: string): Promise<{ backupCodes: string[] }> {
-    const response = await this.client.post<ApiResponse<{ backupCodes: string[] }>>(
-      '/users/2fa/backup-codes',
-      { passwordHash }
-    );
-    return response.data.data;
-  }
-
-  // ============================================================================
-  // File Endpoints
-  // ============================================================================
-
-  async getFiles(folderId?: string): Promise<FileMetadata[]> {
-    const response = await this.client.get<ApiResponse<FileMetadata[]>>('/files', {
-      params: { folderId },
+  async downloadContent(downloadUrl: string, onProgress?: ProgressHandler): Promise<Blob> {
+    // arraybuffer works in browsers and Node alike; 'blob' is browser-only.
+    const res = await axios.get<ArrayBuffer>(downloadUrl, {
+      responseType: 'arraybuffer',
+      timeout: 0,
+      onDownloadProgress: (e) => onProgress?.(e.loaded, e.total ?? e.loaded),
     });
-    return response.data.data;
+    return new Blob([res.data], { type: 'application/octet-stream' });
+  }
+  updateFile(fileId: string, data: { encryptedName?: string; encryptedNameIV?: string; folderId?: string | null }): Promise<FileMetadata> {
+    return this.patch(`/files/${fileId}`, data);
+  }
+  moveFile(fileId: string, folderId: string | null): Promise<FileMetadata> {
+    return this.post(`/files/${fileId}/move`, { folderId });
+  }
+  copyFile(fileId: string, folderId?: string | null): Promise<FileMetadata> {
+    return this.post(`/files/${fileId}/copy`, { folderId });
+  }
+  deleteFile(fileId: string): Promise<unknown> {
+    return this.delete(`/files/${fileId}`);
   }
 
-  async getFile(fileId: string): Promise<FileMetadata> {
-    const response = await this.client.get<ApiResponse<FileMetadata>>(`/files/${fileId}`);
-    return response.data.data;
+  // --- Folders ---------------------------------------------------------------
+
+  getFolders(parentId?: string): Promise<FolderMetadata[]> {
+    return this.get('/folders', { parentId });
+  }
+  getFolder(folderId: string): Promise<FolderMetadata> {
+    return this.get(`/folders/${folderId}`);
+  }
+  createFolder(data: { encryptedName: string; encryptedNameIV: string; parentId?: string }): Promise<FolderMetadata> {
+    return this.post('/folders', data);
+  }
+  updateFolder(folderId: string, data: { encryptedName?: string; encryptedNameIV?: string; parentId?: string | null }): Promise<FolderMetadata> {
+    return this.patch(`/folders/${folderId}`, data);
+  }
+  moveFolder(folderId: string, parentId: string | null): Promise<FolderMetadata> {
+    return this.post(`/folders/${folderId}/move`, { parentId });
+  }
+  deleteFolder(folderId: string): Promise<unknown> {
+    return this.delete(`/folders/${folderId}`);
   }
 
-  async createUploadUrl(data: UploadRequest): Promise<UploadUrlResponse> {
-    const response = await this.client.post<ApiResponse<UploadUrlResponse>>(
-      '/files/upload-url',
-      data
-    );
-    return response.data.data;
+  // --- Sharing ---------------------------------------------------------------
+
+  createShareLink(data: { fileId: string; password?: string; expiresAt?: string; maxDownloads?: number }): Promise<ShareLink> {
+    return this.post('/shares/links', data);
   }
-
-  async uploadFile(uploadUrl: string, file: Blob): Promise<void> {
-    await axios.put(uploadUrl, file, {
-      headers: {
-        'Content-Type': 'application/octet-stream',
-      },
-    });
+  getFileShareLinks(fileId: string): Promise<ShareLink[]> {
+    return this.get(`/files/${fileId}/links`);
   }
-
-  async confirmUpload(fileId: string): Promise<FileMetadata> {
-    const response = await this.client.post<ApiResponse<FileMetadata>>(
-      `/files/${fileId}/confirm`
-    );
-    return response.data.data;
+  revokeShareLink(linkId: string): Promise<unknown> {
+    return this.delete(`/shares/links/${linkId}`);
   }
-
-  async getDownloadUrl(fileId: string): Promise<{ downloadUrl: string }> {
-    const response = await this.client.get<ApiResponse<{ downloadUrl: string }>>(
-      `/files/${fileId}/download-url`
-    );
-    return response.data.data;
+  getPublicShare(token: string): Promise<PublicShareInfo> {
+    return this.get(`/shares/public/${token}`);
   }
-
-  async downloadFile(downloadUrl: string): Promise<Blob> {
-    const response = await axios.get(downloadUrl, {
-      responseType: 'blob',
-    });
-    return response.data;
+  getPublicShareDownloadUrl(token: string, password?: string): Promise<{ downloadUrl: string; expiresIn: number }> {
+    return this.post(`/shares/public/${token}/download-url`, { password });
   }
-
-  async deleteFile(fileId: string): Promise<void> {
-    await this.client.delete(`/files/${fileId}`);
+  shareWithUser(data: { fileId: string; recipientEmail: string; encryptedFileKey: string; permissions: 'read' | 'write'; expiresAt?: string }): Promise<UserShare> {
+    return this.post('/shares', data);
   }
-
-  async updateFileMetadata(
-    fileId: string,
-    data: { encryptedName?: string; encryptedNameIV?: string; folderId?: string }
-  ): Promise<FileMetadata> {
-    const response = await this.client.patch<ApiResponse<FileMetadata>>(
-      `/files/${fileId}`,
-      data
-    );
-    return response.data.data;
+  getFileShares(fileId: string): Promise<UserShare[]> {
+    return this.get(`/files/${fileId}/shares`);
   }
-
-  async moveFile(fileId: string, folderId?: string): Promise<FileMetadata> {
-    const response = await this.client.post<ApiResponse<FileMetadata>>(
-      `/files/${fileId}/move`,
-      { folderId }
-    );
-    return response.data.data;
+  revokeUserShare(shareId: string): Promise<unknown> {
+    return this.delete(`/shares/${shareId}`);
   }
-
-  async copyFile(fileId: string, folderId?: string): Promise<FileMetadata> {
-    const response = await this.client.post<ApiResponse<FileMetadata>>(
-      `/files/${fileId}/copy`,
-      { folderId }
-    );
-    return response.data.data;
-  }
-
-  // ============================================================================
-  // Folder Endpoints
-  // ============================================================================
-
-  async getFolders(parentId?: string): Promise<FolderMetadata[]> {
-    const response = await this.client.get<ApiResponse<FolderMetadata[]>>('/folders', {
-      params: { parentId },
-    });
-    return response.data.data;
-  }
-
-  async getFolder(folderId: string): Promise<FolderMetadata> {
-    const response = await this.client.get<ApiResponse<FolderMetadata>>(`/folders/${folderId}`);
-    return response.data.data;
-  }
-
-  async createFolder(data: CreateFolderRequest): Promise<FolderMetadata> {
-    const response = await this.client.post<ApiResponse<FolderMetadata>>('/folders', data);
-    return response.data.data;
-  }
-
-  async updateFolder(
-    folderId: string,
-    data: { encryptedName?: string; encryptedNameIV?: string; parentId?: string }
-  ): Promise<FolderMetadata> {
-    const response = await this.client.patch<ApiResponse<FolderMetadata>>(
-      `/folders/${folderId}`,
-      data
-    );
-    return response.data.data;
-  }
-
-  async deleteFolder(folderId: string): Promise<void> {
-    await this.client.delete(`/folders/${folderId}`);
-  }
-
-  async moveFolder(folderId: string, parentId?: string): Promise<FolderMetadata> {
-    const response = await this.client.post<ApiResponse<FolderMetadata>>(
-      `/folders/${folderId}/move`,
-      { parentId }
-    );
-    return response.data.data;
-  }
-
-  // ============================================================================
-  // Sharing Endpoints
-  // ============================================================================
-
-  async shareFile(data: ShareFileRequest): Promise<ShareResponse> {
-    const response = await this.client.post<ApiResponse<ShareResponse>>('/shares', data);
-    return response.data.data;
-  }
-
-  async getFileShares(fileId: string): Promise<ShareResponse[]> {
-    const response = await this.client.get<ApiResponse<ShareResponse[]>>(`/files/${fileId}/shares`);
-    return response.data.data;
-  }
-
-  async revokeShare(shareId: string): Promise<void> {
-    await this.client.delete(`/shares/${shareId}`);
-  }
-
-  async getSharedWithMe(): Promise<FileMetadata[]> {
-    const response = await this.client.get<ApiResponse<FileMetadata[]>>('/shares/with-me');
-    return response.data.data;
-  }
-
-  // ============================================================================
-  // Storage Endpoints
-  // ============================================================================
-
-  async getStorageStats(): Promise<{
-    used: number;
-    limit: number;
-    fileCount: number;
-    folderCount: number;
-  }> {
-    const response = await this.client.get<
-      ApiResponse<{
-        used: number;
-        limit: number;
-        fileCount: number;
-        folderCount: number;
-      }>
-    >('/storage/stats');
-    return response.data.data;
-  }
-
-  // ============================================================================
-  // Activity Log Endpoints
-  // ============================================================================
-
-  async getActivityLog(page: number = 1, pageSize: number = 50): Promise<
-    PaginatedResponse<{
-      id: string;
-      action: string;
-      resourceType: string;
-      resourceId: string;
-      metadata: Record<string, any>;
-      ipAddress: string;
-      userAgent: string;
-      createdAt: string;
-    }>
-  > {
-    const response = await this.client.get<
-      ApiResponse<
-        PaginatedResponse<{
-          id: string;
-          action: string;
-          resourceType: string;
-          resourceId: string;
-          metadata: Record<string, any>;
-          ipAddress: string;
-          userAgent: string;
-          createdAt: string;
-        }>
-      >
-    >('/activity', {
-      params: { page, pageSize },
-    });
-    return response.data.data;
+  getSharedWithMe(): Promise<SharedFileMetadata[]> {
+    return this.get('/shares/with-me');
   }
 }
 
-// Export singleton instance
+export function toApiError(error: unknown): ApiError {
+  if (axios.isAxiosError(error)) {
+    if (error.response) {
+      const data = error.response.data as { message?: string; code?: string; errors?: Record<string, string[]> } | undefined;
+      return { message: data?.message || error.message, statusCode: error.response.status, code: data?.code, errors: data?.errors };
+    }
+    return { message: 'Cannot reach the server. Check your connection.', statusCode: 0 };
+  }
+  if (error && typeof error === 'object' && 'statusCode' in error) return error as ApiError;
+  return { message: error instanceof Error ? error.message : 'Unexpected error', statusCode: 0 };
+}
+
 export default new ApiService();

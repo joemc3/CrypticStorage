@@ -1,52 +1,54 @@
-.PHONY: help build up down logs clean test migrate
+.PHONY: help install typecheck test test-e2e build dev-db dev-api dev-web up down logs ps migrate clean
 
-help: ## Show this help message
-	@echo 'Usage: make [target]'
-	@echo ''
-	@echo 'Available targets:'
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-build: ## Build all Docker images
-	docker-compose build
+# --- Local development (no Docker needed) -----------------------------------
 
-up: ## Start all services
-	docker-compose up -d
+install: ## Install server and client dependencies
+	cd server && npm ci && npx prisma generate
+	cd client && npm ci
 
-down: ## Stop all services
-	docker-compose down
+dev-db: ## Start a throwaway embedded Postgres on :54321 (prints DATABASE_URL)
+	cd server && node scripts/embedded-db.mjs --port 54321
 
-logs: ## View logs from all services
-	docker-compose logs -f
+dev-api: ## Run the API with hot reload (needs server/.env with DATABASE_URL)
+	cd server && npx prisma migrate deploy && npm run dev
 
-clean: ## Remove all containers, volumes, and images
-	docker-compose down -v
-	docker system prune -af
+dev-web: ## Run the web app with hot reload on :3000 (proxies /api to :4000)
+	cd client && npm run dev
 
-test: ## Run tests
+typecheck: ## Typecheck both halves
+	cd server && npm run typecheck
+	cd client && npm run type-check
+
+test: ## Server integration tests (embedded Postgres) + client unit tests
 	cd server && npm test
 	cd client && npm test
 
-migrate: ## Run database migrations
-	docker-compose exec api npx prisma migrate deploy
+test-e2e: ## Real API + real client crypto, end to end
+	scripts/e2e.sh
 
-seed: ## Seed the database with sample data
-	docker-compose exec api npx prisma db seed
+build: ## Production builds of both halves
+	cd server && npm run build
+	cd client && npm run build
 
-dev-server: ## Start server in development mode
-	cd server && npm run dev
+# --- Docker -----------------------------------------------------------------
 
-dev-client: ## Start client in development mode
-	cd client && npm run dev
+up: ## Build and start the full stack (needs .env)
+	docker compose up -d --build
 
-install: ## Install dependencies for server and client
-	cd server && npm install
-	cd client && npm install
+down: ## Stop the stack
+	docker compose down
 
-prisma-studio: ## Open Prisma Studio
-	cd server && npx prisma studio
+logs: ## Tail logs
+	docker compose logs -f
 
-health: ## Check health of all services
-	@echo "Checking services health..."
-	@curl -s http://localhost:4000/health | jq . || echo "API is down"
-	@curl -s http://localhost:3000/health || echo "Client is down"
-	@docker-compose ps
+ps: ## Show service status
+	docker compose ps
+
+migrate: ## Apply migrations inside the running API container
+	docker compose exec api npx prisma migrate deploy
+
+clean: ## Stop the stack and delete its volumes (destroys all data)
+	docker compose down -v

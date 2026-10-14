@@ -6,3 +6,8 @@ export type { RegisterFormProps, RegisterData } from './RegisterForm';
 
 export { TwoFactorSetup } from './TwoFactorSetup';
 export type { TwoFactorSetupProps } from './TwoFactorSetup';
+
+export { TwoFactorSettings } from './TwoFactorSettings';
+
+export { UnlockForm } from './UnlockForm';
+export type { UnlockFormProps } from './UnlockForm';

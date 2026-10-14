@@ -2,8 +2,8 @@
 project: CrypticStorage
 repo: https://github.com/joemc3/CrypticStorage
 journal_format: 1
-updated: 2026-10-13
-last_session: 2026-10-12
+updated: 2026-10-14
+last_session: 2026-10-14
 ---
 
 # CrypticStorage · project journal
@@ -23,12 +23,13 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | End-to-end (register → upload → download → share) | 6 tests, runs in CI |
 | Crypto | per-file keys, chunked AES-GCM with per-chunk nonces, KDF-split auth, keys in link fragments |
 | Ops | Docker Compose with MinIO, GitHub Actions, no-Docker path on embedded Postgres |
-| Branch | `ccr-1fec1232-1akfhk`, not yet merged, no PR opened |
+| Branch | `master`; PR #2 merged 2026-10-13. Origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` has one unmerged commit and no PR |
 
 ## Next steps
 
 - [ ] Delete the old generated server sources (command in README under "Repository cleanup still pending"). A sandbox permission blocked it in the cloud session.
-- [ ] Open a PR from `ccr-1fec1232-1akfhk` to `master` and merge.
+- [x] Open a PR from `ccr-1fec1232-1akfhk` to `master` and merge. (PR #2, merged 2026-10-13)
+- [ ] Review origin branch `claude/audit-and-redesign-ui-01EGwjqbgYnUwXLdF2hAxZGs` (security fixes, UI redesign, spec compliance); merge or discard.
 - [ ] Recovery key at signup, so a forgotten password is not fatal.
 - [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
 - [ ] Passkeys / WebAuthn.
@@ -48,6 +49,23 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | 2026-10-12 | Tests run against a real embedded Postgres, not mocks | The previous mocked suite had never executed and could not catch contract drift |
 
 ## Session log
+
+### 2026-10-14 · local (Claude Code) · env setup documented in README and both example env files
+
+Session: Claude Code, local checkout · Branch: `master`
+
+**Started with** the owner having copied `.env.example` to `.env` and asking what to put in it. The answer was not in one place: the root `.env` is only for Docker Compose, `server/.env` is only for `make dev-api`, and the example's `DATABASE_URL` points at port 5432 while `make dev-db` serves on 54321.
+
+**Did**
+- README "Run it": each path now says which env file it reads, which values are required, and gives a one-shot `perl -pi` + `openssl rand` command that fills them in (three secrets for Docker; `JWT_SECRET` and the embedded-Postgres `DATABASE_URL` for the no-Docker path).
+- Same explanation and command added as a header comment in `.env.example` and `server/.env.example`.
+- Journal: ticked the stale "open a PR" item (PR #2 merged 2026-10-13), fixed the branch row, added the unmerged redesign branch as a next step.
+
+**Verified**: both fill-in commands run on scratch copies of the example files and produce populated secrets and the right `DATABASE_URL`. No code changed, so the test suites were not run.
+
+**Open**: everything in Next steps; nothing new.
+
+**Worth remembering**: `perl -pi` was chosen over `sed -i` because the in-place flag differs between macOS and GNU sed. Within the double-quoted perl expression the `@` in the Postgres URL must be escaped as `\@`.
 
 ### 2026-10-12 · cloud session · from "never run" to green CI
 

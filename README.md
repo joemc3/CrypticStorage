@@ -18,8 +18,13 @@ Zero-knowledge, end-to-end encrypted file storage. Files, file names and folder 
 
 ### Docker (recommended)
 
+The Docker stack reads the root `.env`. Three values are required and have no default; everything else in the file can stay as it is.
+
 ```bash
-cp .env.example .env            # fill in JWT_SECRET, POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD
+cp .env.example .env
+perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|;
+             s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|;
+             s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$(openssl rand -base64 24)|" .env
 docker compose up -d --build
 open http://localhost:3000
 ```
@@ -35,7 +40,15 @@ make install
 make dev-db        # terminal 1: embedded Postgres, prints a DATABASE_URL
 ```
 
-Create `server/.env` from `server/.env.example`, paste that `DATABASE_URL`, set a `JWT_SECRET` (at least 32 characters), keep `STORAGE_DRIVER=local`. Then:
+This path does not read the root `.env`; the API reads `server/.env`. Two values need setting: `JWT_SECRET` (at least 32 characters) and the `DATABASE_URL` that `make dev-db` printed (it is on port 54321, not the 5432 in the example). Keep `STORAGE_DRIVER=local`; files go under `server/data/storage` and no S3 values are needed. The client needs no env file.
+
+```bash
+cp server/.env.example server/.env
+perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|;
+             s|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres\@127.0.0.1:54321/crypticstorage|" server/.env
+```
+
+Then:
 
 ```bash
 make dev-api       # terminal 2: API on :4000

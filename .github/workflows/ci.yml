@@ -107,3 +107,28 @@ jobs:
       - run: scripts/e2e.sh
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crypticstorage_e2e
+
+  docker:
+    name: Docker (build + smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env with throwaway secrets
+        run: |
+          cp .env.example .env
+          perl -pi -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|; s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 24)|" .env
+      - name: Build and start the stack, wait for health
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Health through nginx
+        run: |
+          body="$(curl -fsS http://localhost:3000/api/health)"
+          echo "$body"
+          echo "$body" | grep -q '"status":"ok"'
+          echo "$body" | grep -q '"storage":"local"'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

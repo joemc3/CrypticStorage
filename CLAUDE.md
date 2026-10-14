@@ -29,9 +29,11 @@ Every session that changes anything:
 
 Same convention as the owner's other repositories (Gotcha, Am I, tuPoint).
 
-- `main` is the only long-lived branch. Never commit to it directly; it is protected and requires the three CI jobs to pass before a merge.
+- `main` is the only long-lived branch. Never commit to it directly; it is protected and requires the four CI jobs to pass before a merge.
 - Every change goes on a short-lived branch named `<type>/<topic>` and lands through a pull request into `main`. Types in use: `feat/`, `fix/`, `docs/`, `chore/`, `spec/`, `plan/`, `design/`. Keep the topic short and in kebab-case (`fix/empty-env-values`, `spec/recovery-key`).
 - At session start, check the branch. If it is `main`, create the branch for the work before changing anything.
 - Push the branch and open the pull request when the work is verified; the title says what changed and the description says why. The owner merges with a merge commit; do not merge or force-push.
 - Delete the branch after it is merged. Branches named `claude/...` or `ccr-...` were created by hosted sessions; treat them as pull-request candidates to review, not as long-lived branches.
+- A pull request is a unit of review, not a unit of work. Batch everything written in one sitting into one PR: a spec and its plan together, several stages in one spec or plan when they fit, one implementation PR for one or more stages. Split only when a piece must land early for a reason you can name. Never split by artifact type.
+- Process skills (brainstorming, planning, subagent execution) are tools, not defaults. Use one when its structure earns its cost for the task at hand, and say so.
 - Commit messages explain why, not just what.

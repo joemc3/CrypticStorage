@@ -18,3 +18,6 @@ export type { ToastProps, ToastContainerProps, ToastType } from './Toast';
 
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './Card';
 export type { CardProps } from './Card';
+
+export { OneFact } from './OneFact';
+export type { OneFactProps } from './OneFact';

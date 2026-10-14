@@ -2,14 +2,14 @@ import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-transparent font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-[.42]',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-[.42]',
   {
     variants: {
       variant: {
-        primary: 'bg-accent text-accent-ink hover:bg-accent-hover',
+        primary: 'border-transparent bg-accent text-accent-ink hover:bg-accent-hover',
         secondary: 'border-line-strong bg-surface text-ink hover:bg-surface-2',
-        quiet: 'bg-transparent px-2.5 text-ink-2 hover:text-ink hover:underline',
-        danger: 'bg-danger text-danger-ink hover:bg-danger-hover',
+        quiet: 'border-transparent bg-transparent px-2.5 text-ink-2 hover:text-ink hover:underline',
+        danger: 'border-transparent bg-danger text-danger-ink hover:bg-danger-hover',
       },
       size: {
         sm: 'h-9 px-3 text-sm',

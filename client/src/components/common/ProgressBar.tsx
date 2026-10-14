@@ -4,6 +4,8 @@ export interface ProgressBarProps {
   progress: number; // 0-100
   variant?: 'default' | 'warning' | 'danger';
   label?: string;
+  /** Name for assistive tech when no visible label is shown. */
+  ariaLabel?: string;
   showPercentage?: boolean;
 }
 
@@ -13,7 +15,7 @@ const fill = {
   danger: 'bg-danger',
 };
 
-export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, variant = 'default', label, showPercentage = true }) => {
+export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, variant = 'default', label, ariaLabel, showPercentage = true }) => {
   const clamped = Math.min(100, Math.max(0, progress));
   return (
     <div className="w-full">
@@ -28,7 +30,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, variant = 'd
         aria-valuenow={Math.round(clamped)}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={label ?? 'Progress'}
+        aria-label={ariaLabel ?? label ?? 'Progress'}
         className="h-1.5 w-full overflow-hidden rounded-full bg-sunk"
       >
         <div className={`h-full rounded-full transition-[width] duration-200 ${fill[variant]}`} style={{ width: `${clamped}%` }} />

@@ -30,11 +30,10 @@ client/src/components/
 Reusable button component with variants and sizes.
 
 **Features:**
-- Variants: `primary`, `secondary`, `danger`, `ghost`
-- Sizes: `sm`, `md`, `lg`
+- Variants: `primary`, `secondary`, `quiet`, `danger` (danger only where the click destroys or releases)
+- Sizes: `sm` (36 px), `md` (44 px), `lg`
 - Loading state with spinner
 - Left/right icon support
-- Framer Motion animations
 
 **Usage:**
 ```tsx
@@ -46,13 +45,12 @@ import { Button } from '@/components/common';
 ```
 
 ### Input
-Text input with validation states and icons.
+Text input whose label is linked to the field (`htmlFor`, generated id).
 
 **Features:**
-- Error and success states
-- Helper text support
-- Left/right icon support
-- Validation feedback with animations
+- Error line, linked with `aria-describedby`, red border
+- Helper text
+- `mono` for URLs and keys, `code` for a six-digit code
 
 **Usage:**
 ```tsx
@@ -62,7 +60,6 @@ import { Input } from '@/components/common';
   label="Email"
   type="email"
   error="Invalid email"
-  leftIcon={<EnvelopeIcon />}
 />
 ```
 
@@ -71,7 +68,7 @@ Modal dialog with backdrop using HeadlessUI Dialog.
 
 **Features:**
 - Multiple sizes: `sm`, `md`, `lg`, `xl`, `full`
-- Backdrop blur effect
+- Desktop: centred sheet. Phone: bottom sheet with a grab handle
 - Animated transitions
 - Optional close button
 
@@ -110,9 +107,8 @@ Progress bar for uploads and operations.
 
 **Features:**
 - Linear and circular variants
-- Color variants: `default`, `success`, `warning`, `danger`
-- Animated progress
-- Optional percentage display
+- Variants: `default`, `warning` (amber), `danger`
+- Optional label and percentage
 
 **Usage:**
 ```tsx
@@ -128,7 +124,8 @@ Toast notifications with different types.
 **Features:**
 - Types: `success`, `error`, `warning`, `info`
 - Auto-dismiss with configurable duration
-- Multiple position options
+- Inverse colours, one line, a quiet Dismiss
+- Bottom-right or bottom-center
 - Stacked notifications
 
 **Usage:**
@@ -137,24 +134,22 @@ import { ToastContainer } from '@/components/common';
 
 <ToastContainer
   toasts={toasts}
-  position="top-right"
+  position="bottom-right"
 />
 ```
 
 ### Card
-Card container with variants.
+Card container: surface, 1 px line, 12 px radius.
 
 **Features:**
-- Variants: `default`, `bordered`, `elevated`
 - Padding options
-- Hoverable effect
 - Sub-components: `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`
 
 **Usage:**
 ```tsx
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/common';
 
-<Card variant="bordered">
+<Card>
   <CardHeader>
     <CardTitle>Title</CardTitle>
   </CardHeader>

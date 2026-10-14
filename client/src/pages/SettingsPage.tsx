@@ -249,7 +249,7 @@ export const SettingsPage: React.FC = () => {
                 <span>{formatFileSize(used)} used</span>
                 <span className="text-ink-3">of {formatFileSize(limit)}</span>
               </div>
-              <ProgressBar progress={percent} showPercentage={false} label="Storage used" variant={percent > 90 ? 'danger' : percent > 75 ? 'warning' : 'default'} />
+              <ProgressBar progress={percent} showPercentage={false} ariaLabel="Storage used" variant={percent > 90 ? 'danger' : percent > 75 ? 'warning' : 'default'} />
               {stats && <p className={noteClass}>{stats.fileCount} files in {stats.folderCount} folders</p>}
             </div>
           </section>
@@ -257,7 +257,7 @@ export const SettingsPage: React.FC = () => {
           <section aria-labelledby="set-delete" className={sectionClass('delete')}>
             <h2 id="set-delete" className={headingClass}>Delete account</h2>
             <p className="text-sm text-ink-2">Deleting your account permanently removes every file and share. There is no recovery.</p>
-            <Button variant="secondary" onClick={() => setShowDelete(true)} className="self-start text-danger-text">
+            <Button variant="secondary" onClick={() => setShowDelete(true)} className="self-start !text-danger-text">
               Delete account
             </Button>
           </section>

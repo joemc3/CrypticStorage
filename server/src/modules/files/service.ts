@@ -11,6 +11,7 @@ import { audit } from '../../lib/audit';
 import { ObjectTooLargeError, storage } from '../../storage';
 import { toFileDto } from '../dto';
 import { assertFolderOwnership } from '../folders/service';
+import { RELEASED_STATES_FOR_ACCESS } from '../handoff/access';
 import type { createUploadSchema, updateFileSchema } from './schema';
 
 const CONTENT_TTL = env.CONTENT_TOKEN_TTL_SECONDS;
@@ -125,14 +126,38 @@ export async function confirmUpload(userId: string, fileId: string, req: Request
 // Read
 // ---------------------------------------------------------------------------
 
+/** Active user shares plus unexpired, unrevoked links, per file. Two grouped queries however many files. */
+async function shareCounts(fileIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (fileIds.length === 0) return counts;
+  const now = new Date();
+  const [shares, links] = await Promise.all([
+    prisma.fileShare.groupBy({
+      by: ['fileId'],
+      where: { fileId: { in: fileIds }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      _count: { _all: true },
+    }),
+    prisma.shareLink.groupBy({
+      by: ['fileId'],
+      where: { fileId: { in: fileIds }, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      _count: { _all: true },
+    }),
+  ]);
+  for (const row of [...shares, ...links]) counts.set(row.fileId, (counts.get(row.fileId) ?? 0) + row._count._all);
+  return counts;
+}
+
 export async function listFiles(userId: string, folderId: string | undefined) {
   if (folderId) await assertFolderOwnership(userId, folderId);
   const rows = await prisma.file.findMany({ where: { userId, folderId: folderId ?? null, status: 'READY' }, orderBy: { createdAt: 'asc' } });
-  return rows.map(toFileDto);
+  const counts = await shareCounts(rows.map((r) => r.id));
+  return rows.map((r) => ({ ...toFileDto(r), shareCount: counts.get(r.id) ?? 0 }));
 }
 
 export async function getFile(userId: string, fileId: string) {
-  return toFileDto(await assertFileOwnership(userId, fileId));
+  const file = await assertFileOwnership(userId, fileId);
+  const counts = await shareCounts([file.id]);
+  return { ...toFileDto(file), shareCount: counts.get(file.id) ?? 0 };
 }
 
 /** Download URL for the owner, or for a recipient of a user-to-user share. */
@@ -141,7 +166,12 @@ export async function downloadUrl(userId: string, fileId: string) {
     where: {
       id: fileId,
       status: 'READY',
-      OR: [{ userId }, { shares: { some: { recipientId: userId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } } }],
+      OR: [
+        { userId },
+        { shares: { some: { recipientId: userId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } } },
+        // Released handoff items follow the ordinary sharing path: the recipient may fetch the ciphertext.
+        { handoffItems: { some: { rule: { state: { in: [...RELEASED_STATES_FOR_ACCESS] }, recipients: { some: { userId } } } } } },
+      ],
     },
   });
   if (!file) throw new NotFoundError('File not found');

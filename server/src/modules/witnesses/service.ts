@@ -8,6 +8,25 @@ import { spkiFingerprint } from '../../lib/crypto';
 import { sendMail } from '../../lib/mail';
 import { witnessInvitation } from '../../mail/templates';
 
+interface ActiveRuleRef {
+  id: string;
+  sharesStale: boolean;
+}
+
+/**
+ * The accepted set or the threshold changed, so every open rule's shares no longer match it. Flag them and return
+ * the list; the owner's client re-splits each release key at next unlock and replaces the shares.
+ */
+async function flagOpenRules(ownerId: string): Promise<ActiveRuleRef[]> {
+  await prisma.handoffRule.updateMany({ where: { ownerId, state: { in: ['active', 'warning'] } }, data: { sharesStale: true } });
+  const rules = await prisma.handoffRule.findMany({
+    where: { ownerId, state: { in: ['active', 'warning'] } },
+    select: { id: true, sharesStale: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return rules;
+}
+
 const MIN_K = 2;
 
 interface Person {
@@ -89,8 +108,7 @@ export async function setThreshold(ownerId: string, k: number, req: Request) {
   }
   await prisma.user.update({ where: { id: ownerId }, data: { witnessThreshold: k } });
   audit(req, { userId: ownerId, action: 'witness.threshold', metadata: { k, n } });
-  // Rules arrive with handoff slice B; until then nothing needs re-splitting.
-  return { ...(await getSet(ownerId)), activeRules: [] as unknown[] };
+  return { ...(await getSet(ownerId)), activeRules: await flagOpenRules(ownerId) };
 }
 
 export async function invite(ownerId: string, rawEmail: string, req: Request) {
@@ -130,7 +148,7 @@ export async function remove(ownerId: string, id: string, req: Request) {
 
   const next = await refitThreshold(ownerId);
   audit(req, { userId: ownerId, action: 'witness.remove', resourceType: 'witness', resourceId: id });
-  return { threshold: next, activeRules: [] as unknown[] };
+  return { threshold: next, activeRules: await flagOpenRules(ownerId) };
 }
 
 export async function myInvitations(userId: string) {
@@ -159,6 +177,7 @@ export async function respond(userId: string, id: string, decision: 'accepted' |
   });
   if (claimed.count === 0) throw new ConflictError('This invitation has already been answered');
   if (decision === 'declined') await refitThreshold(row.ownerId);
+  await flagOpenRules(row.ownerId);
   audit(req, {
     userId,
     action: decision === 'accepted' ? 'witness.accept' : 'witness.decline',

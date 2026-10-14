@@ -12,3 +12,17 @@ export function witnessInvitation(ownerName: string, link: string): { subject: s
     text: `Together with others they name, you could release their items to the people they chose, and you could never read those items yourself. Open the link to accept or decline.\n\n${link}\n`,
   };
 }
+
+export function recipientNotice(ownerName: string, link: string): { subject: string; text: string } {
+  return {
+    subject: `${ownerName} has set something aside for you`,
+    text: `You will receive it on their terms. There is nothing to do now.\n\n${link}\n`,
+  };
+}
+
+export function ruleRevoked(ownerName: string, link: string): { subject: string; text: string } {
+  return {
+    subject: 'A handoff rule naming you was withdrawn',
+    text: `${ownerName} withdrew a rule that named you. Nothing will be released from it.\n\n${link}\n`,
+  };
+}

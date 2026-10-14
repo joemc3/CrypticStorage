@@ -7,6 +7,7 @@ import { fileContentRouter, filesRouter } from './modules/files/router';
 import { foldersRouter } from './modules/folders/router';
 import { sharesRouter } from './modules/shares/router';
 import { witnessesRouter } from './modules/witnesses/router';
+import { handoffRouter } from './modules/handoff/router';
 import { handler, ok } from './lib/http';
 import { clearOutbox, outbox } from './lib/mail';
 
@@ -39,6 +40,7 @@ apiRouter.use('/files', filesRouter);
 apiRouter.use('/folders', foldersRouter);
 apiRouter.use('/shares', sharesRouter);
 apiRouter.use('/witnesses', witnessesRouter);
+apiRouter.use('/handoff', handoffRouter);
 apiRouter.use('/contacts', contactsRouter);
 
 if (isTest) {

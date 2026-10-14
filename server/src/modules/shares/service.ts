@@ -9,6 +9,7 @@ import { randomToken } from '../../lib/crypto';
 import { audit } from '../../lib/audit';
 import { toFileDto, toFileShareDto, toShareLinkDto } from '../dto';
 import { assertFileOwnership, downloadUrlFor } from '../files/service';
+import { releasedItemsFor } from '../handoff/service';
 import type { createLinkSchema, createUserShareSchema } from './schema';
 
 // ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ export async function sharedWithMe(userId: string) {
     include: { file: true, owner: { select: { id: true, email: true } } },
     orderBy: { createdAt: 'desc' },
   });
-  return rows.map((row) => ({
+  const direct = rows.map((row) => ({
     ...toFileDto(row.file),
     shareId: row.id,
     encryptedFileKey: row.encryptedFileKey, // RSA-wrapped for the recipient, replaces the owner's wrapping
@@ -59,6 +60,8 @@ export async function sharedWithMe(userId: string) {
     expiresAt: row.expiresAt?.toISOString(),
     sharedBy: row.owner,
   }));
+  // Files from released handoff rules sit beside ordinary shares, marked with where they came from.
+  return [...direct, ...(await releasedItemsFor(userId))];
 }
 
 /** Either party can end a share. */

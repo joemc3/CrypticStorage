@@ -71,6 +71,15 @@ jobs:
           name: client-dist
           path: client/dist
           retention-days: 7
+      # Browser smoke: every route at 1280 and 390, light and dark, against mocked API responses.
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test -c e2e-browser/playwright.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: design-screenshots
+          path: client/e2e-browser/screenshots
+          retention-days: 7
 
   e2e:
     name: End-to-end (real API + real client crypto)

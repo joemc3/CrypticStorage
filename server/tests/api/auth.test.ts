@@ -44,6 +44,7 @@ describe('POST /api/auth/register', () => {
       const res = await api().post('/api/auth/register').send(payload);
       expect(res.status).toBe(201);
       expect(res.body.data.verificationRequired).toBe(true);
+      expect(spy).toHaveBeenCalled();
       const user = await prisma.user.findUniqueOrThrow({ where: { email: payload.email } });
       expect(user.emailVerifiedAt).toBeNull();
     } finally {

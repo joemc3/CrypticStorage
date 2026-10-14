@@ -65,6 +65,12 @@ model User {
   handoffAsRecipient HandoffRuleRecipient[]
   handoffAsWitness   HandoffRuleShare[]
 
+  requestsAboutMe ReleaseRequest[]   @relation("RequestOwner")
+  requestsOpened  ReleaseRequest[]   @relation("RequestOpener")
+  votesCast       ReleaseVote[]
+  voteSharesGiven ReleaseVoteShare[] @relation("VoteShareWitness")
+  voteSharesForMe ReleaseVoteShare[] @relation("VoteShareRecipient")
+
   @@map("users")
 }
 
@@ -276,22 +282,22 @@ enum HandoffRuleState {
 /// A rule that releases a file or a folder to named recipients. Exactly one of file_id and folder_id is set
 /// (checked in the service and by a CHECK constraint in the migration).
 model HandoffRule {
-  id                      String           @id @default(uuid())
-  ownerId                 String           @map("owner_id")
-  fileId                  String?          @map("file_id")
-  folderId                String?          @map("folder_id")
-  periodDays              Int              @map("period_days")
-  state                   HandoffRuleState @default(active)
+  id                     String           @id @default(uuid())
+  ownerId                String           @map("owner_id")
+  fileId                 String?          @map("file_id")
+  folderId               String?          @map("folder_id")
+  periodDays             Int              @map("period_days")
+  state                  HandoffRuleState @default(active)
   /// Release key wrapped under the owner's master key (client JSON blob).
-  wrappedReleaseKeyOwner  String           @map("wrapped_release_key_owner")
+  wrappedReleaseKeyOwner String           @map("wrapped_release_key_owner")
   /// The witness set changed since the shares were made; the owner's client re-splits at next unlock.
-  sharesStale             Boolean          @default(false) @map("shares_stale")
-  createdAt               DateTime         @default(now()) @map("created_at")
-  reminded75At            DateTime?        @map("reminded_75_at")
-  reminded90At            DateTime?        @map("reminded_90_at")
-  reminded95At            DateTime?        @map("reminded_95_at")
-  releasedAt              DateTime?        @map("released_at")
-  revokedAt               DateTime?        @map("revoked_at")
+  sharesStale            Boolean          @default(false) @map("shares_stale")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  reminded75At           DateTime?        @map("reminded_75_at")
+  reminded90At           DateTime?        @map("reminded_90_at")
+  reminded95At           DateTime?        @map("reminded_95_at")
+  releasedAt             DateTime?        @map("released_at")
+  revokedAt              DateTime?        @map("revoked_at")
 
   owner      User                   @relation("RuleOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   file       File?                  @relation(fields: [fileId], references: [id], onDelete: Cascade)
@@ -299,6 +305,7 @@ model HandoffRule {
   recipients HandoffRuleRecipient[]
   items      HandoffRuleItem[]
   shares     HandoffRuleShare[]
+  voteShares ReleaseVoteShare[]
 
   @@index([ownerId, state])
   @@map("handoff_rules")
@@ -345,4 +352,60 @@ model HandoffRuleShare {
 
   @@id([ruleId, witnessUserId])
   @@map("handoff_rule_shares")
+}
+
+enum ReleaseRequestState {
+  open
+  cancelled
+  completed
+}
+
+/// A witness asked to release an owner's items. At most one is open per owner (partial unique index in the migration).
+model ReleaseRequest {
+  id             String              @id @default(uuid())
+  ownerId        String              @map("owner_id")
+  openedByUserId String              @map("opened_by_user_id")
+  state          ReleaseRequestState @default(open)
+  /// The owner's threshold when the request opened. Rules do not record the k their shares were split with, so the request fixes it.
+  requiredVotes  Int                 @map("required_votes")
+  openedAt       DateTime            @default(now()) @map("opened_at")
+  closedAt       DateTime?           @map("closed_at")
+
+  owner    User               @relation("RequestOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  openedBy User               @relation("RequestOpener", fields: [openedByUserId], references: [id], onDelete: Cascade)
+  votes    ReleaseVote[]
+  shares   ReleaseVoteShare[]
+
+  @@index([ownerId, state])
+  @@map("release_requests")
+}
+
+model ReleaseVote {
+  requestId     String   @map("request_id")
+  witnessUserId String   @map("witness_user_id")
+  votedAt       DateTime @default(now()) @map("voted_at")
+
+  request ReleaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  witness User           @relation(fields: [witnessUserId], references: [id], onDelete: Cascade)
+
+  @@id([requestId, witnessUserId])
+  @@map("release_votes")
+}
+
+/// A witness's share for one rule, re-wrapped under one recipient's public key. Opaque to the server.
+model ReleaseVoteShare {
+  requestId       String @map("request_id")
+  witnessUserId   String @map("witness_user_id")
+  ruleId          String @map("rule_id")
+  recipientUserId String @map("recipient_user_id")
+  wrappedShare    String @map("wrapped_share")
+
+  request   ReleaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  witness   User           @relation("VoteShareWitness", fields: [witnessUserId], references: [id], onDelete: Cascade)
+  rule      HandoffRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  recipient User           @relation("VoteShareRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@id([requestId, witnessUserId, ruleId, recipientUserId])
+  @@index([recipientUserId])
+  @@map("release_vote_shares")
 }

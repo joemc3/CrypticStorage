@@ -22,3 +22,8 @@ export const createRuleSchema = z.object({
 export const replaceSharesSchema = z.object({ shares: z.array(shareInput).max(20) });
 export const addItemsSchema = z.object({ items: z.array(itemInput).max(50_000) });
 export const ruleIdParamSchema = z.object({ id: uuid });
+
+export const openRequestSchema = z.object({ ownerId: uuid });
+export const voteSchema = z.object({
+  shares: z.array(z.object({ ruleId: uuid, recipientUserId: uuid, wrappedShare: blob })).max(50_000),
+});

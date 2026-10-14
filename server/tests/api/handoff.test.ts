@@ -382,7 +382,7 @@ describe('recipient views', () => {
     expect((await api().get(`/api/files/${a.id}/download-url`).set(bearer(w.witnesses[0]!))).status).toBe(404);
   });
 
-  it('lists quorum-released files in Shared-with-me without a release key until votes exist', async () => {
+  it('lists quorum-released files in Shared-with-me without a release key and with no vote shares until votes exist', async () => {
     const w = await world();
     const file = await upload(w.owner);
     const id = (await create(w.owner, ruleBody(w, { fileId: file.id }, [file.id]))).body.data.id as string;
@@ -391,9 +391,12 @@ describe('recipient views', () => {
     expect(wm.body.data).toHaveLength(1);
     expect(wm.body.data[0].handoff).toMatchObject({ ruleId: id, by: 'quorum' });
     expect(wm.body.data[0].handoff.wrappedReleaseKey).toBeUndefined();
+    expect(wm.body.data[0].handoff.voteShares).toEqual([]);
     const fm = await api().get('/api/handoff/for-me').set(bearer(w.recipient));
-    expect(fm.body.data[0]).toMatchObject({ state: 'released_quorum', releasedBy: 'quorum' });
-    expect(fm.body.data[0].items).toBeUndefined();
+    expect(fm.body.data[0]).toMatchObject({ state: 'released_quorum', releasedBy: 'quorum', voteShares: [] });
+    expect(fm.body.data[0].wrappedReleaseKey).toBeUndefined();
+    // The wrapped file keys are served so the client can unwrap once it has recombined the release key.
+    expect(fm.body.data[0].items).toHaveLength(1);
   });
 });
 

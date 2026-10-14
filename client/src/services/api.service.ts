@@ -124,7 +124,10 @@ export interface SharedFileMetadata extends FileMetadata {
     from: { id: string; email: string; displayName: string | null };
     releasedAt: string;
     by: 'timer' | 'quorum';
+    /** Only after a timer release. */
     wrappedReleaseKey?: string;
+    /** Only after a quorum release: the shares the voting witnesses re-wrapped for the caller. Combine k of them to get the release key. */
+    voteShares?: HandoffVoteShare[];
     wrappedFileKey: string;
   };
 }
@@ -318,6 +321,12 @@ export interface CreateHandoffRuleRequest {
   wrappedReleaseKeyOwner: string;
 }
 
+export interface HandoffVoteShare {
+  witnessUserId: string;
+  /** A Shamir share, RSA-OAEP wrapped under the recipient's public key. */
+  wrappedShare: string;
+}
+
 export interface HandoffForMe {
   id: string;
   owner: { id: string; email: string; displayName: string | null };
@@ -327,8 +336,58 @@ export interface HandoffForMe {
   releasedBy?: 'timer' | 'quorum';
   /** Only after a timer release. */
   wrappedReleaseKey?: string;
-  /** Only after a timer release. `file.encryptedFileKey` is empty; use `wrappedFileKey`. */
+  /** Only after a quorum release: every share re-wrapped for the caller by the request that released the rule. */
+  voteShares?: HandoffVoteShare[];
+  /** After a timer or quorum release. `file.encryptedFileKey` is empty; use `wrappedFileKey`. */
   items?: Array<{ fileId: string; wrappedFileKey: string; file: FileMetadata }>;
+}
+
+// --- Release requests (quorum) --------------------------------------------------
+
+export type ReleaseRequestState = 'open' | 'cancelled' | 'completed';
+
+export interface ReleasePerson {
+  id: string;
+  email: string;
+  displayName: string | null;
+}
+
+export interface ReleaseRequestRule {
+  ruleId: string;
+  /** A stale rule cannot be voted on until the owner re-splits it; leave it out of the vote. */
+  sharesStale: boolean;
+  state: 'active' | 'warning';
+  /** The people to re-wrap this rule's share for. */
+  recipients: Array<{ userId: string; publicKey: string }>;
+}
+
+export interface ReleaseRequest {
+  id: string;
+  owner: ReleasePerson;
+  openedBy: ReleasePerson;
+  state: ReleaseRequestState;
+  /** The owner's threshold when the request opened. */
+  requiredVotes: number;
+  openedAt: string;
+  closedAt?: string;
+  votes: Array<{ witnessUserId: string; displayName: string | null; email: string; votedAt: string }>;
+  myVote: boolean;
+  /** Open requests only: the owner's active and warning rules now. */
+  rules: ReleaseRequestRule[];
+  /** Open requests only: the caller's own wrapped share for each non-stale rule. Unwrap, then re-wrap per recipient. */
+  myShares: Array<{ ruleId: string; shareIndex: number; wrappedShare: string }>;
+}
+
+export interface ReleaseVoteShareInput {
+  ruleId: string;
+  recipientUserId: string;
+  /** The caller's share for the rule, re-wrapped under this recipient's public key. */
+  wrappedShare: string;
+}
+
+export interface ReleaseVoteResult extends ReleaseRequest {
+  /** Rules left out of the vote because their shares are stale. They stay active. */
+  awaitingRepair: string[];
 }
 
 export interface ActiveRuleRef {
@@ -513,6 +572,15 @@ class ApiService {
   }
   addHandoffItems(id: string, items: HandoffItemInput[]): Promise<HandoffRuleDetail> {
     return this.put(`/handoff/rules/${id}/items`, { items });
+  }
+  openReleaseRequest(ownerId: string): Promise<ReleaseRequest> {
+    return this.post('/handoff/requests', { ownerId });
+  }
+  listReleaseRequests(): Promise<ReleaseRequest[]> {
+    return this.get('/handoff/requests');
+  }
+  voteOnReleaseRequest(id: string, shares: ReleaseVoteShareInput[]): Promise<ReleaseVoteResult> {
+    return this.post(`/handoff/requests/${id}/votes`, { shares });
   }
   handoffForMe(): Promise<HandoffForMe[]> {
     return this.get('/handoff/for-me');

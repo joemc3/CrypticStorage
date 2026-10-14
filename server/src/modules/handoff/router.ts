@@ -3,7 +3,8 @@ import { handler, ok } from '../../lib/http';
 import { auth, requireAuth } from '../../middleware/auth';
 import { body, validate } from '../../middleware/validate';
 import * as service from './service';
-import { addItemsSchema, createRuleSchema, replaceSharesSchema, ruleIdParamSchema } from './schema';
+import * as requests from './requests';
+import { addItemsSchema, createRuleSchema, openRequestSchema, replaceSharesSchema, ruleIdParamSchema, voteSchema } from './schema';
 
 export const handoffRouter = Router();
 handoffRouter.use(requireAuth);
@@ -43,3 +44,18 @@ handoffRouter.put(
 );
 
 handoffRouter.get('/for-me', handler(async (req, res) => ok(res, await service.forMe(auth(req).userId))));
+
+handoffRouter.get('/requests', handler(async (req, res) => ok(res, await requests.listRequests(auth(req).userId))));
+
+handoffRouter.post(
+  '/requests',
+  validate('body', openRequestSchema),
+  handler(async (req, res) => ok(res, await requests.openRequest(auth(req).userId, body(req, openRequestSchema).ownerId, req), 201))
+);
+
+handoffRouter.post(
+  '/requests/:id/votes',
+  validate('params', ruleIdParamSchema),
+  validate('body', voteSchema),
+  handler(async (req, res) => ok(res, await requests.vote(auth(req).userId, req.params.id!, body(req, voteSchema).shares, req), 201))
+);

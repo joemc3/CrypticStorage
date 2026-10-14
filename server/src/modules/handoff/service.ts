@@ -324,16 +324,37 @@ function fileForRecipient(file: Parameters<typeof toFileDto>[0]) {
   return { ...toFileDto(file), encryptedFileKey: '', fileKeyIV: '' };
 }
 
+/**
+ * The shares re-wrapped for `userId` by the request that released each quorum rule, keyed by rule id. Shares left by
+ * requests that did not complete are never served.
+ */
+async function voteSharesFor(userId: string, ruleIds: string[]): Promise<Map<string, Array<{ witnessUserId: string; wrappedShare: string }>>> {
+  const out = new Map<string, Array<{ witnessUserId: string; wrappedShare: string }>>();
+  if (ruleIds.length === 0) return out;
+  const rows = await prisma.releaseVoteShare.findMany({
+    where: { recipientUserId: userId, ruleId: { in: ruleIds }, request: { state: 'completed' } },
+    orderBy: [{ ruleId: 'asc' }, { witnessUserId: 'asc' }],
+  });
+  for (const r of rows) out.set(r.ruleId, [...(out.get(r.ruleId) ?? []), { witnessUserId: r.witnessUserId, wrappedShare: r.wrappedShare }]);
+  return out;
+}
+
 export async function forMe(userId: string) {
   const rows = await prisma.handoffRule.findMany({
     where: { recipients: { some: { userId } } },
     include: { owner: { select: personSelect }, recipients: { where: { userId } } },
     orderBy: { createdAt: 'desc' },
   });
-  const timerIds = rows.filter((r) => r.state === 'released_timer').map((r) => r.id);
-  const items = timerIds.length
-    ? await prisma.handoffRuleItem.findMany({ where: { ruleId: { in: timerIds }, file: { status: 'READY' } }, include: { file: true }, orderBy: { fileId: 'asc' } })
-    : [];
+  const releasedIds = rows.filter((r) => releasedBy(r.state)).map((r) => r.id);
+  const [items, voteShares] = await Promise.all([
+    releasedIds.length
+      ? prisma.handoffRuleItem.findMany({ where: { ruleId: { in: releasedIds }, file: { status: 'READY' } }, include: { file: true }, orderBy: { fileId: 'asc' } })
+      : [],
+    voteSharesFor(
+      userId,
+      rows.filter((r) => r.state === 'released_quorum').map((r) => r.id)
+    ),
+  ]);
   return rows.map((rule) => {
     const base = {
       id: rule.id,
@@ -344,10 +365,12 @@ export async function forMe(userId: string) {
       releasedBy: releasedBy(rule.state),
     };
     // Before release the recipient learns only that the rule exists.
-    if (rule.state !== 'released_timer') return base;
+    if (!releasedBy(rule.state)) return base;
     return {
       ...base,
-      wrappedReleaseKey: rule.recipients[0]?.wrappedReleaseKey,
+      // After a timer release the key is here; after a quorum release it is recombined from the witnesses' shares.
+      wrappedReleaseKey: rule.state === 'released_timer' ? rule.recipients[0]?.wrappedReleaseKey : undefined,
+      voteShares: rule.state === 'released_quorum' ? (voteShares.get(rule.id) ?? []) : undefined,
       items: items.filter((i) => i.ruleId === rule.id).map((i) => ({ fileId: i.fileId, wrappedFileKey: i.wrappedFileKey, file: fileForRecipient(i.file) })),
     };
   });
@@ -363,6 +386,10 @@ export async function releasedItemsFor(userId: string) {
     },
     orderBy: [{ rule: { releasedAt: 'desc' } }, { fileId: 'asc' }],
   });
+  const voteShares = await voteSharesFor(
+    userId,
+    [...new Set(rows.filter((r) => r.rule.state === 'released_quorum').map((r) => r.ruleId))]
+  );
   return rows.map((row) => {
     const by = releasedBy(row.rule.state)!;
     return {
@@ -378,6 +405,7 @@ export async function releasedItemsFor(userId: string) {
         by,
         // After a quorum release the key comes from the witnesses' votes, not from here.
         wrappedReleaseKey: by === 'timer' ? row.rule.recipients[0]?.wrappedReleaseKey : undefined,
+        voteShares: by === 'quorum' ? (voteShares.get(row.ruleId) ?? []) : undefined,
         wrappedFileKey: row.wrappedFileKey,
       },
     };

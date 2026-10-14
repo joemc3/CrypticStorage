@@ -88,3 +88,48 @@ export function releasedByTimerRecipient(ownerName: string, link: string): { sub
     text: `It released on ${ownerName}'s terms and is now in Shared with me. Sign in to open it.\n\n${link}\n`,
   };
 }
+
+/** "13 Oct 2026, 14:05 UTC", in UTC for the same reason as `mailDate`. */
+export function mailTime(d: Date): string {
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${mailDate(d)}, ${hh}:${mm} UTC`;
+}
+
+export function requestOpenedOwner(i: { witness: string; time: string; k: number; link: string }): { subject: string; text: string } {
+  return {
+    subject: 'A witness asked to release your items',
+    text: `${i.witness} opened a release request at ${i.time}. Sign in to cancel it; if ${i.k} witnesses vote first, what you marked is released.\n\n${i.link}\n`,
+  };
+}
+
+export function requestOpenedWitness(i: { witness: string; owner: string; link: string }): { subject: string; text: string } {
+  return {
+    subject: `${i.witness} asked to release ${i.owner}'s items`,
+    text: `You can add your vote or refuse. If ${i.owner} signs in, the request is cancelled.\n\n${i.link}\n`,
+  };
+}
+
+export function voteAdded(i: { witness: string; time: string; count: number; k: number; link: string }): { subject: string; text: string } {
+  return {
+    subject: `Release request: ${i.count} of ${i.k} votes`,
+    text: `${i.witness} added a vote at ${i.time}. Sign in now to cancel the request.\n\n${i.link}\n`,
+  };
+}
+
+export function releaseCompleted(i: { k: number; time: string; link: string }): { subject: string; text: string } {
+  return {
+    subject: 'Your witnesses released your items',
+    text: `${i.k} witnesses voted, and what you marked went to the people you named at ${i.time}. Your own copies are unchanged.\n\n${i.link}\n`,
+  };
+}
+
+export function requestCancelled(owner: string, link: string): { subject: string; text: string } {
+  return {
+    subject: `${owner} signed in, so the request is cancelled`,
+    text: `Nothing was released. There is nothing for you to do.\n\n${link}\n`,
+  };
+}
+
+/** Recipient copy after a quorum release; emails.md has no separate quorum copy, so this is the timer one. */
+export const releasedRecipient = releasedByTimerRecipient;

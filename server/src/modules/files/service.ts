@@ -1,7 +1,7 @@
 import type { Request } from 'express';
 import type { Readable } from 'stream';
 import { randomUUID } from 'crypto';
-import type { File } from '@prisma/client';
+import type { File, Prisma } from '@prisma/client';
 import type { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
@@ -209,11 +209,35 @@ export async function updateFile(userId: string, fileId: string, input: z.infer<
   return toFileDto(file);
 }
 
+/**
+ * A file that leaves the folder a handoff rule covers is no longer under that rule, so its wrapped key goes too.
+ * Moving into a covered folder changes nothing here: the missing key shows as a coverage gap and the client repairs it.
+ * A rule on the file itself follows the file and is untouched.
+ */
+async function dropItemsOutsideCoveredFolders(tx: Prisma.TransactionClient, userId: string, fileId: string, target: string | null): Promise<void> {
+  const rows = await tx.handoffRuleItem.findMany({
+    where: { fileId, rule: { ownerId: userId, state: { in: ['active', 'warning'] }, folderId: { not: null } } },
+    select: { ruleId: true, rule: { select: { folderId: true } } },
+  });
+  if (rows.length === 0) return;
+  const chain = new Set<string>();
+  for (let cur = target; cur && !chain.has(cur); ) {
+    chain.add(cur);
+    cur = (await tx.folder.findUnique({ where: { id: cur }, select: { parentId: true } }))?.parentId ?? null;
+  }
+  const outside = rows.filter((r) => !chain.has(r.rule.folderId!)).map((r) => r.ruleId);
+  if (outside.length) await tx.handoffRuleItem.deleteMany({ where: { fileId, ruleId: { in: outside } } });
+}
+
 export async function moveFile(userId: string, fileId: string, folderId: string | null | undefined, req: Request) {
   await assertFileOwnership(userId, fileId);
   const target = folderId ?? null;
   if (target) await assertFolderOwnership(userId, target);
-  const file = await prisma.file.update({ where: { id: fileId }, data: { folderId: target } });
+  const file = await prisma.$transaction(async (tx) => {
+    const moved = await tx.file.update({ where: { id: fileId }, data: { folderId: target } });
+    await dropItemsOutsideCoveredFolders(tx, userId, fileId, target);
+    return moved;
+  });
   audit(req, { userId, action: 'file.move', resourceType: 'file', resourceId: fileId });
   return toFileDto(file);
 }

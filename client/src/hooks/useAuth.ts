@@ -24,7 +24,10 @@ export const useAuth = () => {
       try {
         return await action();
       } catch (error) {
-        addToast({ type: 'error', message: failure, description: error instanceof Error ? error.message : undefined });
+        // The page shows its own calm "check your email" state for an unverified account.
+        if ((error as { code?: string } | null)?.code !== 'EMAIL_UNVERIFIED') {
+          addToast({ type: 'error', message: failure, description: error instanceof Error ? error.message : undefined });
+        }
         throw error;
       } finally {
         setLoading(false);

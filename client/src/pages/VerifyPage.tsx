@@ -2,7 +2,7 @@
  * CrypticStorage - Verify Page (/verify/:token)
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Spinner } from '../components/common/Spinner';
 import { useAuth } from '../hooks/useAuth';
@@ -15,10 +15,13 @@ export const VerifyPage: React.FC = () => {
   const [state, setState] = useState<State>({ kind: 'pending' });
   const [email, setEmail] = useState('');
   const [resent, setResent] = useState(false);
+  // The token is single use. StrictMode runs effects twice in dev, so both runs share one in-flight call.
+  const attempt = useRef<{ token: string; promise: Promise<{ email: string }> } | null>(null);
 
   useEffect(() => {
     let live = true;
-    verifyEmail(token).then(
+    if (attempt.current?.token !== token) attempt.current = { token, promise: verifyEmail(token) };
+    attempt.current.promise.then(
       (result) => live && setState({ kind: 'ok', email: result.email }),
       () => live && setState({ kind: 'failed' })
     );

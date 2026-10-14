@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -38,5 +39,20 @@ describe('VerifyPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send a new link' }));
     await waitFor(() => expect(resend).toHaveBeenCalledWith('a@b.co'));
     expect(await screen.findByText(/new link is on its way/i)).toBeInTheDocument();
+  });
+
+  it('verifies a token once under StrictMode', async () => {
+    const spy = vi.spyOn(ApiService, 'verifyEmail').mockResolvedValue({ email: 'm.hale@fastmail.com' });
+    render(
+      <React.StrictMode>
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/verify/tok123']}>
+          <Routes>
+            <Route path="/verify/:token" element={<VerifyPage />} />
+          </Routes>
+        </MemoryRouter>
+      </React.StrictMode>
+    );
+    expect(await screen.findByText('Your email is verified.')).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2700px; min-height: 1050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="4">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="pub">
+<header class="pub-top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+<a class="btn btn-quiet" href="#">Create account</a>
+</header>
+<main class="pub-body">
+<div class="pub-col narrow" style="padding-top: 40px">
+
+<sc-if value="{{f.pw}}" hint-placeholder-val="{{ true }}">
+<form class="stack g20">
+<h1 class="d-title">Sign in</h1>
+<div class="field"><label class="label" for="e-{{f.id}}">Email</label><input class="input" id="e-{{f.id}}" type="email" value="m.hale@fastmail.com" autocomplete="username"></div>
+<div class="field"><label class="label" for="p-{{f.id}}">Password</label><div class="input-wrap"><input class="input" id="p-{{f.id}}" type="password" value="lantern-orchard-basalt-71" autocomplete="current-password"><button class="ib" type="button" aria-label="Show password"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
+<button class="btn btn-primary btn-block" type="submit">Sign in</button>
+<p class="t-sm c3 row g8"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>There is no password reset.</p>
+</form>
+</sc-if>
+
+<sc-if value="{{f.code}}" hint-placeholder-val="{{ false }}">
+<form class="stack g20">
+<div class="stack g8"><h1 class="d-title">Two-factor code</h1><p class="c2">Enter the six-digit code from your authenticator app.</p></div>
+<div class="field"><label class="label sr" for="c-{{f.id}}">Six-digit code</label><input class="input input-code" id="c-{{f.id}}" value="482 913" inputmode="numeric" autocomplete="one-time-code"></div>
+<button class="btn btn-primary btn-block" type="submit">Verify</button>
+<a class="btn btn-quiet" href="#" style="align-self: center">Use a backup code instead</a>
+</form>
+</sc-if>
+
+<sc-if value="{{f.backup}}" hint-placeholder-val="{{ false }}">
+<form class="stack g20">
+<div class="stack g8"><h1 class="d-title">Backup code</h1><p class="c2">Each backup code works once. You have the list you saved when you turned two-factor on.</p></div>
+<div class="field"><label class="label" for="b-{{f.id}}">Backup code</label><input class="input mono" id="b-{{f.id}}" value="7KQ2-M9XD" autocomplete="one-time-code" spellcheck="false"></div>
+<button class="btn btn-primary btn-block" type="submit">Verify</button>
+<a class="btn btn-quiet" href="#" style="align-self: center">Use the authenticator code</a>
+</form>
+</sc-if>
+
+</div>
+</main>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2700,"height":1050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { frames: [
+      { id: 'a', cls: 'desk t-light', label: 'Desktop · 1280 · light', pw: true },
+      { id: 'b', cls: 'phone t-light', label: 'Phone · password', pw: true },
+      { id: 'c', cls: 'phone t-light', label: 'Phone · two-factor', code: true },
+      { id: 'd', cls: 'phone t-dark', label: 'Phone · dark · backup code', backup: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Locked</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 1050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="3">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="pub">
+<header class="pub-top">
+<span class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span>
+<button class="btn btn-quiet" type="button">Sign out</button>
+</header>
+<main class="pub-body" style="justify-content: center">
+<form class="pub-col narrow stack g24" style="flex: none; padding-bottom: 64px">
+<div style="width: 64px; height: 64px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: flex; align-items: center; justify-content: center; color: var(--ink)"><svg class="i i-lg" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></div>
+<div class="stack g8">
+<h1 class="d-fact">Your safe is locked.</h1>
+<p class="c2">m.hale@fastmail.com</p>
+</div>
+<div class="field"><label class="label" for="u-{{f.id}}">Password</label><div class="input-wrap"><input class="input" id="u-{{f.id}}" type="password" value="lantern-orchard-basalt-71" autocomplete="current-password"><button class="ib" type="button" aria-label="Show password"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
+<button class="btn btn-primary btn-block" type="submit">Unlock</button>
+<p class="t-sm c3">Locks after five minutes idle and when you close the tab. Unlocking works offline.</p>
+</form>
+</main>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":1050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { frames: [
+      { id: 'a', cls: 'desk t-light', label: 'Desktop · 1280 · light' },
+      { id: 'b', cls: 'phone t-light', label: 'Phone · 390 · light' },
+      { id: 'c', cls: 'phone t-dark', label: 'Phone · 390 · dark' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

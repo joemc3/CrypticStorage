@@ -1,0 +1,141 @@
+/* CrypticStorage design tokens — proposal 2026-10-14.
+   Light on :root, dark via prefers-color-scheme unless the user forced light,
+   and dark via [data-theme="dark"] when the user forced it. */
+
+:root {
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-badge: 5px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-dialog: 14px;
+  --radius-sheet: 18px;
+
+  --bg: #F1F2F0;
+  --surface: #FFFFFF;
+  --surface-2: #F6F7F5;
+  --sunk: #E8EAE7;
+  --line: #DCDFDA;
+  --line-strong: #BCC1BA;
+  --ink: #151816;
+  --ink-2: #454B47;
+  --ink-3: #5F6661;
+  --accent: #1D5844;
+  --accent-hover: #164635;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E1EDE7;
+  --accent-text: #1D5844;
+  --warn-text: #7F4E00;
+  --warn-soft: #FAEDD3;
+  --warn-line: #E3C385;
+  --danger: #A12A2A;
+  --danger-hover: #862121;
+  --danger-ink: #FFFFFF;
+  --danger-soft: #F8E3E1;
+  --danger-text: #9A2626;
+  --info-text: #1D4A85;
+  --info-soft: #E2EAF5;
+  --focus: #1D5844;
+  --overlay: rgba(21, 24, 22, .44);
+  --shadow: 0 1px 2px rgba(21, 24, 22, .06), 0 10px 28px rgba(21, 24, 22, .10);
+  --inverse: #151816;
+  --inverse-ink: #F1F2F0;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D0F0E;
+    --surface: #151816;
+    --surface-2: #1B1F1C;
+    --sunk: #0A0C0B;
+    --line: #272C29;
+    --line-strong: #3A413C;
+    --ink: #E8EBE8;
+    --ink-2: #B2B9B3;
+    --ink-3: #8F9790;
+    --accent: #7EC4A7;
+    --accent-hover: #97D3B9;
+    --accent-ink: #0D0F0E;
+    --accent-soft: #16302A;
+    --accent-text: #8FD0B4;
+    --warn-text: #E9B460;
+    --warn-soft: #2B2213;
+    --warn-line: #5A4520;
+    --danger: #EE8A84;
+    --danger-hover: #F4A39E;
+    --danger-ink: #1A0B0A;
+    --danger-soft: #311918;
+    --danger-text: #F29C96;
+    --info-text: #9BBDEB;
+    --info-soft: #17233A;
+    --focus: #7EC4A7;
+    --overlay: rgba(0, 0, 0, .62);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 14px 36px rgba(0, 0, 0, .5);
+    --inverse: #E8EBE8;
+    --inverse-ink: #0D0F0E;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0D0F0E;
+  --surface: #151816;
+  --surface-2: #1B1F1C;
+  --sunk: #0A0C0B;
+  --line: #272C29;
+  --line-strong: #3A413C;
+  --ink: #E8EBE8;
+  --ink-2: #B2B9B3;
+  --ink-3: #8F9790;
+  --accent: #7EC4A7;
+  --accent-hover: #97D3B9;
+  --accent-ink: #0D0F0E;
+  --accent-soft: #16302A;
+  --accent-text: #8FD0B4;
+  --warn-text: #E9B460;
+  --warn-soft: #2B2213;
+  --warn-line: #5A4520;
+  --danger: #EE8A84;
+  --danger-hover: #F4A39E;
+  --danger-ink: #1A0B0A;
+  --danger-soft: #311918;
+  --danger-text: #F29C96;
+  --info-text: #9BBDEB;
+  --info-soft: #17233A;
+  --focus: #7EC4A7;
+  --overlay: rgba(0, 0, 0, .62);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 14px 36px rgba(0, 0, 0, .5);
+  --inverse: #E8EBE8;
+  --inverse-ink: #0D0F0E;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Tailwind 3: point the theme at the tokens, e.g. in tailwind.config.js
+   theme.extend.colors = {
+     bg: 'var(--bg)', surface: 'var(--surface)', 'surface-2': 'var(--surface-2)', sunk: 'var(--sunk)',
+     line: 'var(--line)', 'line-strong': 'var(--line-strong)',
+     ink: 'var(--ink)', 'ink-2': 'var(--ink-2)', 'ink-3': 'var(--ink-3)',
+     accent: { DEFAULT: 'var(--accent)', hover: 'var(--accent-hover)', ink: 'var(--accent-ink)', soft: 'var(--accent-soft)', text: 'var(--accent-text)' },
+     warn: { text: 'var(--warn-text)', soft: 'var(--warn-soft)', line: 'var(--warn-line)' },
+     danger: { DEFAULT: 'var(--danger)', hover: 'var(--danger-hover)', ink: 'var(--danger-ink)', soft: 'var(--danger-soft)', text: 'var(--danger-text)' },
+     info: { text: 'var(--info-text)', soft: 'var(--info-soft)' },
+   }
+   theme.extend.fontFamily = { serif: 'var(--font-serif)', sans: 'var(--font-sans)', mono: 'var(--font-mono)' }
+   theme.extend.screens = { md: '720px' }
+   darkMode stays unused: the tokens switch, the classes do not. */

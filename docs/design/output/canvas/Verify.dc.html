@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Verify email and not found</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2260px; min-height: 2050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="6">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="pub">
+<header class="pub-top">
+<a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a>
+</header>
+<main class="pub-body">
+<div class="pub-col narrow" style="padding-top: 48px">
+
+<sc-if value="{{f.ok}}" hint-placeholder-val="{{ true }}">
+<div class="stack g20">
+<div class="li-ic folder" style="width: 52px; height: 52px; border-radius: 26px"><svg class="i i-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>
+<h1 class="d-title">Your email is verified.</h1>
+<p class="c2">m.hale@fastmail.com · your safe is ready.</p>
+<a class="btn btn-primary btn-block" href="#" style="margin-top: 8px">Sign in</a>
+</div>
+</sc-if>
+
+<sc-if value="{{f.fail}}" hint-placeholder-val="{{ false }}">
+<div class="stack g20">
+<div class="li-ic" style="width: 52px; height: 52px; border-radius: 26px; color: var(--danger-text); background: var(--danger-soft)"><svg class="i i-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></div>
+<h1 class="d-title">This link has expired or was already used.</h1>
+<div class="field"><label class="label" for="re-{{f.id}}">Your email</label><input class="input" id="re-{{f.id}}" type="email" value="m.hale@fastmail.com"></div>
+<button class="btn btn-primary btn-block" type="button">Send a new link</button>
+</div>
+</sc-if>
+
+<sc-if value="{{f.nf}}" hint-placeholder-val="{{ false }}">
+<div class="stack g20">
+<span class="mono t-sm c3">404</span>
+<h1 class="d-title">Nothing is kept at this address.</h1>
+<p class="c2">It may be mistyped, or it pointed at something that was moved or deleted.</p>
+<div class="actions" style="margin-top: 8px"><a class="btn btn-primary" href="#">Go to your safe</a><a class="btn btn-quiet" href="#">Home</a></div>
+</div>
+</sc-if>
+
+</div>
+</main>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2260,"height":2050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { frames: [
+      { id: 'a', cls: 'desk t-light', label: 'A3 · Desktop · verified', ok: true },
+      { id: 'b', cls: 'phone t-light', label: 'A3 · Phone · verified', ok: true },
+      { id: 'c', cls: 'phone t-dark', label: 'A3 · Phone · dark · link failed', fail: true },
+      { id: 'd', cls: 'desk t-light', label: 'A6 · Desktop · not found', nf: true },
+      { id: 'e', cls: 'phone t-light', label: 'A6 · Phone · not found', nf: true },
+      { id: 'f', cls: 'phone t-dark', label: 'A6 · Phone · dark', nf: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

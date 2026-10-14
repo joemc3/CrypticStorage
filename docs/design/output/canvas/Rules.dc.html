@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rules on an item</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2700px; min-height: 1150px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="4">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+
+<sc-if value="{{f.item}}" hint-placeholder-val="{{ true }}">
+<div class="app" aria-hidden="true">
+<aside class="side">
+<span class="brand"><svg class="logo" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span>
+<nav class="nav"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><span class="nav-a {{n.cls}}"><svg class="i" viewBox="0 0 24 24"><path d="{{n.d}}"></path></svg>{{n.label}}</span></sc-for></nav>
+</aside>
+<header class="top"><span class="brand"><svg class="logo" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span></header>
+<main class="main"><div class="main-in"><h1 class="d-title">Files</h1>
+<div class="list"><sc-for list="{{bg}}" as="r" hint-placeholder-count="4"><div class="li"><div class="li-ic folder"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div><div class="li-main"><span class="li-title">{{r}}</span></div></div></sc-for></div>
+</div></main>
+</div>
+<div class="overlay">
+<div class="sheet" role="dialog" aria-label="Handoff rules on Estate">
+<div class="grab" aria-hidden="true"></div>
+<div class="sheet-head"><div class="stack g4"><span class="d-sec">Estate</span><span class="t-xs c3">Folder · 7 items · handoff rules</span></div><button class="ib" type="button" aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div class="sheet-body">
+<div class="card stack g16" style="padding: 16px">
+<div class="row between g8"><span class="badge b-active">Active</span><span class="t-xs c3">Created 3 Oct 2026</span></div>
+<p class="t-sm"><span class="c3">To </span><span class="strong wrap-any">daniel.hale@gmail.com, sam.hale@proton.me</span></p>
+<dl class="stack g8 t-sm" style="margin: 0">
+<div class="row between g8"><dt class="c2">Releases after</dt><dd style="margin: 0">1 year without a sign-in</dd></div>
+<div class="row between g8"><dt class="c2">Next date</dt><dd style="margin: 0" class="strong">14 Oct 2027</dd></div>
+<div class="row between g8"><dt class="c2">Clock last reset</dt><dd style="margin: 0">Today, by your sign-in</dd></div>
+<div class="row between g8"><dt class="c2">Or by witnesses</dt><dd style="margin: 0">Any 2 of 3</dd></div>
+</dl>
+<button class="btn btn-quiet-danger btn-sm" type="button" style="align-self: flex-start; padding: 0">Revoke this rule</button>
+</div>
+<button class="btn btn-secondary" type="button" style="align-self: flex-start"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add another rule</button>
+<p class="help">Different rules can send this folder to different people.</p>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{f.revoke}}" hint-placeholder-val="{{ false }}">
+<div class="pub">
+<header class="pub-top"><span class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span><a class="btn btn-quiet" href="#">Cancel</a></header>
+<main class="pub-body"><div class="pub-col">
+<div class="fact">
+<span class="mono t-xs c3">Revoke handoff rule · Estate</span>
+<h1 class="d-fact">daniel.hale@gmail.com and sam.hale@proton.me will no longer receive Estate.</h1>
+<p class="fact-sub">Your own copies are untouched. You can make a new rule at any time.</p>
+</div>
+<div class="fact-foot"><button class="btn btn-danger btn-block" type="button">Revoke rule</button><button class="btn btn-quiet" type="button">Keep the rule</button></div>
+</div></main>
+</div>
+</sc-if>
+
+<sc-if value="{{f.all}}" hint-placeholder-val="{{ false }}">
+<div class="app">
+<header class="top"><a class="brand" href="#"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</a><button class="ib" type="button" aria-label="Lock now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button></header>
+<main class="main"><div class="main-in">
+<a class="row g4 t-sm" href="#" style="text-decoration: none; color: var(--ink-2)"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Dashboard</a>
+<h1 class="d-title">Handoff rules</h1>
+<div class="list">
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="5">
+<div class="li {{r.muted}}" style="align-items: flex-start; padding-top: 14px; padding-bottom: 14px"><div class="li-main g4"><div class="row between g8"><span class="li-title">{{r.name}}</span><span class="badge {{r.b}}">{{r.state}}</span></div><span class="li-meta"><span class="wrap-any">To {{r.to}}</span></span><span class="li-meta"><span>{{r.when}}</span></span></div></div>
+</sc-for>
+</div>
+</div></main>
+<nav class="tabs" aria-label="Main"><sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><a class="tab {{n.cls2}}" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.d}}"></path></svg>{{n.short}}</a></sc-for></nav>
+</div>
+</sc-if>
+
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2700,"height":1150}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const NAV = [
+      ['Dashboard', 'Home', 'M4 4h6v9H4zM14 11h6v9h-6zM4 17h6v3H4zM14 4h6v3h-6z', '', 'is-on'],
+      ['Files', 'Files', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'is-on', ''],
+      ['Shared with me', 'Shared', 'M4 13l2.5-7h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4l1.5 2.5h5L16 13h4', '', ''],
+      ['Settings', 'Settings', 'M4 7h10M18 7h2M4 17h4M12 17h8M18 7a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM12 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0z', '', '']
+    ];
+    const nav = NAV.map(n => ({ label: n[0], short: n[1], d: n[2], cls: n[3], cls2: n[4] }));
+    const bg = ['Crypto', 'Estate', 'Letters', 'Personal'];
+    const rules = [
+      { name: 'Estate', to: 'daniel.hale@gmail.com, sam.hale@proton.me', when: '1 year · next date 14 Oct 2027', b: 'b-active', state: 'Active', muted: '' },
+      { name: 'Seed phrase, cold wallet.txt', to: 'daniel.hale@gmail.com', when: '90 days · next date 12 Jan 2027', b: 'b-active', state: 'Active', muted: '' },
+      { name: 'Letters', to: 'sam.hale@proton.me', when: '5 years · next date 14 Oct 2031', b: 'b-active', state: 'Active', muted: '' },
+      { name: 'Crypto', to: 'daniel.hale@gmail.com', when: 'Released 12 Mar 2026 after 30 days without a sign-in', b: 'b-released', state: 'Released by timer', muted: '' },
+      { name: 'Old will (2019).pdf', to: 'daniel.hale@gmail.com', when: 'Revoked 2 Sep 2026', b: 'b-revoked', state: 'Revoked', muted: 'is-muted' }
+    ];
+    return { nav, bg, rules, frames: [
+      { cls: 'desk t-light', label: 'Desktop · rules on an item', item: true },
+      { cls: 'phone t-light', label: 'Phone · rules on an item', item: true },
+      { cls: 'phone t-light', label: 'Phone · revoke, one confirmation', revoke: true },
+      { cls: 'phone t-dark', label: 'Phone · dark · every rule and its state', all: true }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

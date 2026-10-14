@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shared link</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="cs.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 2700px; min-height: 2050px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="7">
+<figure class="slot {{f.cls}}">
+<figcaption class="slot-cap">{{f.label}}</figcaption>
+<div class="frame {{f.cls}}">
+<div class="pub">
+<header class="pub-top">
+<span class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="12" cy="10.5" r="2.2"></circle><path d="M12 12.7v3.8"></path></svg>CrypticStorage</span>
+<span class="t-sm c3" style="padding-right: 8px">No account needed</span>
+</header>
+<main class="pub-body">
+<div class="pub-col narrow" style="padding-top: 40px">
+
+<sc-if value="{{f.ready}}" hint-placeholder-val="{{ true }}">
+<div class="stack g24">
+<p class="cap">A file was shared with you</p>
+<div class="card stack g20" style="padding: 24px">
+<div class="row g16" style="align-items: flex-start">
+<div class="li-ic" style="width: 48px; height: 48px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><path d="M14 3v5h5"></path></svg></div>
+<div class="stack g4 grow"><h1 class="d-sec wrap-any" style="font-size: 18px; line-height: 24px">Will and testament (signed).pdf</h1><span class="t-sm c3">2.4 MB</span></div>
+</div>
+<button class="btn btn-primary btn-block" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg>Download</button>
+<div class="stack g8 t-sm c2">
+<div class="row g8"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Link expires 21 Oct 2026</div>
+<div class="row g8"><svg class="i i-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg>2 of 3 downloads left</div>
+</div>
+</div>
+<p class="t-sm c3">Decrypted in this browser. The key is in the link itself and never reached the server.</p>
+</div>
+</sc-if>
+
+<sc-if value="{{f.pass}}" hint-placeholder-val="{{ false }}">
+<form class="stack g20">
+<p class="cap">A file was shared with you</p>
+<div class="stack g8"><h1 class="d-title">This link has a password</h1><p class="c2">The person who sent the link has it. Ask them if you were not given it.</p></div>
+<div class="field"><label class="label" for="lp-{{f.id}}">Password</label><div class="input-wrap"><input class="input" id="lp-{{f.id}}" type="password" value="harbour-9"><button class="ib" type="button" aria-label="Show password"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
+<button class="btn btn-primary btn-block" type="submit">Open</button>
+</form>
+</sc-if>
+
+<sc-if value="{{f.gone}}" hint-placeholder-val="{{ false }}">
+<div class="stack g16">
+<div class="li-ic" style="width: 48px; height: 48px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path><path d="M4 4l16 16"></path></svg></div>
+<h1 class="d-title">{{f.why}}</h1>
+<p class="c2">Ask the person who sent it for a new one.</p>
+</div>
+</sc-if>
+
+</div>
+</main>
+</div>
+</div>
+</figure>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2700,"height":2050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { frames: [
+      { id: 'a', cls: 'desk t-light', label: 'Desktop · ready', ready: true },
+      { id: 'b', cls: 'phone t-light', label: 'Phone · password first', pass: true },
+      { id: 'c', cls: 'phone t-light', label: 'Phone · ready', ready: true },
+      { id: 'd', cls: 'phone t-dark', label: 'Phone · dark · ready', ready: true },
+      { id: 'e', cls: 'desk t-light', label: 'Desktop · password first', pass: true },
+      { id: 'f', cls: 'phone t-light', label: 'Phone · expired (revoked reads: This link was revoked by its owner.)', gone: true, why: 'This link has expired.' },
+      { id: 'g', cls: 'phone t-dark', label: 'Phone · dark · download limit reached', gone: true, why: 'This link has reached its download limit.' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

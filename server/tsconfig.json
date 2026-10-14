@@ -19,18 +19,5 @@
     "noUncheckedIndexedAccess": true
   },
   "include": ["src/**/*"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "tests",
-    "src/controllers",
-    "src/routes",
-    "src/services",
-    "src/utils",
-    "src/config/database.ts",
-    "src/config/redis.ts",
-    "src/config/storage.ts",
-    "src/middleware/*.middleware.ts",
-    "src/middleware/index.ts"
-  ]
+  "exclude": ["node_modules", "dist", "tests"]
 }

@@ -24,7 +24,6 @@ Every session that changes anything:
 - Everything cryptographic lives in `client/src/services/crypto.service.ts`. Changing the content format, the KDF or the key hierarchy needs a new format version, a migration story and a line in `SECURITY.md`.
 - The server never receives plaintext names, content or keys. If a change would send any of those, it is wrong.
 - Server tests share one database; jest runs with `maxWorkers: 1` on purpose.
-- The old generated sources under `server/src/{controllers,routes,services,utils}`, `server/src/config/{database,redis,storage}.ts`, `server/src/middleware/*.middleware.ts` and `server/tests/{unit,integration}` are dead and excluded from builds. Delete them when the environment allows; do not import from them.
 
 ## Git
 

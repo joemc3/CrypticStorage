@@ -27,19 +27,11 @@ What is true today, verified by CI:
 ## Known gaps
 
 - **No external security review.** The design follows well-known patterns (Bitwarden-style KDF split, per-file keys, fragment-carried link keys) but nobody outside this repository has audited it.
-- **No password recovery.** Zero-knowledge means a lost password loses the data. A recovery-key flow is the top item on the roadmap.
+- **No password recovery, by design.** A lost password loses the data. The product spec rules out recovery keys, resets and support paths; the only way anyone else ever reads an item is a handoff rule the owner set.
 - **Whole-file buffering in the browser.** Encryption happens in 1 MiB chunks, but the sealed chunks are held in memory until the single PUT completes. Multi-gigabyte files will strain browser memory; the server side already supports streaming.
 - **Metadata the server can see:** file sizes (approximately), MIME types, folder structure (not names), timestamps, who shares with whom.
 - **Email is the KDF salt.** This removes a round trip at login but means changing the email requires re-deriving keys, so the UI does not offer email changes.
-- **Old sources still in the tree.** See the cleanup section in the README; a permission restriction prevented deleting them in the session that replaced them.
 
 ## Roadmap
 
-1. **Recovery key.** Generate a 256-bit recovery key at signup that also wraps the master key; show it once; allow "forgot password" by re-wrapping with a new password.
-2. **Streaming uploads.** Encrypt in a Web Worker and upload chunk by chunk with resumable multipart uploads (S3 multipart or tus), so a 5 GB file neither freezes the tab nor restarts from zero after a network blip.
-3. **Passkeys / WebAuthn** as a second factor and, with PRF, as a way to unlock the vault without typing the password.
-4. **Encrypted search.** Client-side index of file names encrypted with the master key.
-5. **Thumbnails and previews** generated and encrypted client-side.
-6. **Folder sharing** by wrapping a folder key, and write permissions for user shares.
-7. **Browser-level end-to-end tests** with Playwright on top of the existing service-level e2e.
-8. **Observability.** Prometheus metrics and structured request logs are easy to add on the pino/express base.
+The order of work is section 12 of [`docs/superpowers/specs/2026-10-14-product-core-design.md`](docs/superpowers/specs/2026-10-14-product-core-design.md). The product is a safe, not a drive: no recovery by design, handoff rules per item released by a dead-man timer or a witness quorum, irreversible acts shown one fact per screen. Anything written here before 2026-10-14 that contradicts the spec is superseded by it.

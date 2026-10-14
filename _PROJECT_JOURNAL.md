@@ -23,7 +23,7 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | End-to-end (register → upload → download → share) | 6 tests, runs in CI |
 | Crypto | per-file keys, chunked AES-GCM with per-chunk nonces, KDF-split auth, keys in link fragments |
 | Ops | Docker Compose (Postgres + API on a volume + nginx web), GitHub Actions with four jobs including a Docker build and smoke, no-Docker path on embedded Postgres |
-| Design | Proposal from the Claude Design session under `docs/design/output/` (branch `design/visual-proposal`), not yet reconciled |
+| Design | Proposal under `docs/design/output/`, reconciled 2026-10-14 into `docs/design/decisions.md` (14 rows, all adopted or decided); binding on implementation |
 | Branch | `main` (renamed from `master` 2026-10-14, protected, PR-only). No other branches on origin |
 
 ## Next steps
@@ -35,8 +35,8 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 - [x] Product core spec reviewed and merged (PR #4); stage 1 plan merged (PR #5).
 - [x] Add a Docker build and smoke job to CI. (2026-10-14, stage 1)
 - [x] Claude Design session run against `docs/design/brief/`; output under `docs/design/output/` on `design/visual-proposal`. (2026-10-14)
-- [ ] Reconcile `docs/design/output/` against the spec into `docs/design/decisions.md`, starting from `docs/design/output/open-questions.md` (spec section 11, step 3).
-- [ ] Stage 2: signup as a contract, mandatory email verification, auto-lock; email service enters the stack. Write spec and plan together in one PR.
+- [x] Reconcile the design into `docs/design/decisions.md` (2026-10-14).
+- [ ] Implement stages 2 to 5 from `docs/superpowers/plans/2026-10-14-stages-2-5-plan.md` on `feat/stages-2-5`, subagent-driven, as far as the session's context allows (stage 2 and the design application first; handoff slices after).
 - [ ] Recovery key at signup, so a forgotten password is not fatal.
 - [ ] Streaming chunked uploads in a Web Worker (resumable, no whole-file buffering).
 - [ ] Passkeys / WebAuthn.
@@ -58,6 +58,19 @@ Working alpha of a zero-knowledge encrypted file store. Both halves build, CI is
 | 2026-10-14 | MinIO dropped from the Docker stack; the API's local driver on a named volume is the default | MinIO deleted its Docker Hub and Quay images in September 2026 and the last free release carries an auth-bypass CVE. The stack streamed through the API anyway, so MinIO added a service and two secrets for nothing. The S3 driver stays for external stores (S3, R2, Garage) via `STORAGE_DRIVER=s3` in `.env` |
 
 ## Session log
+
+### 2026-10-14 · local (Claude Code) · design reconciled; specs and plan for stages 2 to 5
+
+Session: Claude Code, local checkout (same session as stage 1) · Branch: `design/visual-proposal` · Commits: `23adbc3`, `5a09be5`, plus this journal commit
+
+**Did**
+- Reconciled the Claude Design output against the product spec with the owner: 14 decision rows in `docs/design/decisions.md`. Owner chose an optional display name, a lock-after selector defaulting to 5 minutes, full-screen irreversible confirmations, and no re-arming of released rules; the rest adopt the design's placements. Spec amended in four places; the brief's lock constraint corrected.
+- Wrote three specs sized to what the next session can build: stage 2 (contract, email verification with a `log|smtp` mail driver, auto-lock with raw keys in memory only, display name, theme), stage 2b (apply the design to existing screens, Playwright smoke), stages 3 to 5 (handoff: witnesses with trust-on-first-use, rules with owner-held release key, in-house Shamir over GF(256), timer job with injectable clock and check-in links, quorum with re-wrapped shares, cancel on owner activity). One plan of 21 tasks for subagent-driven execution.
+- Owner refined the sizing rule: size work by what fits sanely in a session's context; recorded in `CLAUDE.md`, the vault and memory.
+
+**Verified**: documents only; no code changed. The "key changed" callout described in the design write-up is not drawn in the share dialog source, noted in decisions as an implementation item.
+
+**Open**: PR for this branch; next session starts `feat/stages-2-5`.
 
 ### 2026-10-14 · Claude Design (cloud, linked to local checkout) · design proposal written to docs/design/output
 

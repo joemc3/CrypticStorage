@@ -65,6 +65,8 @@ Explicitly out: password reset, recovery key, security questions, support-assist
 ### 7.1 People
 
 - **Witnesses** are set once per account in Settings: accounts on the platform chosen by email, with a threshold k of n (for example 2 of 3). Each witness receives an invitation and must accept; they are taking on a duty. The owner sees who has accepted. Changing the witness set re-splits every rule's release key client-side.
+- **Witness set size.** n is between 2 and 7, k between 2 and n. These bounds are server configuration for self-hosters; the defaults ship as stated. A threshold of 1 is never allowed, because one person alone could then release everything.
+- **A witness may also be a recipient.** Allowed by default, with a warning on the screen where it happens that this person will then hold both a share of the release and the destination. A self-hoster can turn the allowance off in server configuration.
 - **Recipients** are set per rule: one or more accounts on the platform. A recipient is told that a rule exists for them, not what it covers, so a wrong email is caught early and the inheritance is not a surprise.
 - Non-account heirs are not supported. If ever needed, the path is a link with a password, as a separate feature.
 
@@ -117,6 +119,7 @@ Folders with breadcrumbs; drag-and-drop upload with progress; previews for text 
 - Email becomes a required service from stage 2 onward. Self-hosters bring SMTP; the hosted service uses a provider.
 - `SECURITY.md` is the document reviewers read. It grows a section for the handoff scheme as that lands, and a dated "review status" section that says plainly who has looked at the design and who has not. An external review is sought and welcomed; nothing in the plan waits for it.
 - A reproducible client build with published hashes is the cheap first step toward attacker 2 and is done early.
+- **The hosted service acts as timekeeper for inheritance, and that carries legal exposure.** Releasing someone's documents to named people on a timer or a vote touches estate and privacy law, and it varies by jurisdiction. Before the hosted service accepts its first customer, the owner gets a legal opinion on the terms of service for handoff rules and records the outcome in the docs. Self-hosters carry this themselves.
 - **Compliance is a goal of the hosted service, pursued after it stands up, never claimed before.** HIPAA is an obligation on whoever handles health data: a hosted safe that holds a clinic's records is a business associate even though it cannot read them, so taking such customers means signed agreements, written policies, breach procedures and risk assessments on the owner's side. SOC 2 is an audit of the operating organization's controls, bought to satisfy enterprise procurement. Both ask for technical properties the core already has or plans: encryption at rest and in transit, access control, auto-lock, an audit log, logging of administrative actions, retention rules. The software keeps those properties and documents how it supports each control. Self-hosters inherit the properties, not the compliance; that is theirs to obtain.
 
 ## 11. Design handoff
@@ -138,7 +141,7 @@ The visual and interaction design is produced in Claude Design in a separate ses
 6. Admin role and quotas for self-hosters.
 7. Reconcile the design (section 11, step 3) and apply it across the whole UI.
 8. Reproducible client build with published hashes.
-9. The hosted service, with the review status published alongside it. An external review is pursued in parallel and recorded when it happens.
+9. The hosted service, with the review status published alongside it and the legal opinion on handoff terms obtained first. An external review is pursued in parallel and recorded when it happens.
 10. Compliance readiness for the hosted service: a control-by-control mapping in the docs, audit log export and retention settings, then business associate agreements and a SOC 2 engagement if customers ask for them.
 11. Streaming uploads, passkeys, packaged client, in whatever order matters then.
 
@@ -147,9 +150,3 @@ Each stage gets its own spec and plan under `docs/superpowers/`; this document i
 ## 13. Dropped from the 2025 PRD, and staying dropped
 
 Security-question recovery, recovery keys, deduplication, storage analytics dashboard, blockchain integrity, IPFS, real-time collaboration, thumbnails as a priority, 1000-concurrent-user targets. None of them serve a safe. HIPAA and SOC 2 are not dropped; they move from claims in a PRD to a stage of the hosted service (section 10 and stage 10).
-
-## 14. Open questions
-
-- Whether a witness should also be allowed to be a recipient. Default: allowed, with a warning that they then hold both a share and the destination.
-- Minimum and maximum witness set sizes. Default: n between 2 and 7, k between 2 and n.
-- Whether the hosted service needs a legal review of acting as timekeeper for inheritance. Not a design question; noted so it is not forgotten.

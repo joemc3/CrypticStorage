@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { prisma } from './config/prisma';
 import { env, isTest } from './config/env';
 import { authRouter } from './modules/auth/router';
-import { activityRouter, storageRouter, usersRouter } from './modules/users/router';
+import { activityRouter, contactsRouter, storageRouter, usersRouter } from './modules/users/router';
 import { fileContentRouter, filesRouter } from './modules/files/router';
 import { foldersRouter } from './modules/folders/router';
 import { sharesRouter } from './modules/shares/router';
+import { witnessesRouter } from './modules/witnesses/router';
 import { handler, ok } from './lib/http';
 import { clearOutbox, outbox } from './lib/mail';
 
@@ -37,6 +38,8 @@ apiRouter.use('/files', fileContentRouter);
 apiRouter.use('/files', filesRouter);
 apiRouter.use('/folders', foldersRouter);
 apiRouter.use('/shares', sharesRouter);
+apiRouter.use('/witnesses', witnessesRouter);
+apiRouter.use('/contacts', contactsRouter);
 
 if (isTest) {
   // Lets the end-to-end run fetch verification links. Never mounted outside NODE_ENV=test.

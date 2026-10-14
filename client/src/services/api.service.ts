@@ -209,6 +209,55 @@ export type ProgressHandler = (loaded: number, total: number) => void;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
+// --- Witnesses and key trust ---------------------------------------------------
+
+export type WitnessStatus = 'invited' | 'accepted' | 'declined' | 'removed';
+
+export interface WitnessEntry {
+  id: string;
+  user: { id: string; email: string; displayName: string | null; publicKey: string; fingerprint: string };
+  status: WitnessStatus;
+  invitedAt: string;
+  respondedAt: string | null;
+}
+
+export interface WitnessSet {
+  threshold: number;
+  minN: number;
+  maxN: number;
+  witnesses: WitnessEntry[];
+}
+
+export interface WitnessInvitation {
+  id: string;
+  owner: { id: string; email: string; displayName: string | null };
+  status: WitnessStatus;
+  invitedAt: string;
+  respondedAt: string | null;
+}
+
+export interface WitnessInvitations {
+  invitations: Array<{ id: string; owner: WitnessInvitation['owner']; invitedAt: string }>;
+  serving: Array<{ id: string; owner: WitnessInvitation['owner']; respondedAt: string | null }>;
+}
+
+export interface TrustedKey {
+  fingerprint: string;
+  verifiedInPerson: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface PublicKeyLookup {
+  id: string;
+  email: string;
+  publicKey: string;
+  /** SHA-256 of the SPKI bytes, lowercase hex, computed by the server. */
+  fingerprint: string;
+  /** The caller's stored row for this contact, or null if never recorded. */
+  trust: TrustedKey | null;
+}
+
 class ApiService {
   private readonly client: AxiosInstance;
   private refreshing: Promise<Tokens> | null = null;
@@ -269,6 +318,9 @@ class ApiService {
   private async patch<T>(url: string, body?: unknown): Promise<T> {
     return (await this.client.patch<ApiResponse<T>>(url, body)).data.data;
   }
+  private async put<T>(url: string, body?: unknown): Promise<T> {
+    return (await this.client.put<ApiResponse<T>>(url, body)).data.data;
+  }
   private async delete<T>(url: string, body?: unknown): Promise<T> {
     return (await this.client.delete<ApiResponse<T>>(url, { data: body })).data.data;
   }
@@ -308,8 +360,39 @@ class ApiService {
   deleteAccount(passwordHash: string): Promise<unknown> {
     return this.delete('/users/profile', { passwordHash });
   }
-  getPublicKey(email: string): Promise<{ id: string; email: string; publicKey: string }> {
+  getPublicKey(email: string): Promise<PublicKeyLookup> {
     return this.get('/users/public-key', { email });
+  }
+  /** Record that this contact's current key was seen (first use, or a fetch whose fingerprint matched). */
+  markContactSeen(userId: string): Promise<TrustedKey> {
+    return this.post(`/contacts/${userId}/seen`);
+  }
+  setContactTrust(userId: string, verifiedInPerson: boolean): Promise<TrustedKey> {
+    return this.put(`/contacts/${userId}/trust`, { verifiedInPerson });
+  }
+
+  // --- Witnesses ---------------------------------------------------------------
+
+  getWitnesses(): Promise<WitnessSet> {
+    return this.get('/witnesses');
+  }
+  setWitnessThreshold(k: number): Promise<WitnessSet & { activeRules: unknown[] }> {
+    return this.put('/witnesses/threshold', { k });
+  }
+  inviteWitness(email: string): Promise<WitnessEntry> {
+    return this.post('/witnesses', { email });
+  }
+  removeWitness(id: string): Promise<{ threshold: number; activeRules: unknown[] }> {
+    return this.delete(`/witnesses/${id}`);
+  }
+  getWitnessInvitations(): Promise<WitnessInvitations> {
+    return this.get('/witnesses/invitations');
+  }
+  acceptWitnessInvitation(id: string): Promise<WitnessInvitation> {
+    return this.post(`/witnesses/invitations/${id}/accept`);
+  }
+  declineWitnessInvitation(id: string): Promise<WitnessInvitation> {
+    return this.post(`/witnesses/invitations/${id}/decline`);
   }
   setupTwoFactor(): Promise<{ secret: string; qrCode: string }> {
     return this.post('/users/2fa/setup');

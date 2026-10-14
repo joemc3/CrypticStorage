@@ -44,6 +44,8 @@ model User {
   contractAcknowledgedAt DateTime  @default(now()) @map("contract_acknowledged_at")
   lockAfterMinutes       Int       @default(5) @map("lock_after_minutes")
   lastActivityAt         DateTime  @default(now()) @map("last_activity_at")
+  /// How many witnesses must agree to release (k of n). Never below 2.
+  witnessThreshold       Int       @default(2) @map("witness_threshold")
 
   files          File[]
   folders        Folder[]
@@ -53,6 +55,11 @@ model User {
   sharesGiven    FileShare[]  @relation("SharesGiven")
   sharesReceived FileShare[]  @relation("SharesReceived")
   emailTokens    EmailToken[]
+
+  witnesses       Witness[]    @relation("WitnessOwner")
+  witnessFor      Witness[]    @relation("WitnessUser")
+  trustedKeys     TrustedKey[] @relation("TrustOwner")
+  trustedByOthers TrustedKey[] @relation("TrustContact")
 
   @@map("users")
 }
@@ -205,4 +212,46 @@ model EmailToken {
 
   @@index([userId, purpose])
   @@map("email_tokens")
+}
+
+enum WitnessStatus {
+  invited
+  accepted
+  declined
+  removed
+}
+
+/// A person the owner named to help release their items. Holds no data, only a duty.
+model Witness {
+  id            String        @id @default(uuid())
+  ownerId       String        @map("owner_id")
+  witnessUserId String        @map("witness_user_id")
+  status        WitnessStatus @default(invited)
+  invitedAt     DateTime      @default(now()) @map("invited_at")
+  respondedAt   DateTime?     @map("responded_at")
+
+  owner   User @relation("WitnessOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  witness User @relation("WitnessUser", fields: [witnessUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, witnessUserId])
+  @@index([witnessUserId, status])
+  @@map("witnesses")
+}
+
+/// Trust on first use: the key fingerprint a user last saw for a contact. Public data only.
+model TrustedKey {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  contactUserId    String   @map("contact_user_id")
+  /// SHA-256 of the SPKI bytes, lowercase hex.
+  fingerprint      String
+  verifiedInPerson Boolean  @default(false) @map("verified_in_person")
+  firstSeenAt      DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt       DateTime @default(now()) @map("last_seen_at")
+
+  user    User @relation("TrustOwner", fields: [userId], references: [id], onDelete: Cascade)
+  contact User @relation("TrustContact", fields: [contactUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactUserId])
+  @@map("trusted_keys")
 }

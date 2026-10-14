@@ -5,3 +5,10 @@ export function verifyEmail(link: string): { subject: string; text: string } {
     text: `Open the link to finish creating your safe. If you did not sign up, ignore this and nothing will happen.\n\n${link}\n`,
   };
 }
+
+export function witnessInvitation(ownerName: string, link: string): { subject: string; text: string } {
+  return {
+    subject: `${ownerName} asked you to be a witness`,
+    text: `Together with others they name, you could release their items to the people they chose, and you could never read those items yourself. Open the link to accept or decline.\n\n${link}\n`,
+  };
+}

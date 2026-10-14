@@ -54,3 +54,8 @@ export function decryptAtRest(blob: string): string {
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
 }
+
+/** Lowercase-hex SHA-256 of the DER bytes of a base64 SPKI public key. Shown to users to compare keys. */
+export function spkiFingerprint(publicKeyBase64: string): string {
+  return createHash('sha256').update(Buffer.from(publicKeyBase64, 'base64')).digest('hex');
+}

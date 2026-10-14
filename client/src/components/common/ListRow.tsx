@@ -1,20 +1,21 @@
 import React from 'react';
 
-/** The container for rows: a bordered list with no gaps. */
-export const RowList: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <ul role="list" className={`overflow-hidden rounded-xl border border-line bg-surface ${className}`}>
-    {children}
-  </ul>
-);
-
-/** Heading for the desktop columns of a RowList. Hidden from assistive technology, the rows carry the data. */
-export const RowListHead: React.FC = () => (
-  <li aria-hidden="true" className="hidden items-center gap-3 border-b border-line bg-surface-2 py-2 pl-4 pr-2 text-xs font-medium text-ink-3 md:flex">
-    <span className="flex-1">Name</span>
-    <span className="w-24 text-right">Size</span>
-    <span className="w-28 text-right">Modified</span>
-    <span className="w-11" />
-  </li>
+/**
+ * The container for rows: a bordered list with no gaps. With `columns` it draws the desktop column
+ * heading above the rows. The box does not clip, so a row menu can open past its edge.
+ */
+export const RowList: React.FC<{ children: React.ReactNode; className?: string; columns?: boolean }> = ({ children, className = '', columns = false }) => (
+  <div className={`rounded-xl border border-line bg-surface ${className}`}>
+    {columns && (
+      <div aria-hidden="true" className="hidden items-center gap-3 rounded-t-[11px] border-b border-line bg-surface-2 py-2 pl-4 pr-2 text-xs font-medium text-ink-3 md:flex">
+        <span className="flex-1">Name</span>
+        <span className="w-24 text-right">Size</span>
+        <span className="w-28 text-right">Modified</span>
+        <span className="w-11" />
+      </div>
+    )}
+    <ul role="list">{children}</ul>
+  </div>
 );
 
 const markerTone = { default: 'text-ink-3', handoff: 'text-accent-text', shared: 'text-info-text' } as const;
@@ -76,7 +77,7 @@ export const ListRow: React.FC<ListRowProps> = ({ icon, tone = 'file', title, me
   );
 
   return (
-    <li className={`flex min-h-[60px] items-center gap-3 border-t border-line py-2 pl-4 pr-2 first:border-t-0 ${selected ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
+    <li className={`flex min-h-[60px] items-center gap-3 border-b border-line py-2 pl-4 pr-2 first:rounded-t-[11px] last:rounded-b-[11px] last:border-b-0 ${selected ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
       {leading}
       {onClick ? (
         <button type="button" onClick={onClick} aria-pressed={selected || undefined} className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left ${focus}`}>

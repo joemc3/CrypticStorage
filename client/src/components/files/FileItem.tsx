@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Fragment } from 'react';
 import {
   DocumentIcon,
   DocumentTextIcon,
@@ -6,15 +6,15 @@ import {
   VideoCameraIcon,
   MusicalNoteIcon,
   ArchiveBoxIcon,
-  EllipsisVerticalIcon,
+  EllipsisHorizontalIcon,
   ArrowDownTrayIcon,
   ShareIcon,
   TrashIcon,
   EyeIcon,
+  UserIcon,
 } from '@heroicons/react/24/outline';
 import { Menu, Transition } from '@headlessui/react';
-import { motion } from 'framer-motion';
-import { Fragment } from 'react';
+import { ListRow, RowMarker } from '../common/ListRow';
 
 export interface FileItemProps {
   id: string;
@@ -22,8 +22,13 @@ export interface FileItemProps {
   size: number;
   mimeType: string;
   uploadedAt: string;
-  thumbnailUrl?: string;
-  viewMode?: 'grid' | 'list';
+  /** Number of people this file is shared with. Draws the shared marker when above zero. */
+  sharedWith?: number;
+  /** Slot for the handoff marker. Nothing is drawn until the handoff stage supplies one. */
+  handoffMarker?: React.ReactNode;
+  /** Optional checkbox state. The checkbox is drawn only when `onToggleSelect` is given. */
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onClick?: () => void;
   onDownload?: () => void;
   onDelete?: () => void;
@@ -31,45 +36,28 @@ export interface FileItemProps {
   onPreview?: () => void;
 }
 
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+export const formatFileSize = (bytes: number): string => {
+  if (bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${Math.round((bytes / 1024 ** i) * 10) / 10} ${units[i]}`;
 };
 
-const formatDate = (dateString: string): string => {
+/** "12 Oct", with the year when it is not this one. */
+export const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
-  const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-
-  if (diffInDays === 0) return 'Today';
-  if (diffInDays === 1) return 'Yesterday';
-  if (diffInDays < 7) return `${diffInDays} days ago`;
-  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
-  if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} months ago`;
-  return `${Math.floor(diffInDays / 365)} years ago`;
+  if (Number.isNaN(date.getTime())) return '';
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString('en-GB', sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const getFileIcon = (mimeType: string) => {
   if (mimeType.startsWith('image/')) return PhotoIcon;
   if (mimeType.startsWith('video/')) return VideoCameraIcon;
   if (mimeType.startsWith('audio/')) return MusicalNoteIcon;
-  if (mimeType.includes('pdf') || mimeType.includes('document')) return DocumentTextIcon;
+  if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.startsWith('text/')) return DocumentTextIcon;
   if (mimeType.includes('zip') || mimeType.includes('compressed')) return ArchiveBoxIcon;
   return DocumentIcon;
-};
-
-const getFileIconColor = (mimeType: string) => {
-  if (mimeType.startsWith('image/')) return 'text-blue-500';
-  if (mimeType.startsWith('video/')) return 'text-purple-500';
-  if (mimeType.startsWith('audio/')) return 'text-green-500';
-  if (mimeType.includes('pdf')) return 'text-red-500';
-  if (mimeType.includes('document')) return 'text-indigo-500';
-  if (mimeType.includes('zip') || mimeType.includes('compressed')) return 'text-yellow-500';
-  return 'text-gray-500';
 };
 
 export const FileItem: React.FC<FileItemProps> = ({
@@ -77,250 +65,106 @@ export const FileItem: React.FC<FileItemProps> = ({
   size,
   mimeType,
   uploadedAt,
-  thumbnailUrl,
-  viewMode = 'grid',
+  sharedWith = 0,
+  handoffMarker,
+  selected = false,
+  onToggleSelect,
   onClick,
   onDownload,
   onDelete,
   onShare,
   onPreview,
 }) => {
-  const [imageError, setImageError] = useState(false);
   const Icon = getFileIcon(mimeType);
-  const iconColor = getFileIconColor(mimeType);
-  const showThumbnail = thumbnailUrl && !imageError && mimeType.startsWith('image/');
-
-  if (viewMode === 'list') {
-    return (
-      <motion.div
-        whileHover={{ scale: 1.01 }}
-        className="flex items-center gap-4 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-        onClick={onClick}
-      >
-        {/* Icon/Thumbnail */}
-        <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
-          {showThumbnail ? (
-            <img
-              src={thumbnailUrl}
-              alt={name}
-              className="w-10 h-10 object-cover rounded"
-              onError={() => setImageError(true)}
-            />
-          ) : (
-            <Icon className={`h-8 w-8 ${iconColor}`} />
-          )}
-        </div>
-
-        {/* Name */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{name}</p>
-        </div>
-
-        {/* Size */}
-        <div className="hidden sm:block flex-shrink-0 w-20 text-right">
-          <p className="text-sm text-gray-500 dark:text-gray-400">{formatFileSize(size)}</p>
-        </div>
-
-        {/* Date */}
-        <div className="hidden md:block flex-shrink-0 w-32 text-right">
-          <p className="text-sm text-gray-500 dark:text-gray-400">{formatDate(uploadedAt)}</p>
-        </div>
-
-        {/* Actions Menu */}
-        <FileActionsMenu
-          onDownload={onDownload}
-          onShare={onShare}
-          onPreview={onPreview}
-          onDelete={onDelete}
-        />
-      </motion.div>
-    );
-  }
-
-  // Grid view
-  return (
-    <motion.div
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.98 }}
-      className="relative group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-      onClick={onClick}
-    >
-      {/* Thumbnail/Icon */}
-      <div className="aspect-square bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-        {showThumbnail ? (
-          <img
-            src={thumbnailUrl}
-            alt={name}
-            className="w-full h-full object-cover"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <Icon className={`h-16 w-16 ${iconColor}`} />
+  const markers =
+    sharedWith > 0 || handoffMarker ? (
+      <>
+        {handoffMarker}
+        {sharedWith > 0 && (
+          <RowMarker tone="shared" icon={<UserIcon className="h-3.5 w-3.5" />}>
+            Shared with {sharedWith}
+          </RowMarker>
         )}
+      </>
+    ) : undefined;
 
-        {/* Hover Overlay */}
-        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <div className="flex gap-2">
-            {onPreview && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPreview();
-                }}
-                className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <EyeIcon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-              </button>
-            )}
-            {onDownload && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDownload();
-                }}
-                className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <ArrowDownTrayIcon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* File Info */}
-      <div className="p-3">
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate mb-1" title={name}>
-          {name}
-        </p>
-        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-          <span>{formatFileSize(size)}</span>
-          <span>{formatDate(uploadedAt)}</span>
-        </div>
-      </div>
-
-      {/* Actions Menu (Top Right) */}
-      <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
-        <FileActionsMenu
-          onDownload={onDownload}
-          onShare={onShare}
-          onPreview={onPreview}
-          onDelete={onDelete}
-          variant="compact"
-        />
-      </div>
-    </motion.div>
+  return (
+    <ListRow
+      icon={<Icon className="h-5 w-5" />}
+      title={name}
+      size={formatFileSize(size)}
+      date={formatDate(uploadedAt)}
+      markers={markers}
+      selected={selected}
+      onClick={onClick}
+      leading={
+        onToggleSelect ? (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`Select ${name}`}
+            className="h-4 w-4 flex-none rounded border-line-strong accent-[var(--accent)]"
+          />
+        ) : undefined
+      }
+      actions={<FileActionsMenu name={name} onDownload={onDownload} onShare={onShare} onPreview={onPreview} onDelete={onDelete} />}
+    />
   );
 };
 
-const FileActionsMenu: React.FC<{
+const item = 'flex w-full items-center gap-3 px-4 py-2.5 text-left text-[15px] font-medium';
+
+export const FileActionsMenu: React.FC<{
+  name: string;
   onDownload?: () => void;
   onShare?: () => void;
   onPreview?: () => void;
   onDelete?: () => void;
-  variant?: 'default' | 'compact';
-}> = ({ onDownload, onShare, onPreview, onDelete, variant = 'default' }) => {
+}> = ({ name, onDownload, onShare, onPreview, onDelete }) => {
+  const entries: { label: string; icon: React.ReactNode; run?: () => void; danger?: boolean }[] = [
+    { label: 'Preview', icon: <EyeIcon className="h-5 w-5" />, run: onPreview },
+    { label: 'Download', icon: <ArrowDownTrayIcon className="h-5 w-5" />, run: onDownload },
+    { label: 'Share', icon: <ShareIcon className="h-5 w-5" />, run: onShare },
+    { label: 'Delete', icon: <TrashIcon className="h-5 w-5" />, run: onDelete, danger: true },
+  ].filter((e) => e.run);
+  if (entries.length === 0) return null;
+
   return (
     <Menu as="div" className="relative">
       <Menu.Button
-        className={`
-          ${
-            variant === 'compact'
-              ? 'p-1.5 bg-white dark:bg-gray-800 opacity-0 group-hover:opacity-100'
-              : 'p-2'
-          }
-          rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all
-        `}
+        aria-label={`Actions for ${name}`}
+        className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        <EllipsisVerticalIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+        <EllipsisHorizontalIcon className="h-5 w-5" aria-hidden="true" />
       </Menu.Button>
-
       <Transition
         as={Fragment}
         enter="transition ease-out duration-100"
-        enterFrom="transform opacity-0 scale-95"
-        enterTo="transform opacity-100 scale-100"
+        enterFrom="opacity-0"
+        enterTo="opacity-100"
         leave="transition ease-in duration-75"
-        leaveFrom="transform opacity-100 scale-100"
-        leaveTo="transform opacity-0 scale-95"
+        leaveFrom="opacity-100"
+        leaveTo="opacity-0"
       >
-        <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-          <div className="py-1">
-            {onPreview && (
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPreview();
-                    }}
-                    className={`${
-                      active ? 'bg-gray-100 dark:bg-gray-700' : ''
-                    } group flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300`}
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                    Preview
-                  </button>
-                )}
-              </Menu.Item>
-            )}
-            {onDownload && (
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDownload();
-                    }}
-                    className={`${
-                      active ? 'bg-gray-100 dark:bg-gray-700' : ''
-                    } group flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300`}
-                  >
-                    <ArrowDownTrayIcon className="h-4 w-4" />
-                    Download
-                  </button>
-                )}
-              </Menu.Item>
-            )}
-            {onShare && (
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onShare();
-                    }}
-                    className={`${
-                      active ? 'bg-gray-100 dark:bg-gray-700' : ''
-                    } group flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300`}
-                  >
-                    <ShareIcon className="h-4 w-4" />
-                    Share
-                  </button>
-                )}
-              </Menu.Item>
-            )}
-            {onDelete && (
-              <>
-                <div className="border-t border-gray-200 dark:border-gray-700" />
-                <Menu.Item>
-                  {({ active }) => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete();
-                      }}
-                      className={`${
-                        active ? 'bg-red-50 dark:bg-red-900/20' : ''
-                      } group flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400`}
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                      Delete
-                    </button>
-                  )}
-                </Menu.Item>
-              </>
-            )}
-          </div>
+        <Menu.Items className="absolute right-0 z-10 mt-1 w-52 origin-top-right overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg focus:outline-none">
+          {entries.map((e) => (
+            <Menu.Item key={e.label}>
+              {({ active }) => (
+                <button
+                  type="button"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    e.run?.();
+                  }}
+                  className={`${item} ${active ? (e.danger ? 'bg-danger-soft' : 'bg-surface-2') : ''} ${e.danger ? 'text-danger-text' : 'text-ink'}`}
+                >
+                  {e.icon}
+                  {e.label}
+                </button>
+              )}
+            </Menu.Item>
+          ))}
         </Menu.Items>
       </Transition>
     </Menu>

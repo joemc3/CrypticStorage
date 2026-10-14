@@ -1,5 +1,5 @@
 export { FileList } from './FileList';
-export type { FileListProps } from './FileList';
+export type { FileListProps, FolderRowItem } from './FileList';
 
 export { FileItem } from './FileItem';
 export type { FileItemProps } from './FileItem';

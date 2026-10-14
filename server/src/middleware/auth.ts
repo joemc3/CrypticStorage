@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { UnauthorizedError } from '../lib/errors';
+import { logger } from '../lib/logger';
 import { verifyAccessToken, type AccessScope } from '../lib/jwt';
 
 export interface AuthContext {
@@ -34,6 +35,21 @@ export function requireTwoFactorPending(req: Request, _res: Response, next: Next
   authenticate(req, '2fa').then(() => next(), next);
 }
 
+const ACTIVITY_INTERVAL_MS = 5 * 60_000;
+
+/** Record activity for the lock handoff: one UPDATE, and only when the stored value is stale. */
+async function touchActivity(userId: string): Promise<void> {
+  const now = Date.now();
+  try {
+    await prisma.user.updateMany({
+      where: { id: userId, lastActivityAt: { lt: new Date(now - ACTIVITY_INTERVAL_MS) } },
+      data: { lastActivityAt: new Date(now) },
+    });
+  } catch (err) {
+    logger.warn({ err }, 'activity touch failed');
+  }
+}
+
 async function authenticate(req: Request, scope: AccessScope): Promise<void> {
   const token = bearer(req);
   if (!token) throw new UnauthorizedError();
@@ -45,6 +61,7 @@ async function authenticate(req: Request, scope: AccessScope): Promise<void> {
     throw new UnauthorizedError('Session expired');
   }
   req.auth = { userId: payload.sub, sessionId: payload.sid, scope };
+  if (scope === 'access') await touchActivity(payload.sub);
 }
 
 export function auth(req: Request): AuthContext {

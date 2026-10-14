@@ -5,6 +5,7 @@ import ApiService from '../services/api.service';
 import AuthService from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import { useUIStore } from '../stores/ui.store';
+import CryptoService from '../services/crypto.service';
 import SettingsPage from './SettingsPage';
 
 vi.mock('../layouts/DashboardLayout', () => ({
@@ -63,5 +64,28 @@ describe('SettingsPage: Lock and look', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
     fireEvent.click(screen.getByRole('radio', { name: 'System' }));
     expect(document.documentElement.dataset.theme).toBeUndefined();
+  });
+});
+
+describe('SettingsPage: Key fingerprint', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(ApiService, 'getStorageStats').mockResolvedValue({ used: 0, limit: 1000, fileCount: 0, folderCount: 0 } as never);
+    useAuthStore.setState({ user: { ...(user as object), publicKey: 'c3BraQ==' } as never, status: 'unlocked' });
+  });
+
+  it('shows the fingerprint of the account public key, not the master key', async () => {
+    const expected = await CryptoService.publicKeyFingerprint('c3BraQ==');
+    renderPage();
+    const group = await screen.findByRole('group', { name: `Key fingerprint ${expected.toUpperCase()}` });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByText('People who share with you compare this, in person or on a call, to know the key is yours.')).toBeInTheDocument();
+    expect(screen.queryByText('Master key fingerprint')).not.toBeInTheDocument();
+  });
+
+  it('opens one section from the phone index', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^Storage/ }));
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
   });
 });

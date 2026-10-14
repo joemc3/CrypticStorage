@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ShieldCheckIcon, DocumentDuplicateIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { DocumentDuplicateIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
+import { StateBadge } from '../common/StateBadge';
 import { TwoFactorSetup } from './TwoFactorSetup';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -14,19 +15,17 @@ const BackupCodes: React.FC<{ codes: string[]; onDone: () => void }> = ({ codes,
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-600 dark:text-gray-400">
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-ink-2">
         Each backup code works once. Store them somewhere safe; they are the only way in if you lose your authenticator.
       </p>
-      <div className="grid grid-cols-2 gap-2 font-mono text-sm bg-gray-100 dark:bg-gray-700 rounded-lg p-4">
+      <div className="grid grid-cols-2 gap-2 rounded-lg border border-line bg-surface-2 p-4 font-mono text-sm font-medium tracking-[.06em] text-ink">
         {codes.map((code) => (
-          <span key={code} className="text-gray-900 dark:text-gray-100">
-            {code}
-          </span>
+          <span key={code}>{code}</span>
         ))}
       </div>
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={copy} leftIcon={copied ? <CheckCircleIcon className="h-5 w-5 text-green-500" /> : <DocumentDuplicateIcon className="h-5 w-5" />}>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={copy} leftIcon={copied ? <CheckIcon className="h-5 w-5" aria-hidden="true" /> : <DocumentDuplicateIcon className="h-5 w-5" aria-hidden="true" />}>
           {copied ? 'Copied' : 'Copy codes'}
         </Button>
         <Button onClick={onDone}>I saved them</Button>
@@ -103,43 +102,45 @@ export const TwoFactorSettings: React.FC = () => {
     return <TwoFactorSetup secret={setup.secret} qrCodeUrl={setup.qrCode} onVerify={verify} onComplete={() => setSetup(null)} isLoading={isLoading} />;
   }
 
+  const modalActions = 'flex flex-col-reverse gap-2 md:flex-row md:justify-end';
+
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3">
       {user?.twoFactorEnabled ? (
         <>
-          <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-            <ShieldCheckIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-            <div>
-              <p className="font-medium text-green-900 dark:text-green-100">Two-factor authentication is on</p>
-              <p className="text-sm text-green-800 dark:text-green-300">Every sign-in needs a code from your authenticator app.</p>
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <StateBadge state="active" label="On" />
+            <span className="text-sm text-ink-2">Authenticator app. Every sign-in needs a code from it.</span>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setModal('regenerate')}>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setModal('regenerate')}>
               Regenerate backup codes
             </Button>
-            <Button variant="danger" onClick={() => setModal('disable')}>
+            <Button variant="quiet" size="sm" onClick={() => setModal('disable')}>
               Turn off
             </Button>
           </div>
         </>
       ) : (
         <>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Protect your account with a time-based code from an authenticator app such as Aegis, 1Password or Google Authenticator.
-          </p>
-          <Button onClick={startSetup} isLoading={isLoading} leftIcon={<ShieldCheckIcon className="h-5 w-5" />}>
+          <div className="flex flex-wrap items-center gap-3">
+            <StateBadge state="revoked" label="Off" />
+            <span className="text-sm text-ink-2">
+              Protect your account with a time-based code from an authenticator app such as Aegis, 1Password or Google Authenticator.
+            </span>
+          </div>
+          <Button variant="secondary" size="sm" onClick={startSetup} isLoading={isLoading} className="self-start">
             Turn on two-factor authentication
           </Button>
         </>
       )}
 
       <Modal isOpen={modal === 'disable'} onClose={closeModal} title="Turn off two-factor authentication" size="sm">
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           <Input type="text" label="Authenticator code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} autoComplete="one-time-code" />
           <Input type="password" label="Password" value={password} onChange={(e) => setPassword(e.target.value)} error={error} autoComplete="current-password" />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={closeModal}>
+          <div className={modalActions}>
+            <Button variant="quiet" onClick={closeModal}>
               Cancel
             </Button>
             <Button variant="danger" onClick={confirmDisable} isLoading={isLoading} disabled={code.length !== 6 || !password}>
@@ -150,11 +151,11 @@ export const TwoFactorSettings: React.FC = () => {
       </Modal>
 
       <Modal isOpen={modal === 'regenerate'} onClose={closeModal} title="Regenerate backup codes" size="sm">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">Your existing backup codes stop working immediately.</p>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-ink-2">Your existing backup codes stop working immediately.</p>
           <Input type="password" label="Password" value={password} onChange={(e) => setPassword(e.target.value)} error={error} autoComplete="current-password" />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={closeModal}>
+          <div className={modalActions}>
+            <Button variant="quiet" onClick={closeModal}>
               Cancel
             </Button>
             <Button onClick={confirmRegenerate} isLoading={isLoading} disabled={!password}>

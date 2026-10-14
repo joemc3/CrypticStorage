@@ -24,9 +24,6 @@ const linkFragment = createHash('sha256').update(FIXTURE_LINK_KEY_SEED).digest()
 // Console and overflow checks
 // ---------------------------------------------------------------------------
 
-/** Font hosts are not part of what the smoke tests; a blocked font must not fail it. */
-const IGNORED_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
-
 interface Watch {
   /** Allow the "Failed to load resource" line for a request the test deliberately fails. */
   allowFailure(urlPart: string): void;
@@ -39,7 +36,6 @@ const test = base.extend<{ watch: Watch }>({
     page.on('console', (msg) => {
       if (msg.type() !== 'error') return;
       const url = msg.location().url ?? '';
-      if (IGNORED_HOSTS.some((h) => url.includes(h) || msg.text().includes(h))) return;
       if (msg.text().startsWith('Failed to load resource') && allowed.some((a) => url.includes(a))) return;
       problems.push(`console: ${msg.text()} ${url}`);
     });

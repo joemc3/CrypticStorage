@@ -2,6 +2,16 @@
  * CrypticStorage global styles. Colours, type and radii come from the tokens;
  * components style themselves with token classes, so there are no component classes here.
  */
+@import '@fontsource/newsreader/400.css';
+@import '@fontsource/newsreader/400-italic.css';
+@import '@fontsource/newsreader/500.css';
+@import '@fontsource/newsreader/500-italic.css';
+@import '@fontsource/newsreader/600.css';
+@import '@fontsource/instrument-sans/400.css';
+@import '@fontsource/instrument-sans/500.css';
+@import '@fontsource/instrument-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
 @import './styles/tokens.css';
 
 @tailwind base;

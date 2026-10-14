@@ -446,7 +446,6 @@ npm install \
   @heroicons/react \
   framer-motion \
   react-dropzone \
-  recharts \
   class-variance-authority
 ```
 

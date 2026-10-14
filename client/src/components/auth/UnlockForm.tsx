@@ -6,13 +6,12 @@ import { Input } from '../common/Input';
 export interface UnlockFormProps {
   email: string;
   onUnlock: (password: string) => Promise<void>;
-  onSignOut: () => void;
   isLoading?: boolean;
   lockAfterMinutes?: number;
 }
 
 /** Shown after a lock or reload: the session is valid but the keys left memory. */
-export const UnlockForm: React.FC<UnlockFormProps> = ({ email, onUnlock, onSignOut, isLoading = false, lockAfterMinutes = 5 }) => {
+export const UnlockForm: React.FC<UnlockFormProps> = ({ email, onUnlock, isLoading = false, lockAfterMinutes = 5 }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | undefined>();
 
@@ -29,12 +28,9 @@ export const UnlockForm: React.FC<UnlockFormProps> = ({ email, onUnlock, onSignO
   };
 
   return (
-    <div className="relative w-full max-w-sm mx-auto">
-      <button type="button" onClick={onSignOut} className="absolute -top-16 right-0 text-sm text-ink-2 hover:text-ink">
-        Sign out
-      </button>
+    <div className="w-full">
       <form onSubmit={submit} className="space-y-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full border-[1.5px] border-line text-ink">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full border-[1.5px] border-line-strong text-ink">
           <LockClosedIcon className="h-7 w-7" aria-hidden="true" />
         </div>
         <div className="space-y-2">

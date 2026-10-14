@@ -1,5 +1,6 @@
 import { authenticator } from 'otplib';
 import { prisma } from '../../src/config/prisma';
+import * as mail from '../../src/lib/mail';
 import { outbox } from '../../src/lib/mail';
 import { runCleanup } from '../../src/jobs/cleanup';
 import { api, bearer, closeDatabase, prepareDatabase, registerUser, registrationPayload, verificationToken } from '../helpers/api';
@@ -34,6 +35,20 @@ describe('POST /api/auth/register', () => {
     expect(user.emailVerifiedAt).toBeNull();
     expect(user.contractAcknowledgedAt).not.toBeNull();
     expect(user.displayName).toBe('Ada');
+  });
+
+  it('still answers 201 when the verification mail cannot be sent', async () => {
+    const spy = jest.spyOn(mail, 'sendMail').mockRejectedValue(new Error('smtp down'));
+    try {
+      const payload = registrationPayload();
+      const res = await api().post('/api/auth/register').send(payload);
+      expect(res.status).toBe(201);
+      expect(res.body.data.verificationRequired).toBe(true);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: payload.email } });
+      expect(user.emailVerifiedAt).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('rejects a duplicate email', async () => {

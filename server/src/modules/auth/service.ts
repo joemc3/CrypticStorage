@@ -12,6 +12,7 @@ import { audit } from '../../lib/audit';
 import { clientIp, userAgent } from '../../lib/http';
 import { toAuthenticatedUser, toPublicUser } from '../dto';
 import { sendMail } from '../../lib/mail';
+import { logger } from '../../lib/logger';
 import { verifyEmail as verifyEmailTemplate } from '../../mail/templates';
 import { CONTRACT_PHRASE } from './schema';
 import type { loginSchema, registerSchema } from './schema';
@@ -87,7 +88,7 @@ export async function register(input: z.infer<typeof registerSchema>, req: Reque
     throw new BadRequestError('The contract phrase is required', undefined, 'CONTRACT_NOT_ACKNOWLEDGED');
   }
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
-  if (existing) throw new ConflictError('An account with this email already exists');
+  if (existing) throw new ConflictError('An account with this email already exists. Sign in to resend the verification email if it is not verified yet.');
 
   const user = await prisma.user.create({
     data: {
@@ -106,7 +107,13 @@ export async function register(input: z.infer<typeof registerSchema>, req: Reque
 
   audit(req, { userId: user.id, action: 'auth.register' });
   audit(req, { userId: user.id, action: 'user.contract_acknowledged' });
-  await sendVerification(user);
+  // The row is committed. A mail failure must not strand the person with a 500 and a 409 on retry;
+  // the Resend path recovers. Never log the token.
+  try {
+    await sendVerification(user);
+  } catch (error) {
+    logger.warn({ userId: user.id, err: error instanceof Error ? error.message : String(error) }, 'verification mail failed after register');
+  }
   return { verificationRequired: true as const };
 }
 

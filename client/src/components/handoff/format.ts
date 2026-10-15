@@ -45,6 +45,9 @@ export function periodLabel(days: number): string {
 
 export type Person = { email: string; displayName?: string | null };
 export const personName = (p: Person) => p.displayName || p.email;
+/** A release-request opener or voter: null, or no email, means their account no longer exists. */
+export const witnessName = (p: { email: string | null; displayName?: string | null } | null) =>
+  p?.email ? p.displayName || p.email : 'A former witness';
 export const recipientNames = (rule: Pick<HandoffRule, 'recipients'>) => joinNames(rule.recipients.map(personName));
 
 /** The same "75 / 90 / 95 %" dates the server's reminders use, from a start date and a period. */

@@ -214,14 +214,15 @@ export async function remove(ownerId: string, id: string, req: Request) {
 
 /**
  * Ruling R42: `userId` is deleting their account. For every owner they serve as an accepted witness, cancel any open
- * request, drop the witness's vote shares, take them out of the set, refit k and flag the open rules stale, before
- * the account delete cascades the rows away. Remaining witnesses hear about a cancelled request as usual.
+ * request, drop the witness's vote shares on open requests, take them out of the set, refit k and flag the open rules
+ * stale, before the account delete cascades the rows away. Shares on completed requests stay (R46): the recipient
+ * still combines them, and they carry no foreign key to the deleted account. Remaining witnesses hear about a cancelled request as usual.
  */
 export async function withdrawFromAllSets(userId: string): Promise<void> {
   const served = await prisma.witness.findMany({ where: { witnessUserId: userId, status: 'accepted' }, select: { ownerId: true } });
   for (const { ownerId } of served) {
     await changeSet(ownerId, true, async (tx) => {
-      await tx.releaseVoteShare.deleteMany({ where: { witnessUserId: userId, request: { ownerId } } });
+      await tx.releaseVoteShare.deleteMany({ where: { witnessUserId: userId, request: { ownerId, state: 'open' } } });
       await tx.witness.deleteMany({ where: { ownerId, witnessUserId: userId } });
       await refitThresholdTx(tx, ownerId);
     });

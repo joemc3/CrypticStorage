@@ -67,8 +67,6 @@ model User {
 
   requestsAboutMe ReleaseRequest[]   @relation("RequestOwner")
   requestsOpened  ReleaseRequest[]   @relation("RequestOpener")
-  votesCast       ReleaseVote[]
-  voteSharesGiven ReleaseVoteShare[] @relation("VoteShareWitness")
   voteSharesForMe ReleaseVoteShare[] @relation("VoteShareRecipient")
 
   @@map("users")
@@ -366,7 +364,8 @@ enum ReleaseRequestState {
 model ReleaseRequest {
   id             String              @id @default(uuid())
   ownerId        String              @map("owner_id")
-  openedByUserId String              @map("opened_by_user_id")
+  /// Null once the opener deletes their account; the request and its record outlive them.
+  openedByUserId String?             @map("opened_by_user_id")
   state          ReleaseRequestState @default(open)
   /// The owner's threshold when the request opened. Rules do not record the k their shares were split with, so the request fixes it.
   requiredVotes  Int                 @map("required_votes")
@@ -376,7 +375,7 @@ model ReleaseRequest {
   reason         String?
 
   owner    User               @relation("RequestOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  openedBy User               @relation("RequestOpener", fields: [openedByUserId], references: [id], onDelete: Cascade)
+  openedBy User?              @relation("RequestOpener", fields: [openedByUserId], references: [id], onDelete: SetNull)
   votes    ReleaseVote[]
   shares   ReleaseVoteShare[]
 
@@ -384,19 +383,21 @@ model ReleaseRequest {
   @@map("release_requests")
 }
 
+/// `witnessUserId` is a plain id with no foreign key: a vote is a record that outlives the witness's account.
 model ReleaseVote {
   requestId     String   @map("request_id")
   witnessUserId String   @map("witness_user_id")
   votedAt       DateTime @default(now()) @map("voted_at")
 
   request ReleaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  witness User           @relation(fields: [witnessUserId], references: [id], onDelete: Cascade)
 
   @@id([requestId, witnessUserId])
   @@map("release_votes")
 }
 
 /// A witness's share for one rule, re-wrapped under one recipient's public key. Opaque to the server.
+/// `witnessUserId` is a plain id with no foreign key: once a request completes, these shares are what the recipient
+/// combines, so they must survive the witness deleting their account.
 model ReleaseVoteShare {
   requestId       String @map("request_id")
   witnessUserId   String @map("witness_user_id")
@@ -405,7 +406,6 @@ model ReleaseVoteShare {
   wrappedShare    String @map("wrapped_share")
 
   request   ReleaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  witness   User           @relation("VoteShareWitness", fields: [witnessUserId], references: [id], onDelete: Cascade)
   rule      HandoffRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   recipient User           @relation("VoteShareRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
 

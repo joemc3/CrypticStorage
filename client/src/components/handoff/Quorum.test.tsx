@@ -56,6 +56,12 @@ describe('You are a witness for', () => {
     expect(onVote).toHaveBeenCalledWith(open);
   });
 
+  it('names an opener or voter whose account is gone as "A former witness"', () => {
+    renderSection([{ owner, open: request({ openedBy: null, votes: [{ witnessUserId: 'gone', displayName: null, email: null, votedAt: at(10, 13, 14, 2) }] }), closed: [] }]);
+    expect(screen.getByText('Opened by A former witness · 13 Oct, 14:02')).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Who has voted' })).getByText('A former witness')).toBeInTheDocument();
+  });
+
   it('hides Add your vote once I have voted, and shows me as You', () => {
     renderSection([{ owner, open: request({ myVote: true, votes: [{ witnessUserId: 'me', displayName: null, email: 'me@x.co', votedAt: at(10, 13, 15, 0) }] }), closed: [] }]);
     expect(screen.queryByRole('button', { name: 'Add your vote' })).toBeNull();
@@ -182,6 +188,12 @@ describe('the owner\'s release notice', () => {
     expect(screen.getByRole('link', { name: 'See your witnesses' })).toHaveAttribute('href', '/settings/witnesses');
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('names an opener or voter whose account is gone as "A former witness"', () => {
+    const [notice] = ownerNotices([ownerRequest({ openedBy: null, votes: [{ witnessUserId: 'w2', displayName: null, email: null, votedAt: at(10, 14, 8, 40) }] })], [], new Map(), now);
+    show(notice);
+    expect(timeline().slice(0, 2)).toEqual(['A former witness opened a release request · 14 Oct, 08:02', 'A former witness voted · 14 Oct, 08:40']);
   });
 
   it('an owner change ends with "Your change cancelled a release request"', () => {

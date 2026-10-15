@@ -45,8 +45,22 @@ function isAcceptedWitness(db: Prisma.TransactionClient | typeof prisma, ownerId
 const requestInclude = {
   owner: { select: person },
   openedBy: { select: person },
-  votes: { include: { witness: { select: person } }, orderBy: { votedAt: 'asc' } },
+  votes: { orderBy: { votedAt: 'asc' } },
 } satisfies Prisma.ReleaseRequestInclude;
+
+/**
+ * Votes keep the witness's id with no foreign key, so they outlive a deleted account. Names are joined here; a
+ * witness who no longer exists comes back with null name and email, which the client shows as "A former witness".
+ */
+async function voteNames(rows: Array<{ votes: Array<{ witnessUserId: string }> }>) {
+  const ids = [...new Set(rows.flatMap((r) => r.votes.map((v) => v.witnessUserId)))];
+  const users = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: person }) : [];
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return (v: { witnessUserId: string; votedAt: Date }) => {
+    const u = byId.get(v.witnessUserId);
+    return { witnessUserId: v.witnessUserId, displayName: u?.displayName ?? null, email: u?.email ?? null, votedAt: v.votedAt.toISOString() };
+  };
+}
 
 type RequestRow = Prisma.ReleaseRequestGetPayload<{ include: typeof requestInclude }>;
 
@@ -63,6 +77,7 @@ async function toDtos(userId: string, rows: RequestRow[]) {
         orderBy: { createdAt: 'asc' },
       })
     : [];
+  const vote = await voteNames(rows);
 
   return rows.map((r) => {
     const mine = r.state === 'open' ? rules.filter((rule) => rule.ownerId === r.ownerId) : [];
@@ -74,7 +89,7 @@ async function toDtos(userId: string, rows: RequestRow[]) {
       requiredVotes: r.requiredVotes,
       openedAt: r.openedAt.toISOString(),
       closedAt: r.closedAt?.toISOString(),
-      votes: r.votes.map((v) => ({ witnessUserId: v.witnessUserId, displayName: v.witness.displayName, email: v.witness.email, votedAt: v.votedAt.toISOString() })),
+      votes: r.votes.map(vote),
       myVote: r.votes.some((v) => v.witnessUserId === userId),
       rules: mine.map((rule) => ({
         ruleId: rule.id,
@@ -123,7 +138,7 @@ function ownerReason(reason: string | null): 'sign_in' | 'owner_change' | 'no_re
 export async function listMine(ownerId: string) {
   const rows = await prisma.releaseRequest.findMany({
     where: { ownerId },
-    include: { openedBy: { select: person }, votes: { include: { witness: { select: person } }, orderBy: { votedAt: 'asc' } } },
+    include: { openedBy: { select: person }, votes: { orderBy: { votedAt: 'asc' } } },
     orderBy: [{ openedAt: 'desc' }, { id: 'asc' }],
     take: MINE_CAP,
   });
@@ -131,6 +146,7 @@ export async function listMine(ownerId: string) {
   const released = completed.length
     ? await prisma.handoffRule.findMany({ where: { ownerId, releasedByRequestId: { in: completed } }, select: { id: true, releasedByRequestId: true }, orderBy: { id: 'asc' } })
     : [];
+  const vote = await voteNames(rows);
   return rows.map((r) => ({
     id: r.id,
     state: r.state,
@@ -139,7 +155,7 @@ export async function listMine(ownerId: string) {
     closedAt: r.closedAt?.toISOString(),
     reason: r.state === 'cancelled' ? ownerReason(r.reason) : undefined,
     openedBy: r.openedBy,
-    votes: r.votes.map((v) => ({ witnessUserId: v.witnessUserId, displayName: v.witness.displayName, email: v.witness.email, votedAt: v.votedAt.toISOString() })),
+    votes: r.votes.map(vote),
     releasedRuleIds: released.filter((x) => x.releasedByRequestId === r.id).map((x) => x.id),
   }));
 }
@@ -154,15 +170,23 @@ export async function openRequest(userId: string, ownerId: string, req: Request)
   if (ruleCount === 0) throw nothingToRelease();
   const alreadyOpen = () => conflict('A release request is already open for this person', 'REQUEST_OPEN');
 
-  const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: { ...person, witnessThreshold: true } });
+  const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: person });
   let created;
   try {
     created = await prisma.$transaction(async (tx) => {
-      // Locking the owner's row makes two simultaneous opens take turns, so the loser gets a clean 409 here
-      // instead of a constraint error. The partial unique index stays as the backstop.
-      await tx.$queryRaw`SELECT id FROM users WHERE id = ${ownerId} FOR UPDATE`;
+      // Lock order as everywhere else: the owner's open requests, then the owner's row. The owner's row makes two
+      // simultaneous opens take turns, so the loser sees the winner's request below and gets a clean 409 instead of a
+      // constraint error. The partial unique index stays as the backstop.
+      await lockOpenRequestsTx(tx, ownerId);
+      // k is read from the locked row, so a threshold or witness-set change cannot land between the read and the insert.
+      const k = await lockOwnerTx(tx, ownerId);
       if (await tx.releaseRequest.count({ where: { ownerId, state: 'open' } })) throw alreadyOpen();
-      return tx.releaseRequest.create({ data: { ownerId, openedByUserId: userId, requiredVotes: owner.witnessThreshold } });
+      if (!(await isAcceptedWitness(tx, ownerId, userId))) throw notAWitness();
+      if ((await tx.handoffRule.count({ where: { ownerId, state: { in: [...OPEN_RULE_STATES] } } })) === 0) throw nothingToRelease();
+      if ((await tx.witness.count({ where: { ownerId, status: 'accepted' } })) < k) {
+        throw new BadRequestError('There are fewer accepted witnesses than the threshold', undefined, 'WITNESSES_NOT_READY');
+      }
+      return tx.releaseRequest.create({ data: { ownerId, openedByUserId: userId, requiredVotes: k } });
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw alreadyOpen();

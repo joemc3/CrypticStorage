@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ClockIcon } from '@heroicons/react/24/outline';
 import type { HandoffRule, OwnerReleaseRequest } from '../../services/api.service';
-import { formatDayTime, joinNames, personName } from './format';
+import { formatDayTime, joinNames, personName, witnessName } from './format';
 
 export interface NoticeLine {
   /** One sentence with who and when. */
@@ -52,8 +52,8 @@ export function ownerNotices(requests: OwnerReleaseRequest[], rules: HandoffRule
   for (const request of requests) {
     if (request.state === 'open' || !request.closedAt || new Date(request.closedAt).getTime() < since) continue;
     const lines: NoticeLine[] = [
-      { what: `${personName(request.openedBy)} opened a release request · ${formatDayTime(request.openedAt)}`, tone: 'warn' },
-      ...request.votes.map((v): NoticeLine => ({ what: `${personName(v)} voted · ${formatDayTime(v.votedAt)}`, tone: 'warn' })),
+      { what: `${witnessName(request.openedBy)} opened a release request · ${formatDayTime(request.openedAt)}`, tone: 'warn' },
+      ...request.votes.map((v): NoticeLine => ({ what: `${witnessName(v)} voted · ${formatDayTime(v.votedAt)}`, tone: 'warn' })),
     ];
     const end = ending(request, formatDayTime(request.closedAt));
     lines.push({ what: end.line, tone: request.state === 'completed' ? 'info' : 'accent' });

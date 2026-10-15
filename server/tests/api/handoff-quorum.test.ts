@@ -864,3 +864,91 @@ describe('a witness deleting their account (R42)', () => {
     expect(outbox().filter((m) => m.to === w2.email)).toHaveLength(0);
   });
 });
+
+describe('a released quorum outlives the accounts that released it (R46)', () => {
+  const deleteAccount = (u: TestUser) => api().delete('/api/users/profile').set(bearer(u)).send({ passwordHash: u.passwordHash });
+
+  it('keeps the vote shares, the votes and the request when the opener and a voter delete their accounts', async () => {
+    const s = await withRule(4, 2);
+    const [w0, w1, , w3] = s.w.witnesses as [TestUser, TestUser, TestUser, TestUser];
+    const id = (await open(w3, s.w.owner.id)).body.data.id as string;
+    await vote(w0, id, fullVote(s)).expect(201);
+    expect((await vote(w1, id, fullVote(s)).expect(201)).body.data.state).toBe('completed');
+
+    await deleteAccount(w3).expect(200);
+    await deleteAccount(w0).expect(200);
+
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: id } })).toBe(2);
+    expect(await prisma.releaseVote.count({ where: { requestId: id } })).toBe(2);
+    const row = await requestRow(id);
+    expect(row.state).toBe('completed');
+    expect(row.openedByUserId).toBeNull();
+
+    const forMe = await api().get('/api/handoff/for-me').set(bearer(s.w.recipient)).expect(200);
+    const rule = forMe.body.data.find((r: { id: string }) => r.id === s.ruleId);
+    expect(rule.voteShares.map((v: { witnessUserId: string }) => v.witnessUserId).sort()).toEqual([w0.id, w1.id].sort());
+    const withMe = await api().get('/api/shares/with-me').set(bearer(s.w.recipient)).expect(200);
+    const item = withMe.body.data.find((f: { handoff?: { ruleId: string } }) => f.handoff?.ruleId === s.ruleId);
+    expect(item.handoff.voteShares).toHaveLength(2);
+
+    const mine = await api().get('/api/handoff/requests/mine').set(bearer(s.w.owner)).expect(200);
+    const req = mine.body.data.find((r: { id: string }) => r.id === id);
+    expect(req.openedBy).toBeNull();
+    expect(req.votes).toEqual([
+      { witnessUserId: w0.id, displayName: null, email: null, votedAt: expect.any(String) },
+      { witnessUserId: w1.id, displayName: null, email: w1.email, votedAt: expect.any(String) },
+    ]);
+  });
+
+  it('a witness deleting their account cancels the open request and clears only its shares', async () => {
+    const s = await withRule(3, 2);
+    const [w0, w1] = s.w.witnesses as [TestUser, TestUser];
+    const done = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, done, fullVote(s)).expect(201);
+    await vote(w1, done, fullVote(s)).expect(201);
+
+    const file2 = await upload(s.w.owner);
+    const rule2 = (await api().post('/api/handoff/rules').set(bearer(s.w.owner)).send(ruleBody(s.w, { fileId: file2.id }, [file2.id])).expect(201)).body.data.id as string;
+    const pending = (await open(w1, s.w.owner.id)).body.data.id as string;
+    await vote(w0, pending, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }])).expect(201);
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: pending } })).toBe(1);
+
+    await deleteAccount(w0).expect(200);
+
+    expect((await requestRow(pending)).state).toBe('cancelled');
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: pending } })).toBe(0);
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: done, witnessUserId: w0.id } })).toBe(1);
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: done } })).toBe(2);
+  });
+});
+
+describe('opening reads k under the owner lock (R46)', () => {
+  const kMatches = async (requestId: string, ownerId: string) => {
+    const [row, owner] = await Promise.all([requestRow(requestId), prisma.user.findUniqueOrThrow({ where: { id: ownerId } })]);
+    expect(row.requiredVotes).toBe(owner.witnessThreshold);
+    return row.requiredVotes;
+  };
+
+  it('fixes requiredVotes to the threshold on the locked row, through a threshold change', async () => {
+    const s = await withRule(3, 2);
+    const first = await open(s.w.witnesses[0]!, s.w.owner.id).expect(201);
+    expect(first.body.data.requiredVotes).toBe(2);
+    expect(await kMatches(first.body.data.id, s.w.owner.id)).toBe(2);
+
+    // Changing the threshold cancels the open request; the next one carries the new k.
+    await api().put('/api/witnesses/threshold').set(bearer(s.w.owner)).send({ k: 3 }).expect(200);
+    expect((await requestRow(first.body.data.id)).state).toBe('cancelled');
+    const second = await open(s.w.witnesses[1]!, s.w.owner.id).expect(201);
+    expect(second.body.data.requiredVotes).toBe(3);
+    expect(await kMatches(second.body.data.id, s.w.owner.id)).toBe(3);
+  });
+
+  it('refuses with 400 WITNESSES_NOT_READY when fewer witnesses have accepted than k', async () => {
+    const s = await withRule(3, 2);
+    await prisma.user.update({ where: { id: s.w.owner.id }, data: { witnessThreshold: 4 } });
+    const res = await open(s.w.witnesses[0]!, s.w.owner.id);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('WITNESSES_NOT_READY');
+    expect(await prisma.releaseRequest.count({ where: { ownerId: s.w.owner.id } })).toBe(0);
+  });
+});

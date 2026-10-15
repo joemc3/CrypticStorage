@@ -3,7 +3,7 @@ import type { ReleasePerson, ReleaseRequest } from '../../services/api.service';
 import { awaitingRepair, type WitnessCard } from '../../services/release.service';
 import { Button } from '../common/Button';
 import { StateBadge } from '../common/StateBadge';
-import { formatDayTime, personName } from './format';
+import { formatDayTime, personName, witnessName } from './format';
 
 const heading = 'font-sans text-lg font-semibold leading-6 text-ink';
 
@@ -45,11 +45,11 @@ const Card: React.FC<{
 
       {open ? (
         <>
-          <p className="text-sm text-ink-2">{`Opened by ${personName(open.openedBy)} · ${formatDayTime(open.openedAt)}`}</p>
+          <p className="text-sm text-ink-2">{`Opened by ${witnessName(open.openedBy)} · ${formatDayTime(open.openedAt)}`}</p>
           <ul className="flex flex-col gap-2 text-sm text-ink" aria-label="Who has voted">
             {open.votes.map((v) => (
               <li key={v.witnessUserId} className="flex items-center justify-between gap-2">
-                <span className="min-w-0 break-words">{v.witnessUserId === meId ? 'You' : v.displayName || v.email}</span>
+                <span className="min-w-0 break-words">{v.witnessUserId === meId ? 'You' : witnessName(v)}</span>
                 <StateBadge state="active" label="Voted" />
               </li>
             ))}

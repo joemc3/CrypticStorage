@@ -369,13 +369,15 @@ export interface ReleaseRequestRule {
 export interface ReleaseRequest {
   id: string;
   owner: ReleasePerson;
-  openedBy: ReleasePerson;
+  /** Null once the opener has deleted their account: show "A former witness". */
+  openedBy: ReleasePerson | null;
   state: ReleaseRequestState;
   /** The owner's threshold when the request opened. */
   requiredVotes: number;
   openedAt: string;
   closedAt?: string;
-  votes: Array<{ witnessUserId: string; displayName: string | null; email: string; votedAt: string }>;
+  /** A witness whose account no longer exists comes back with null name and email: show "A former witness". */
+  votes: Array<{ witnessUserId: string; displayName: string | null; email: string | null; votedAt: string }>;
   myVote: boolean;
   /** Open requests only: the owner's active and warning rules now. */
   rules: ReleaseRequestRule[];
@@ -395,8 +397,10 @@ export interface OwnerReleaseRequest {
   closedAt?: string;
   /** Cancelled requests only. */
   reason?: ReleaseCancelReason;
-  openedBy: ReleasePerson;
-  votes: Array<{ witnessUserId: string; displayName: string | null; email: string; votedAt: string }>;
+  /** Null once the opener has deleted their account: show "A former witness". */
+  openedBy: ReleasePerson | null;
+  /** A witness whose account no longer exists comes back with null name and email: show "A former witness". */
+  votes: Array<{ witnessUserId: string; displayName: string | null; email: string | null; votedAt: string }>;
   /** Completed requests only: the rules this request released. */
   releasedRuleIds: string[];
 }

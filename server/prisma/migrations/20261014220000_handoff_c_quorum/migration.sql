@@ -8,7 +8,7 @@ ALTER TABLE "handoff_rules" ADD COLUMN "released_by_request_id" TEXT;
 CREATE TABLE "release_requests" (
     "id" TEXT NOT NULL,
     "owner_id" TEXT NOT NULL,
-    "opened_by_user_id" TEXT NOT NULL,
+    "opened_by_user_id" TEXT,
     "state" "ReleaseRequestState" NOT NULL DEFAULT 'open',
     "required_votes" INTEGER NOT NULL,
     "opened_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -48,19 +48,13 @@ CREATE INDEX "release_vote_shares_recipient_user_id_idx" ON "release_vote_shares
 ALTER TABLE "release_requests" ADD CONSTRAINT "release_requests_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "release_requests" ADD CONSTRAINT "release_requests_opened_by_user_id_fkey" FOREIGN KEY ("opened_by_user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "release_requests" ADD CONSTRAINT "release_requests_opened_by_user_id_fkey" FOREIGN KEY ("opened_by_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "release_votes" ADD CONSTRAINT "release_votes_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "release_requests"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "release_votes" ADD CONSTRAINT "release_votes_witness_user_id_fkey" FOREIGN KEY ("witness_user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "release_vote_shares" ADD CONSTRAINT "release_vote_shares_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "release_requests"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "release_vote_shares" ADD CONSTRAINT "release_vote_shares_witness_user_id_fkey" FOREIGN KEY ("witness_user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "release_vote_shares" ADD CONSTRAINT "release_vote_shares_rule_id_fkey" FOREIGN KEY ("rule_id") REFERENCES "handoff_rules"("id") ON DELETE CASCADE ON UPDATE CASCADE;

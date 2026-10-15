@@ -86,7 +86,7 @@ const witnessInvitations = {
   serving: [] as unknown[],
 };
 
-// Quorum (slice C): the owners I serve, the release requests I can see, and the owner's own activity feed.
+// Quorum (slice C): the owners I serve, the release requests I can see, and the owner's own request history.
 const annaPerson = { id: 'o-anna', email: 'anna.lind@gmail.com', displayName: null };
 const openRequest = {
   id: 'req-1', owner: annaPerson, openedBy: { id: 'u-jpark', email: 'j.park@outlook.com', displayName: null }, state: 'open', requiredVotes: 2,
@@ -94,11 +94,11 @@ const openRequest = {
   votes: [{ witnessUserId: 'u-jpark', displayName: null, email: 'j.park@outlook.com', votedAt: '2026-10-13T14:02:00.000Z' }],
   rules: [{ ruleId: 'r-a', sharesStale: false, state: 'active', recipients: [] }], myShares: [],
 };
-const quorum: { serving: unknown[]; requests: unknown[]; activity: unknown[] } = { serving: [], requests: [], activity: [] };
+const quorum: { serving: unknown[]; requests: unknown[]; mine: unknown[] } = { serving: [], requests: [], mine: [] };
 function resetQuorum() {
   quorum.serving = [];
   quorum.requests = [];
-  quorum.activity = [];
+  quorum.mine = [];
 }
 
 const vaultUser = { ...fx.user, ...fx.vault };
@@ -153,7 +153,7 @@ async function mockVaultApi(page: Page) {
       if (path === '/witnesses') return route.fulfill(ok(witnessSet));
       if (path === '/witnesses/invitations') return route.fulfill(ok({ ...witnessInvitations, serving: quorum.serving }));
       if (path === '/handoff/requests') return route.fulfill(ok(quorum.requests));
-      if (path === '/activity') return route.fulfill(ok({ items: quorum.activity, total: quorum.activity.length, page: 1, pageSize: 50, totalPages: 1 }));
+      if (path === '/handoff/requests/mine') return route.fulfill(ok(quorum.mine));
       if (path === '/shares/with-me') return route.fulfill(ok(fx.sharedWithMe));
       if (/^\/files\/[^/]+\/(shares|links)$/.test(path)) return route.fulfill(ok([]));
       const one = path.match(/^\/files\/([^/]+)$/);
@@ -500,8 +500,15 @@ test('quorum, witness side: no request, an open request, both one-fact screens',
 test('quorum, owner side: the release notice after a sign-in cancelled a request', async ({ page, watch: _ }, info) => {
   await seedSession(page);
   await mockVaultApi(page);
-  quorum.activity = [
-    { id: 'act-1', action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: 'req-1', metadata: { reason: 'owner_activity' }, ipAddress: '', userAgent: '', success: true, createdAt: new Date().toISOString() },
+  const closedAt = new Date();
+  quorum.mine = [
+    {
+      id: 'req-1', state: 'cancelled', reason: 'sign_in', requiredVotes: 2,
+      openedAt: new Date(closedAt.getTime() - 3_600_000).toISOString(), closedAt: closedAt.toISOString(),
+      openedBy: { id: 'o-tom', email: 'tom.becker@icloud.com', displayName: null },
+      votes: [{ witnessUserId: 'o-tom', displayName: null, email: 'tom.becker@icloud.com', votedAt: new Date(closedAt.getTime() - 1_800_000).toISOString() }],
+      releasedRuleIds: [],
+    },
   ];
   await page.goto('/dashboard');
   await page.getByLabel('Password').fill(FIXTURE_PASSWORD);
@@ -510,8 +517,9 @@ test('quorum, owner side: the release notice after a sign-in cancelled a request
 
   const notice = page.getByRole('status', { name: 'Release notice' });
   await expect(notice.getByText('Your sign-in cancelled a release request.')).toBeVisible();
-  await expect(notice.getByText('Your witnesses have been told. Nothing was released.')).toBeVisible();
-  await expect(notice.getByText('Cancelled by your sign-in')).toBeVisible();
+  await expect(notice.getByText('tom.becker@icloud.com opened a release request', { exact: false })).toBeVisible();
+  await expect(notice.getByText('tom.becker@icloud.com voted', { exact: false })).toBeVisible();
+  await expect(notice.getByText(/^Your sign-in cancelled a release request · .+\. Your witnesses have been told\. Nothing was released\.$/)).toBeVisible();
   await page.waitForLoadState('networkidle');
   await shot(page, info, 'release-notice');
 

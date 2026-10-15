@@ -10,7 +10,7 @@ process.env.STORAGE_DRIVER = 'local';
 process.env.LOG_LEVEL = 'silent';
 
 if (!process.env.DATABASE_URL || !process.env.STORAGE_LOCAL_PATH) {
-  const state = JSON.parse(readFileSync(path.join(os.tmpdir(), 'crypticstorage-test-state.json'), 'utf8')) as {
+  const state = JSON.parse(readFileSync(process.env.CS_TEST_STATE_FILE ?? path.join(os.tmpdir(), 'crypticstorage-test-state.json'), 'utf8')) as {
     databaseUrl: string;
     storageDir: string;
   };

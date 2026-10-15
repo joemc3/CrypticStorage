@@ -94,9 +94,9 @@ All routes live under `/api` and return `{ success, data }` or `{ success: false
 | Files | `GET /files`, `POST /files/upload-url` → `PUT <uploadUrl>` → `POST /files/:id/confirm`, `GET /files/:id`, `GET /files/:id/download-url`, `PATCH /files/:id`, `POST /files/:id/{move,copy}`, `DELETE /files/:id` |
 | Folders | `GET/POST /folders`, `GET/PATCH/DELETE /folders/:id`, `POST /folders/:id/move` |
 | Sharing | `POST/GET /shares/links`, `DELETE /shares/links/:id`, `GET /files/:id/links`, `GET /shares/public/:token`, `POST /shares/public/:token/download-url`, `POST /shares`, `GET /shares/with-me`, `GET /files/:id/shares`, `DELETE /shares/:id` |
-| Witnesses | `GET/POST /witnesses`, `PUT /witnesses/threshold`, `DELETE /witnesses/:id`, `GET /witnesses/invitations`, `POST /witnesses/invitations/:id/{accept,decline}` |
+| Witnesses | `GET/POST /witnesses`, `PUT /witnesses/threshold`, `POST /witnesses/:id/resend`, `DELETE /witnesses/:id`, `GET /witnesses/invitations`, `POST /witnesses/invitations/:id/{accept,decline}` |
 | Contacts | `POST /contacts/:userId/seen`, `PUT /contacts/:userId/trust` (trust on first use for public keys) |
-| Handoff | `GET/POST /handoff/rules`, `GET/DELETE /handoff/rules/:id`, `PUT /handoff/rules/:id/{shares,items}`, `GET /handoff/for-me`, `GET/POST /handoff/requests`, `POST /handoff/requests/:id/votes` |
+| Handoff | `GET/POST /handoff/rules`, `GET/DELETE /handoff/rules/:id`, `PUT /handoff/rules/:id/{shares,items}`, `GET /handoff/for-me`, `GET/POST /handoff/requests`, `GET /handoff/requests/mine`, `POST /handoff/requests/:id/votes` |
 
 Uploads are a three-step reservation so the server can verify size and quota before a file becomes visible. When the storage driver can presign (S3 with `S3_PUBLIC_ENDPOINT`), the upload and download URLs point straight at object storage; otherwise they point at `/api/files/:id/content` with a short-lived token and the API streams the bytes.
 

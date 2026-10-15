@@ -2,7 +2,7 @@
 project: CrypticStorage
 repo: https://github.com/joemc3/CrypticStorage
 journal_format: 1
-updated: 2026-10-15
+updated: 2026-10-14
 last_session: 2026-10-14
 ---
 
@@ -34,10 +34,11 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 - [x] Owner decision on lock at `pagehide`: keep (ruling R18).
 - [x] Implement the handoff, tasks 12 to 21, on `feat/handoff`.
 - [ ] Open the PR for `feat/handoff`, watch the four CI jobs, owner reviews and merges.
-- [ ] API follow-ups: owner-visible request history for the owner's timeline (`GET /api/handoff/requests/mine`, ruling R39; check it landed in the final fix wave), a Refuse action for witnesses, the witness set on the witness card.
+- [x] Owner-visible request history for the C7 timeline: `GET /api/handoff/requests/mine` (ruling R39), landed in the final fix wave.
+- [ ] API follow-ups: a Refuse action for witnesses, the witness set on the witness card.
 - [ ] A durable "last seen" marker for the owner's release notice, so it does not depend on the browser.
 - [ ] Moving a folder out of a covered folder should drop its files' item rows (a file move already does).
-- [ ] The test harness keeps per-run state in a file; make it per-run isolated. Server tests that flaked under load: quorum votes, timer claim race.
+- [x] The test harness keeps per-run state in a per-run file and retries the Postgres port; the interleave tests wait for named lock waiters.
 - [ ] Deferred minors from the reviews are in the PR description.
 - [ ] Later stages per spec section 12: admin role; reproducible client build; hosted service; compliance readiness. Streaming uploads and passkeys remain on the supporting list. Recovery key stays ruled out by the spec.
 - [ ] External security review before anyone stores real data.
@@ -82,6 +83,12 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 | 2026-10-14 | R37: open requests are cancelled on login and on every owner-initiated handoff write; vote shares are tied to one split | A quorum must never run against a living owner, and a release must never combine shares from two different splits |
 | 2026-10-14 | R38: the cancel mail wording follows the reason | The design row covers only the sign-in case, and a mail must not state a false cause |
 | 2026-10-14 | R39: an owner request history endpoint for the C7 timeline | The spec asks for one line each with who and when, and the API had no owner-visible history; Refuse and the witness set on the card remain follow-ups |
+| 2026-10-14 | R40: a timer release waits for the final warning, or for a day past the period if it cannot be sent | Spec 7.4 orders reminders, final warning, release, so the owner gets a last chance; a mail outage must not keep a dead owner's rule armed forever |
+| 2026-10-14 | R41: create and re-split carry the k the shares were split with; the server refuses a mismatch with 409 THRESHOLD_CHANGED under a lock on the owner's row | Shares split for one k under a threshold of another release a key nobody can rebuild, irreversibly |
+| 2026-10-14 | R42: a witness who deletes their account first leaves each set they serve: open requests cancelled, rules flagged stale, k refit | Spec 7.1 says a changed set re-splits, and a silent dead slot can leave a quorum unreachable with no signal |
+| 2026-10-14 | R43: the Witnesses page warns about a witness who is also a recipient on an open rule | Decision 6 names both the rule form and the Witnesses page |
+| 2026-10-14 | R44: witness keys are checked against the owner's trust rows at create and repair; recipient keys at vote time are not, and SECURITY.md says so with the server's power to release alone | The safe must not claim a check it does not make |
+| 2026-10-14 | R45: the owner gets no mail for their own rule creation or revocation | Spec 7.2's "every state change is emailed" is read as changes that happen to the owner; a mail confirming one's own click is noise |
 
 ## Session log
 

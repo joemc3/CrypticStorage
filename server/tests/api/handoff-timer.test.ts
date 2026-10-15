@@ -150,10 +150,35 @@ describe('thresholds', () => {
     expect([r.reminded75At, r.reminded90At, r.reminded95At].every((s) => s !== null)).toBe(true);
   });
 
-  it('on a jump past 100 % releases and sends no reminder', async () => {
+  // Ruling R40: release waits for the final warning, up to a grace day past the period.
+  // A 7-day period keeps 110 % (7.7 days) inside that grace day.
+  const atDays = (t0: Date, days: number) => () => new Date(t0.getTime() + days * DAY);
+
+  it('on a jump from 0 to 110 % sends the final warning and releases only on the next tick', async () => {
+    const w = await world();
+    const { id } = await ruleFor(w, { periodDays: 7 });
+    const t0 = await pinActivity(w.owner);
+    expect(await runHandoffTimer(atDays(t0, 7.7))).toEqual({ warned: 1, released: 0 });
+    const mails = reminders(w.owner);
+    expect(mails).toHaveLength(1);
+    expect(mails[0]!.subject).toContain('Final notice');
+    let r = await row(id);
+    expect(r.state).toBe('warning');
+    expect([r.reminded75At, r.reminded90At, r.reminded95At].every((s) => s !== null)).toBe(true);
+    expect(mailsTo(w.recipient, 'has handed something to you')).toHaveLength(0);
+
+    expect(await runHandoffTimer(atDays(t0, 7.71))).toEqual({ warned: 0, released: 1 });
+    r = await row(id);
+    expect(r.state).toBe('released_timer');
+    expect(reminders(w.owner)).toHaveLength(1);
+    expect(mailsTo(w.recipient, 'has handed something to you')).toHaveLength(1);
+  });
+
+  it('on a jump past 100 % plus the grace day releases at once with no reminder', async () => {
     const w = await world();
     const { id } = await ruleFor(w);
     const t0 = await pinActivity(w.owner);
+    // 120 % of 30 days is 36 days, past the period plus one day.
     expect(await runHandoffTimer(at(t0, 1.2))).toEqual({ warned: 0, released: 1 });
     expect(reminders(w.owner)).toHaveLength(0);
     expect((await row(id)).state).toBe('released_timer');
@@ -286,6 +311,26 @@ describe('failure and races', () => {
     r = await row(id);
     expect(r.state).toBe('warning');
     expect(r.reminded95At).not.toBeNull();
+  });
+
+  it('releases once a day past the period when the final warning fails on every tick, with no final warning stamp', async () => {
+    const w = await world();
+    const { id } = await ruleFor(w, { periodDays: 7 });
+    const t0 = await pinActivity(w.owner);
+    jest.spyOn(mail, 'sendMail').mockRejectedValue(new Error('smtp down'));
+    const atDays = (days: number) => () => new Date(t0.getTime() + days * DAY);
+
+    for (const days of [7, 7.5, 7.99]) {
+      expect(await runHandoffTimer(atDays(days))).toEqual({ warned: 0, released: 0 });
+      const r = await row(id);
+      expect(r.state).toBe('active');
+      expect(r.reminded95At).toBeNull();
+    }
+
+    expect(await runHandoffTimer(atDays(8.01))).toEqual({ warned: 0, released: 1 });
+    const r = await row(id);
+    expect(r.state).toBe('released_timer');
+    expect(r.reminded95At).toBeNull();
   });
 
   it('does not warn an owner who was seen between the read and the claim', async () => {

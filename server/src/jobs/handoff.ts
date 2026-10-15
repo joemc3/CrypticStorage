@@ -11,8 +11,8 @@ import { finalWarning, joinNames, mailDate, periodLabel, releasedByTimerOwner, r
 
 const DAY_MS = 86_400_000;
 const CHECK_IN_TOKEN_TTL_MS = 30 * DAY_MS;
-
-
+/** How long past the period a rule waits for its final warning to be delivered before releasing anyway. */
+const FINAL_WARNING_GRACE_MS = DAY_MS;
 const OPEN = ['active', 'warning'] as const;
 const person = { id: true, email: true, displayName: true } as const;
 const name = (p: { email: string; displayName: string | null }) => p.displayName ?? p.email;
@@ -50,10 +50,18 @@ export async function runHandoffTimer(now: () => Date = clockNow): Promise<{ war
     const recipients = rule.recipients.map((r) => name(r.user));
     const releaseAt = nextCheckInAt(rule.owner.lastActivityAt, rule.periodDays);
 
-    if (elapsed >= period) {
-      // Not claimed if the owner was seen, or the rule revoked, since we read it.
+    // Ruling R40: release only after the final warning went out, or, if mail keeps failing,
+    // once a further grace day has passed so a broken mailer cannot hold a rule forever.
+    // A rule past its period with no final warning falls through and gets one this tick.
+    if (elapsed >= period && (rule.reminded95At !== null || elapsed >= period + FINAL_WARNING_GRACE_MS)) {
+      // Not claimed if the owner was seen, the rule revoked, or the final warning rolled back since we read it.
       const claim = await prisma.handoffRule.updateMany({
-        where: { id: rule.id, state: { in: [...OPEN] }, owner: { lastActivityAt: { lte: new Date(at.getTime() - period) } } },
+        where: {
+          id: rule.id,
+          state: { in: [...OPEN] },
+          owner: { lastActivityAt: { lte: new Date(at.getTime() - period) } },
+          OR: [{ reminded95At: { not: null } }, { owner: { lastActivityAt: { lte: new Date(at.getTime() - period - FINAL_WARNING_GRACE_MS) } } }],
+        },
         data: { state: 'released_timer', releasedAt: at },
       });
       if (claim.count === 0) continue;
@@ -121,7 +129,8 @@ export async function runHandoffTimer(now: () => Date = clockNow): Promise<{ war
       try {
         await sendMail({ to: owner.email, ...mail });
       } catch (err) {
-        // Give the stamps back so the next tick tries again; a lost final warning would mean release without notice.
+        // Give the stamps back so the next tick tries again. Release waits for the final warning's
+        // stamp, so a lost final warning holds the release until a day past the period.
         logger.warn({ err, userId: owner.id, level }, 'reminder not sent');
         await rollback(group);
         warned -= group.length;

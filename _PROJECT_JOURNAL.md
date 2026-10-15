@@ -18,8 +18,8 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 
 | Area | State |
 |---|---|
-| Server (Express, Prisma, Postgres) | 149 integration and unit tests on a real Postgres (jest total; a few quorum and timer tests flaked under load in this session and passed alone); migrations `stage2_contract_mail`, `handoff_a_witnesses`, `handoff_b_rules`, `handoff_c_quorum`; witnesses, contacts (trust on first use), rules, timer job with injectable clock, quorum requests and votes, cancel on owner activity |
-| Client (React, Vite) | 229 vitest tests in 38 files; Shamir and handoff crypto, witness, rules and release services; Witnesses page, rules screens, quorum witness and owner screens, Shared-with-me rows for released items; Playwright smoke 44 tests (11 specs at 4 projects) |
+| Server (Express, Prisma, Postgres) | 162 integration and unit tests on a real Postgres (jest total; each run has its own state file and a test server bound to 127.0.0.1, and the quorum file passed five runs in a row); migrations `stage2_contract_mail`, `handoff_a_witnesses`, `handoff_b_rules`, `handoff_c_quorum`; witnesses, contacts (trust on first use), rules, timer job with injectable clock, quorum requests and votes, cancel on owner activity |
+| Client (React, Vite) | 237 vitest tests in 38 files; Shamir and handoff crypto, witness, rules and release services; Witnesses page, rules screens, quorum witness and owner screens, Shared-with-me rows for released items; Playwright smoke 44 tests (11 specs at 4 projects) |
 | End-to-end | 11 tests, runs in CI: the stage 1 flow (7) and `handoff.e2e.test.ts` (4: timer with injected clock, quorum with a late third vote refused, cancel on owner sign-in, repair after a witness is removed) |
 | Crypto | content format, KDF and key hierarchy unchanged; per-rule release key, Shamir over GF(2^8), SECURITY.md has a Handoff section |
 | Ops | `WITNESS_MIN_N`, `WITNESS_MAX_N`, `WITNESS_MAY_BE_RECIPIENT` in env; handoff job runs in the API process; CI unchanged (four jobs) |

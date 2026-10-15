@@ -208,7 +208,9 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
     const have = await tx.releaseVoteShare.groupBy({ by: ['ruleId', 'recipientUserId'], where: { requestId }, _count: { _all: true } });
     const perPair = new Map(have.map((h) => [`${h.ruleId}:${h.recipientUserId}`, h._count._all]));
     const at = new Date();
-    for (const rule of fresh) {
+    // Rule locks are taken in byte order of id everywhere (COLLATE "C" in SQL), so a vote and a stale flag cannot
+    // wait on each other.
+    for (const rule of [...fresh].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
       if (!rule.recipients.every((x) => (perPair.get(`${rule.id}:${x.userId}`) ?? 0) >= request.requiredVotes)) continue;
       // Claimed by a conditional update: a rule the timer, a revoke or a stale flag got to first is left alone.
       const claimed = await tx.handoffRule.updateMany({
@@ -278,13 +280,21 @@ export type CancelReason = 'owner_activity' | 'owner_change' | 'no_release_possi
 type Tx = Prisma.TransactionClient;
 
 /**
+ * Lock the owner's open request rows, in id order. Every path that touches an owner's rules while a request may be
+ * completing takes this lock first and the rule locks after, in id order, so none of them can deadlock with a vote.
+ */
+export async function lockOpenRequestsTx(tx: Tx, ownerId: string): Promise<Array<{ id: string }>> {
+  return tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM release_requests WHERE owner_id = ${ownerId} AND state = 'open' ORDER BY id FOR UPDATE`;
+}
+
+/**
  * Cancel the owner's open requests inside the caller's transaction and return the ids it cancelled. It takes the same
  * row lock the vote path takes, so a vote either finished before this runs or finds the request closed afterwards.
  * Callers do this BEFORE writing whatever made the votes obsolete, and call `announceCancelled` after they commit.
  * Nothing was released, so the re-wrapped shares go with the request.
  */
 export async function cancelOpenRequestsTx(tx: Tx, ownerId: string): Promise<string[]> {
-  const open = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM release_requests WHERE owner_id = ${ownerId} AND state = 'open' ORDER BY id FOR UPDATE`;
+  const open = await lockOpenRequestsTx(tx, ownerId);
   const won: string[] = [];
   for (const { id } of open) {
     const res = await tx.releaseRequest.updateMany({ where: { id, state: 'open' }, data: { state: 'cancelled', closedAt: new Date() } });

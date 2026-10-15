@@ -654,9 +654,15 @@ describe('replacing shares while a vote is in flight', () => {
       { timeout: 30_000 }
     );
     await isLocked;
+    const before = await prisma.handoffRuleShare.findMany({ where: { ruleId: s.ruleId }, orderBy: { witnessUserId: 'asc' } });
     const fresh = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
     const replacing = api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).set('Connection', 'close').send({ shares: fresh }).then((r) => r);
     await waitForLockWaiters(1);
+    // The re-split is queued behind the lock and has written nothing: from another connection the rule is untouched.
+    // Under the old ordering it committed without the lock and these would already have changed.
+    const during = await prisma.handoffRule.findUniqueOrThrow({ where: { id: s.ruleId } });
+    expect(during.sharesStale).toBe(false);
+    expect(await prisma.handoffRuleShare.findMany({ where: { ruleId: s.ruleId }, orderBy: { witnessUserId: 'asc' } })).toEqual(before);
     const voting = vote(w1, id, fullVote(s)).set('Connection', 'close').then((r) => r);
     await waitForLockWaiters(2);
     release();
@@ -680,5 +686,72 @@ describe('replacing shares while a vote is in flight', () => {
     expect((await vote(w1, id, fullVote(s))).status).toBe(409);
     expect(await ruleState(s.ruleId)).toBe('active');
     expect(await prisma.releaseVoteShare.count({ where: { ruleId: s.ruleId } })).toBe(0);
+  });
+});
+
+describe('a stale flag and a completing vote on several rules', () => {
+  /** Two open rules, one vote in, an invitee waiting to accept, and the request row lock held from outside. */
+  async function arrange() {
+    const s = await withRule();
+    const file2 = await upload(s.w.owner);
+    const second = await api().post('/api/handoff/rules').set(bearer(s.w.owner)).send(ruleBody(s.w, { fileId: file2.id }, [file2.id])).expect(201);
+    const ruleIds = [s.ruleId, second.body.data.id as string];
+    const late = await registerUser();
+    const invited = await api().post('/api/witnesses').set(bearer(s.w.owner)).send({ email: late.email }).expect(201);
+    const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
+    const body = votes(ruleIds.map((ruleId) => ({ ruleId, recipients: [s.w.recipient.id] })));
+    await vote(s.w.witnesses[0]!, id, body).expect(201);
+
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    const held = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM release_requests WHERE id = ${id} FOR UPDATE`;
+        locked();
+        await gate;
+      },
+      { timeout: 30_000 }
+    );
+    await isLocked;
+    const accept = () => api().post(`/api/witnesses/invitations/${invited.body.data.id}/accept`).set(bearer(late)).set('Connection', 'close').then((r) => r);
+    const finish = () => vote(s.w.witnesses[1]!, id, body).set('Connection', 'close').then((r) => r);
+    return { s, ruleIds, id, held, release, accept, finish };
+  }
+
+  it('vote first: it completes, then the flag finds nothing open; neither errors', async () => {
+    const t = await arrange();
+    const voting = t.finish();
+    await waitForLockWaiters(1);
+    const accepting = t.accept();
+    await waitForLockWaiters(2);
+    t.release();
+    await t.held;
+    const [voted, accepted] = await Promise.all([voting, accepting]);
+    expect(voted.status).toBe(201);
+    expect(accepted.status).toBe(200);
+    expect(voted.body.data.state).toBe('completed');
+    for (const r of t.ruleIds) expect(await ruleState(r)).toBe('released_quorum');
+  });
+
+  it('flag first: the rules turn stale, then the vote sees them stale; neither errors', async () => {
+    const t = await arrange();
+    const accepting = t.accept();
+    await waitForLockWaiters(1);
+    const voting = t.finish();
+    await waitForLockWaiters(2);
+    t.release();
+    await t.held;
+    const [voted, accepted] = await Promise.all([voting, accepting]);
+    expect(accepted.status).toBe(200);
+    expect(voted.status).toBe(400);
+    expect(voted.body.code).toBe('NOTHING_TO_RELEASE');
+    for (const r of t.ruleIds) {
+      const rule = await prisma.handoffRule.findUniqueOrThrow({ where: { id: r } });
+      expect(rule.state).toBe('active');
+      expect(rule.sharesStale).toBe(true);
+    }
+    expect((await requestRow(t.id)).state).toBe('open');
   });
 });

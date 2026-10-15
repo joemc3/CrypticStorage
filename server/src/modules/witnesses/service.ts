@@ -7,7 +7,7 @@ import { audit } from '../../lib/audit';
 import { spkiFingerprint } from '../../lib/crypto';
 import { sendMail } from '../../lib/mail';
 import { witnessInvitation } from '../../mail/templates';
-import { announceCancelled, cancelOpenRequestsTx, dropOpenVoteShares } from '../handoff/requests';
+import { announceCancelled, cancelOpenRequestsTx, dropOpenVoteShares, lockOpenRequestsTx } from '../handoff/requests';
 
 interface ActiveRuleRef {
   id: string;
@@ -21,7 +21,11 @@ interface ActiveRuleRef {
 async function flagOpenRules(ownerId: string, cancelRequests = false): Promise<ActiveRuleRef[]> {
   const { rules, cancelled } = await prisma.$transaction(async (tx) => {
     // The request lock comes first, so no vote can complete on the old split once the rules read as stale.
-    const cancelled = cancelRequests ? await cancelOpenRequestsTx(tx, ownerId) : [];
+    let cancelled: string[] = [];
+    if (cancelRequests) cancelled = await cancelOpenRequestsTx(tx, ownerId);
+    else await lockOpenRequestsTx(tx, ownerId);
+    // Then the rules, in byte order of id: a completing vote claims them in that order while holding the request.
+    await tx.$queryRaw`SELECT id FROM handoff_rules WHERE owner_id = ${ownerId} AND state IN ('active', 'warning') ORDER BY id COLLATE "C" FOR UPDATE`;
     await tx.handoffRule.updateMany({ where: { ownerId, state: { in: ['active', 'warning'] } }, data: { sharesStale: true } });
     const rules = await tx.handoffRule.findMany({
       where: { ownerId, state: { in: ['active', 'warning'] } },

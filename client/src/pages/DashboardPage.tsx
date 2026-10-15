@@ -18,8 +18,8 @@ import { ReleaseNoticeCard, dismissedNotice, ownerNotices, rememberDismissed, ty
 import { formatDay, stateLabel } from '../components/handoff/format';
 import { useAuth } from '../hooks/useAuth';
 import { useFiles } from '../hooks/useFiles';
-import ApiService, { type HandoffForMe, type HandoffRule, type StorageStats } from '../services/api.service';
-import { witnessCards, type WitnessCard } from '../services/release.service';
+import ApiService, { type HandoffForMe, type HandoffRule, type OwnerReleaseRequest, type StorageStats } from '../services/api.service';
+import { myRequests, witnessCards, type WitnessCard } from '../services/release.service';
 import { forMe, isOpen, listRules, nameRuleTargets, repairAtUnlock, repairRunning, witnessSummary, type WitnessSummary } from '../services/rules.service';
 
 export const DashboardPage: React.FC = () => {
@@ -40,12 +40,12 @@ export const DashboardPage: React.FC = () => {
 
   const loadHandoff = useCallback(async () => {
     // Each part fails alone: a missing list leaves its section empty, never the whole page.
-    const [mine, theirs, summary, owners, activity] = await Promise.all([
+    const [mine, theirs, summary, owners, requests] = await Promise.all([
       listRules().catch(() => [] as HandoffRule[]),
       forMe().catch(() => [] as HandoffForMe[]),
       witnessSummary().catch(() => null),
       witnessCards().catch(() => [] as WitnessCard[]),
-      ApiService.getActivity(1, 50).then((page) => page.items).catch(() => []),
+      myRequests().catch(() => [] as OwnerReleaseRequest[]),
     ]);
     const shown = mine.filter((r) => r.state !== 'revoked');
     setRules(shown);
@@ -54,7 +54,7 @@ export const DashboardPage: React.FC = () => {
     setServed(owners);
     const targetNames = await nameRuleTargets(shown);
     setNames(targetNames);
-    const newest = ownerNotices(mine, targetNames, activity)[0] ?? null;
+    const newest = ownerNotices(requests, mine, targetNames)[0] ?? null;
     setNotice(newest && newest.id !== dismissedNotice() ? newest : null);
 
     // The repair at unlock may have failed (offline, a witness not yet accepted). Try again once per visit.

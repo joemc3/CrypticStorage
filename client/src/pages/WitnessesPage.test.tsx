@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import ApiService, { type WitnessEntry, type WitnessSet } from '../services/api.service';
+import ApiService, { type HandoffRule, type WitnessEntry, type WitnessSet } from '../services/api.service';
 import { useUIStore } from '../stores/ui.store';
 import WitnessesPage from './WitnessesPage';
 
@@ -30,6 +30,7 @@ describe('WitnessesPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useUIStore.setState({ toasts: [] });
+    vi.spyOn(ApiService, 'listHandoffRules').mockResolvedValue([]);
   });
 
   it('lists the set with status and the start of each fingerprint', async () => {
@@ -164,5 +165,72 @@ describe('WitnessesPage', () => {
     fireEvent.change(screen.getByLabelText('Add a witness by email'), { target: { value: 'nobody@x.co' } });
     fireEvent.click(screen.getByRole('button', { name: 'Check key' }));
     expect(await screen.findByText('No account with that email, or it is not verified yet.')).toBeInTheDocument();
+  });
+
+  describe('a witness who is also a recipient (decision 6)', () => {
+    const openRule = (recipientUserIds: string[], state: HandoffRule['state'] = 'active'): HandoffRule => ({
+      id: `r-${recipientUserIds.join('-')}-${state}`, fileId: 'f', periodDays: 30, state, createdAt: '', nextCheckInAt: null, warningAt: null, sharesStale: false, coverageGaps: 0,
+      recipients: recipientUserIds.map((userId) => ({ userId, email: `${userId}@x.co`, displayName: null, notifiedAt: null })),
+    });
+    const warning = /also receives one of your rules/;
+
+    it('warns at the row and in the confirmation for an existing witness who receives an open rule, and for nobody else', async () => {
+      vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(2, three));
+      // priya receives an open rule; tom only a revoked one.
+      vi.spyOn(ApiService, 'listHandoffRules').mockResolvedValue([openRule(['u-w1']), openRule(['u-w2'], 'revoked')]);
+      renderPage();
+      await screen.findByText('priya@x.co');
+      await waitFor(() => expect(screen.getAllByText(warning)).toHaveLength(1));
+      expect(screen.getByRole('note')).toHaveTextContent('priya@x.co also receives one of your rules.');
+
+      fireEvent.click(screen.getByRole('button', { name: 'More' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and save' }));
+      await screen.findByRole('heading', { name: /Any 3 of these 3 people/ });
+      expect(screen.getAllByRole('note')).toHaveLength(1);
+      expect(screen.getByRole('note')).toHaveTextContent('priya@x.co also receives');
+    });
+
+    it('warns for a staged witness who is a recipient', async () => {
+      vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(2, three));
+      vi.spyOn(ApiService, 'listHandoffRules').mockResolvedValue([openRule(['u9'])]);
+      vi.spyOn(ApiService, 'getPublicKey').mockResolvedValue({ id: 'u9', email: 'new@x.co', publicKey: 'K', fingerprint: fp('a'), trust: null });
+      vi.spyOn(ApiService, 'markContactSeen').mockResolvedValue({} as never);
+      const { default: CryptoService } = await import('../services/crypto.service');
+      vi.spyOn(CryptoService, 'publicKeyFingerprint').mockResolvedValue('aaaa '.repeat(8).trim());
+      renderPage();
+      await screen.findByText('priya@x.co');
+      expect(screen.queryByText(warning)).toBeNull();
+      fireEvent.change(screen.getByLabelText('Add a witness by email'), { target: { value: 'new@x.co' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Check key' }));
+      await screen.findByLabelText(/^Key fingerprint AAAA/);
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      expect(screen.getByRole('note')).toHaveTextContent('new@x.co also receives one of your rules.');
+      fireEvent.click(screen.getByRole('button', { name: 'Review and save' }));
+      await screen.findByRole('heading', { name: /Any 2 of these 4 people/ });
+      expect(screen.getByRole('note')).toHaveTextContent('new@x.co also receives');
+    });
+  });
+
+  describe('resending an invitation', () => {
+    it('offers Resend on invited rows only, and sends it', async () => {
+      vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(2, three));
+      const resend = vi.spyOn(ApiService, 'resendWitnessInvitation').mockResolvedValue(three[2]!);
+      renderPage();
+      await screen.findByText('priya@x.co');
+      expect(screen.queryByRole('button', { name: 'Resend the invitation to priya@x.co' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Resend the invitation to tom@x.co' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Resend the invitation to lena@x.co' }));
+      await waitFor(() => expect(resend).toHaveBeenCalledWith('w3'));
+      await waitFor(() => expect(useUIStore.getState().toasts.some((t) => t.type === 'success' && t.message === 'Invitation sent again')).toBe(true));
+    });
+
+    it('says so when the invitation could not be sent', async () => {
+      vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(set(2, three));
+      vi.spyOn(ApiService, 'resendWitnessInvitation').mockRejectedValue({ message: 'The invitation could not be sent. Try again later.', statusCode: 502, code: 'MAIL_FAILED' });
+      renderPage();
+      await screen.findByText('lena@x.co');
+      fireEvent.click(screen.getByRole('button', { name: 'Resend the invitation to lena@x.co' }));
+      await waitFor(() => expect(useUIStore.getState().toasts.some((t) => t.type === 'error')).toBe(true));
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import type { ActivityEntry, HandoffRule, ReleaseRequest } from '../../services/api.service';
+import type { HandoffRule, OwnerReleaseRequest, ReleaseRequest } from '../../services/api.service';
 import type { WitnessCard } from '../../services/release.service';
 import { useUIStore } from '../../stores/ui.store';
 import { QuorumFlows, type QuorumIntent } from './QuorumFlows';
@@ -152,9 +152,11 @@ describe('the two one-fact screens', () => {
 
 describe('the owner\'s release notice', () => {
   const now = new Date(at(10, 14, 12, 0));
-  const entry = (over: Partial<ActivityEntry>): ActivityEntry => ({
-    id: 'a1', action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: 'q1', metadata: { reason: 'owner_activity' }, ipAddress: '', userAgent: '', success: true,
-    createdAt: at(10, 14, 9, 12), ...over,
+  const ownerRequest = (over: Partial<OwnerReleaseRequest> = {}): OwnerReleaseRequest => ({
+    id: 'q1', state: 'cancelled', reason: 'sign_in', requiredVotes: 2, openedAt: at(10, 14, 8, 2), closedAt: at(10, 14, 9, 12),
+    openedBy: { id: 'w1', email: 'j.park@outlook.com', displayName: null },
+    votes: [{ witnessUserId: 'w2', displayName: 'Mia Ross', email: 'mia@x.co', votedAt: at(10, 14, 8, 40) }],
+    releasedRuleIds: [], ...over,
   });
   const rule = (over: Partial<HandoffRule> = {}): HandoffRule => ({
     id: 'r1', folderId: 'f1', periodDays: 365, state: 'released_quorum', createdAt: '2026-09-01T00:00:00.000Z', nextCheckInAt: null, warningAt: null, sharesStale: false, coverageGaps: 0,
@@ -165,50 +167,71 @@ describe('the owner\'s release notice', () => {
     render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ReleaseNoticeCard notice={notice} onDismiss={onDismiss} /></MemoryRouter>);
     return onDismiss;
   };
+  const timeline = () => screen.getAllByRole('listitem').map((li) => li.textContent);
 
-  it('sign-in cancelled the request: reassures that nothing was released', () => {
-    const [notice] = ownerNotices([], new Map(), [entry({})], now);
+  it('sign-in: names who opened and who voted, then says the sign-in cancelled it and nothing was released', () => {
+    const [notice] = ownerNotices([ownerRequest()], [], new Map(), now);
     const onDismiss = show(notice);
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText('Your sign-in cancelled a release request.')).toBeInTheDocument();
-    expect(screen.getByText('Your witnesses have been told. Nothing was released.')).toBeInTheDocument();
-    expect(screen.getByText('Cancelled by your sign-in')).toBeInTheDocument();
-    expect(screen.getByText('14 Oct, 09:12')).toBeInTheDocument();
+    expect(timeline()).toEqual([
+      'j.park@outlook.com opened a release request · 14 Oct, 08:02',
+      'Mia Ross voted · 14 Oct, 08:40',
+      'Your sign-in cancelled a release request · 14 Oct, 09:12. Your witnesses have been told. Nothing was released.',
+    ]);
     expect(screen.getByRole('link', { name: 'See your witnesses' })).toHaveAttribute('href', '/settings/witnesses');
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(onDismiss).toHaveBeenCalled();
   });
 
-  it('witnesses released the items: says where they went and that the owner\'s copy is unchanged', () => {
-    const [notice] = ownerNotices([rule()], new Map([['r1', 'Estate']]), [], now);
+  it('an owner change ends with "Your change cancelled a release request"', () => {
+    const [notice] = ownerNotices([ownerRequest({ reason: 'owner_change', votes: [] })], [], new Map(), now);
+    show(notice);
+    expect(timeline()).toEqual([
+      'j.park@outlook.com opened a release request · 14 Oct, 08:02',
+      'Your change cancelled a release request · 14 Oct, 09:12. Nothing was released.',
+    ]);
+  });
+
+  it('a request that could not complete says so', () => {
+    const [notice] = ownerNotices([ownerRequest({ reason: 'no_release_possible' })], [], new Map(), now);
+    show(notice);
+    expect(screen.getByText('A release request could not complete.')).toBeInTheDocument();
+    expect(timeline()[2]).toBe('A release request could not complete · 14 Oct, 09:12. Nothing was released.');
+  });
+
+  it('a completed request: what was released, to whom, and that the owner\'s copies are unchanged', () => {
+    const done = ownerRequest({
+      state: 'completed', reason: undefined, closedAt: at(10, 14, 8, 15), releasedRuleIds: ['r1'],
+      votes: [
+        { witnessUserId: 'w1', displayName: null, email: 'j.park@outlook.com', votedAt: at(10, 14, 8, 3) },
+        { witnessUserId: 'w2', displayName: 'Mia Ross', email: 'mia@x.co', votedAt: at(10, 14, 8, 15) },
+      ],
+    });
+    const [notice] = ownerNotices([done], [rule()], new Map([['r1', 'Estate']]), now);
     show(notice);
     expect(screen.getByText('Estate was released by your witnesses.')).toBeInTheDocument();
-    expect(screen.getByText('It went to daniel.hale@gmail.com and sam.hale@proton.me. Your own copy is unchanged.')).toBeInTheDocument();
-    expect(screen.getByText('Released to daniel.hale@gmail.com and sam.hale@proton.me')).toBeInTheDocument();
-    expect(screen.getByText('14 Oct, 08:15')).toBeInTheDocument();
+    expect(screen.getByText('It went to daniel.hale@gmail.com and sam.hale@proton.me.')).toBeInTheDocument();
+    expect(timeline()).toEqual([
+      'j.park@outlook.com opened a release request · 14 Oct, 08:02',
+      'j.park@outlook.com voted · 14 Oct, 08:03',
+      'Mia Ross voted · 14 Oct, 08:15',
+      'Your witnesses released your items · 14 Oct, 08:15. Your own copies are unchanged.',
+    ]);
   });
 
-  it('a change of witnesses that cancelled the request is named for what it was', () => {
-    const [notice] = ownerNotices([], new Map(), [entry({ metadata: { reason: 'owner_change' } })], now);
-    show(notice);
-    expect(screen.getByText('A change you made cancelled a release request.')).toBeInTheDocument();
-    expect(screen.getByText('Cancelled by your change')).toBeInTheDocument();
-  });
-
-  it('picks the newest ending, ignores old ones, failed entries and other actions, and groups rules released together', () => {
+  it('picks the newest ending and ignores open requests and endings older than two weeks', () => {
     const notices = ownerNotices(
-      [rule({ id: 'r1' }), rule({ id: 'r2', releasedAt: at(10, 14, 8, 15, 30) }), rule({ id: 'old', releasedAt: '2026-09-01T00:00:00.000Z' })],
-      new Map([['r1', 'Estate'], ['r2', 'Letter']]),
-      [entry({ id: 'x', createdAt: '2026-09-01T00:00:00.000Z' }), entry({ id: 'y', success: false }), entry({ id: 'z', action: 'handoff.request.open' })],
+      [
+        ownerRequest({ id: 'open', state: 'open', reason: undefined, closedAt: undefined }),
+        ownerRequest({ id: 'old', closedAt: '2026-09-01T00:00:00.000Z' }),
+        ownerRequest({ id: 'earlier', reason: 'owner_change', closedAt: at(10, 13, 9, 0) }),
+        ownerRequest({ id: 'newest' }),
+      ],
+      [],
+      new Map(),
       now
     );
-    expect(notices).toHaveLength(1);
-    expect(notices[0].head).toBe('Estate and Letter were released by your witnesses.');
-    expect(notices[0].sub).toBe('They went to daniel.hale@gmail.com and sam.hale@proton.me. Your own copies are unchanged.');
-  });
-
-  it('a sign-in that came after a release is the newest ending', () => {
-    const notices = ownerNotices([rule()], new Map([['r1', 'Estate']]), [entry({})], now);
-    expect(notices.map((n) => n.head)).toEqual(['Your sign-in cancelled a release request.', 'Estate was released by your witnesses.']);
+    expect(notices.map((n) => n.id)).toEqual(['request:newest', 'request:earlier']);
   });
 });

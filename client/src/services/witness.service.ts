@@ -58,6 +58,10 @@ export function listWitnesses(): Promise<WitnessSet> {
 export function invite(email: string): Promise<WitnessEntry> {
   return ApiService.inviteWitness(email.trim().toLowerCase());
 }
+/** Send an invited witness their invitation email again. */
+export function resend(id: string): Promise<WitnessEntry> {
+  return ApiService.resendWitnessInvitation(id);
+}
 export async function remove(id: string): Promise<void> {
   await ApiService.removeWitness(id);
 }

@@ -3,7 +3,8 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 /**
  * Amber callout for a witness who is also a recipient of a rule (design decision 6).
- * Built now and unused until rules exist; the Witnesses page and the rule form will render it.
+ * The rule form shows it for a recipient who is a witness; the Witnesses page shows it for an existing or staged
+ * witness who receives something from one of the owner's open rules, at the row and again in the confirmation.
  */
 export const WitnessRecipientWarning: React.FC<{ name: string; ruleName?: string }> = ({ name, ruleName }) => (
   <div role="note" className="flex items-start gap-3 rounded-[10px] bg-warn-soft px-4 py-3.5 text-sm leading-5 text-warn-text">

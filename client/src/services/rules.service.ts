@@ -9,6 +9,7 @@
 
 import CryptoService from './crypto.service';
 import ApiService, {
+  toApiError,
   type CreateHandoffRuleRequest,
   type FileMetadata,
   type HandoffForMe,
@@ -21,6 +22,7 @@ import ApiService, {
 import StorageService from './storage.service';
 import { fileKeyFor, getFolder } from './file.service';
 import * as Handoff from './handoff.service';
+import { lookupContact } from './witness.service';
 
 export type RuleTarget = { fileId: string; folderId?: undefined } | { folderId: string; fileId?: undefined };
 
@@ -41,6 +43,25 @@ export interface ReleasedItem {
   releasedAt?: string;
 }
 
+export interface ReleasedItems {
+  items: ReleasedItem[];
+  /** Released rules whose key or items could not be opened here. Their items are left out; the rest still show. */
+  failedRuleIds: string[];
+}
+
+/** A witness's key differs from the one this account trusted. Nothing is wrapped for it until it is re-trusted. */
+export class WitnessKeyChangedError extends Error {
+  constructor(public readonly email: string) {
+    super(
+      `The key for your witness ${email} has changed since you last trusted it. Nothing was saved. Compare the fingerprint with them in person and mark it verified, then try again.`
+    );
+    this.name = 'WitnessKeyChangedError';
+  }
+}
+
+/** The server's code when the threshold moved between reading the witness set and sending the split. */
+const THRESHOLD_CHANGED = 'THRESHOLD_CHANGED';
+
 export const WITNESS_NOT_READY = 'Your witnesses are not ready. At least two must have accepted, and at least as many as your threshold.';
 
 const MIN_WITNESSES = 2;
@@ -59,13 +80,45 @@ export function joinNames(names: string[]): string {
 
 // --- Witnesses ---------------------------------------------------------------
 
+/**
+ * The accepted witnesses' keys, each checked against this account's trust rows the way the share dialog checks a
+ * recipient (trust on first use): the first sight is recorded, a match passes, a changed key throws before anything
+ * is wrapped for it.
+ */
 async function currentShareHolders(): Promise<{ keys: Map<string, CryptoKey>; threshold: number }> {
   const set = await ApiService.getWitnesses();
   const accepted: WitnessEntry[] = set.witnesses.filter((w) => w.status === 'accepted');
   if (accepted.length < MIN_WITNESSES || accepted.length < set.threshold) throw new Error(WITNESS_NOT_READY);
   const keys = new Map<string, CryptoKey>();
-  for (const w of accepted) keys.set(w.user.id, await CryptoService.importPublicKey(w.user.publicKey));
+  for (const w of accepted) {
+    const contact = await lookupContact(w.user.email);
+    if (contact.keyChanged) throw new WitnessKeyChangedError(w.user.email);
+    // The two server answers must name the same person and key, or the trust check did not cover the key in use.
+    if (contact.id !== w.user.id || contact.publicKey !== w.user.publicKey) throw new WitnessKeyChangedError(w.user.email);
+    keys.set(w.user.id, await CryptoService.importPublicKey(contact.publicKey));
+  }
   return { keys, threshold: set.threshold };
+}
+
+const isThresholdChanged = (error: unknown) => toApiError(error).code === THRESHOLD_CHANGED;
+
+/**
+ * Split for the current witnesses and send the result with the k it was split with. When the server says the
+ * threshold moved in between, read the set again and try once more; a second refusal goes to the caller.
+ */
+async function sendWithCurrentSplit<T>(
+  releaseKey: CryptoKey,
+  send: (shares: HandoffShareInput[], threshold: number) => Promise<T>,
+  first?: { keys: Map<string, CryptoKey>; threshold: number }
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const { keys, threshold } = attempt === 0 && first ? first : await currentShareHolders();
+    try {
+      return await send(await sharesFor(releaseKey, keys, threshold), threshold);
+    } catch (error) {
+      if (attempt > 0 || !isThresholdChanged(error)) throw error;
+    }
+  }
 }
 
 export interface WitnessSummary {
@@ -132,7 +185,8 @@ async function sharesFor(releaseKey: CryptoKey, keys: Map<string, CryptoKey>, th
 
 export async function createRule(input: NewRule): Promise<HandoffRuleDetail> {
   const owner = masterKey();
-  const { keys, threshold } = await currentShareHolders();
+  // Checked first, so a set that is not ready or a changed key stops before any file is touched.
+  const holders = await currentShareHolders();
   const files = await filesUnder(input.target);
 
   const releaseKey = await Handoff.createReleaseKey();
@@ -141,14 +195,20 @@ export async function createRule(input: NewRule): Promise<HandoffRuleDetail> {
     recipients.push({ userId: r.userId, wrappedReleaseKey: await Handoff.wrapForUser(releaseKey, await CryptoService.importPublicKey(r.publicKey)) });
   }
 
-  return ApiService.createHandoffRule({
-    ...(input.target.fileId ? { fileId: input.target.fileId } : { folderId: input.target.folderId }),
-    periodDays: input.periodDays,
-    recipients,
-    items: await wrapItems(files, releaseKey),
-    shares: await sharesFor(releaseKey, keys, threshold),
-    wrappedReleaseKeyOwner: JSON.stringify(await Handoff.wrapForOwner(releaseKey, owner)),
-  });
+  const items = await wrapItems(files, releaseKey);
+  const wrappedReleaseKeyOwner = JSON.stringify(await Handoff.wrapForOwner(releaseKey, owner));
+  return sendWithCurrentSplit(releaseKey, (shares, threshold) =>
+    ApiService.createHandoffRule({
+      ...(input.target.fileId ? { fileId: input.target.fileId } : { folderId: input.target.folderId }),
+      periodDays: input.periodDays,
+      recipients,
+      items,
+      shares,
+      threshold,
+      wrappedReleaseKeyOwner,
+    }),
+    holders
+  );
 }
 
 export const listRules = (): Promise<HandoffRule[]> => ApiService.listHandoffRules();
@@ -197,8 +257,7 @@ async function repairAll(): Promise<{ repaired: number; failed: number }> {
       const detail = await getRule(rule.id);
       const releaseKey = await releaseKeyOf(detail);
       if (rule.sharesStale) {
-        const { keys, threshold } = await currentShareHolders();
-        await ApiService.replaceHandoffShares(rule.id, await sharesFor(releaseKey, keys, threshold));
+        await sendWithCurrentSplit(releaseKey, (shares, threshold) => ApiService.replaceHandoffShares(rule.id, shares, threshold));
       }
       if (rule.coverageGaps > 0) await addMissingItems(detail, releaseKey);
       repaired++;
@@ -227,38 +286,50 @@ export async function coverFile(fileId: string, folderId: string | null | undefi
 
 // --- Recipient -------------------------------------------------------------------
 
-/** Items of rules that released, opened with my private key: by timer from my wrapped release key, by quorum from the voting witnesses' shares. */
-export async function releasedItems(): Promise<ReleasedItem[]> {
+/**
+ * Items of rules that released, opened with my private key: by timer from my wrapped release key, by quorum from the
+ * voting witnesses' shares. A rule that cannot be opened is skipped and named in `failedRuleIds`; the others still show.
+ */
+export async function releasedItems(): Promise<ReleasedItems> {
   const privateKey = StorageService.getPrivateKey();
   if (!privateKey) throw new Error('Your vault is locked. Unlock it to continue.');
-  const out: ReleasedItem[] = [];
+  const items: ReleasedItem[] = [];
+  const failedRuleIds: string[] = [];
   for (const rule of await forMe()) {
     if (!rule.items) continue;
-    let releaseKey: CryptoKey;
-    if (rule.state === 'released_timer' && rule.wrappedReleaseKey) {
-      releaseKey = await Handoff.unwrapForUser(rule.wrappedReleaseKey, privateKey);
-    } else if (rule.state === 'released_quorum' && rule.voteShares?.length) {
-      releaseKey = await Handoff.combineAndUnwrap(rule.voteShares.map((s) => s.wrappedShare), privateKey);
-    } else {
-      continue;
-    }
-    for (const item of rule.items) {
-      const fileKey = await Handoff.unwrapFileKeyUnderRelease(JSON.parse(item.wrappedFileKey), releaseKey);
-      StorageService.cacheFileKey(item.fileId, fileKey);
-      const name = await CryptoService.decryptString({ data: item.file.encryptedName, iv: item.file.encryptedNameIV }, fileKey);
-      out.push({
-        ruleId: rule.id,
-        fileId: item.fileId,
-        name,
-        size: CryptoService.plaintextSize(item.file.encryptedSize),
-        mimeType: item.file.mimeType,
-        createdAt: item.file.createdAt,
-        from: rule.owner,
-        releasedAt: rule.releasedAt,
-      });
+    try {
+      let releaseKey: CryptoKey;
+      if (rule.state === 'released_timer' && rule.wrappedReleaseKey) {
+        releaseKey = await Handoff.unwrapForUser(rule.wrappedReleaseKey, privateKey);
+      } else if (rule.state === 'released_quorum' && rule.voteShares?.length) {
+        releaseKey = await Handoff.combineAndUnwrap(rule.voteShares.map((s) => s.wrappedShare), privateKey);
+      } else {
+        continue;
+      }
+      const opened: ReleasedItem[] = [];
+      const keys: Array<[string, CryptoKey]> = [];
+      for (const item of rule.items) {
+        const fileKey = await Handoff.unwrapFileKeyUnderRelease(JSON.parse(item.wrappedFileKey), releaseKey);
+        keys.push([item.fileId, fileKey]);
+        const name = await CryptoService.decryptString({ data: item.file.encryptedName, iv: item.file.encryptedNameIV }, fileKey);
+        opened.push({
+          ruleId: rule.id,
+          fileId: item.fileId,
+          name,
+          size: CryptoService.plaintextSize(item.file.encryptedSize),
+          mimeType: item.file.mimeType,
+          createdAt: item.file.createdAt,
+          from: rule.owner,
+          releasedAt: rule.releasedAt,
+        });
+      }
+      for (const [fileId, key] of keys) StorageService.cacheFileKey(fileId, key);
+      items.push(...opened);
+    } catch {
+      failedRuleIds.push(rule.id);
     }
   }
-  return out;
+  return { items, failedRuleIds };
 }
 
 // --- Names for the screens -------------------------------------------------------

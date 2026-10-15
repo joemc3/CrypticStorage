@@ -174,7 +174,8 @@ describe('handoff: timer', () => {
     noNames(await mailTo(c.recipient), files);
 
     await expectReceived(c, files, 'timer');
-    const items = await RulesService.releasedItems();
+    const { items, failedRuleIds } = await RulesService.releasedItems();
+    expect(failedRuleIds).toEqual([]);
     expect(items.map((i) => i.name).sort()).toEqual(files.map((f) => f.name).sort());
   });
 });

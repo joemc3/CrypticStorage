@@ -8,7 +8,7 @@
  */
 
 import CryptoService from './crypto.service';
-import ApiService, { type ReleasePerson, type ReleaseRequest, type ReleaseVoteResult, type ReleaseVoteShareInput } from './api.service';
+import ApiService, { type OwnerReleaseRequest, type ReleasePerson, type ReleaseRequest, type ReleaseVoteResult, type ReleaseVoteShareInput } from './api.service';
 import StorageService from './storage.service';
 import { rewrapShareForRecipient } from './handoff.service';
 
@@ -22,6 +22,8 @@ export interface WitnessCard {
 }
 
 export const listRequests = (): Promise<ReleaseRequest[]> => ApiService.listReleaseRequests();
+/** The owner's own release requests, newest first: the C7 notice is built from these. */
+export const myRequests = (): Promise<OwnerReleaseRequest[]> => ApiService.listMyReleaseRequests();
 export const openRequest = (ownerId: string): Promise<ReleaseRequest> => ApiService.openReleaseRequest(ownerId);
 
 /** True when no rule in the request can take a vote now: each waits for its owner to repair the shares. */

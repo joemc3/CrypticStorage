@@ -38,6 +38,26 @@ async function witness(id: string, status: WitnessEntry['status']): Promise<Witn
 }
 const setOf = (threshold: number, witnesses: WitnessEntry[]): WitnessSet => ({ threshold, minN: 2, maxN: 7, witnesses });
 
+/**
+ * The key lookup the trust check makes for each witness. `changed` names witnesses whose trust row records another
+ * key; everyone else is seen for the first time. Returns the spy on markContactSeen.
+ */
+function trustLookups(changed: string[] = []) {
+  vi.spyOn(ApiService, 'getPublicKey').mockImplementation(async (email: string) => {
+    const id = email.split('@')[0]!;
+    const publicKey = await CryptoService.exportPublicKey(witnessPairs[id]!.publicKey);
+    const fingerprint = await CryptoService.publicKeyFingerprint(publicKey);
+    const trust = changed.includes(id) ? { fingerprint: 'ab'.repeat(32), verifiedInPerson: true, firstSeenAt: '', lastSeenAt: '' } : null;
+    return { id, email, publicKey, fingerprint, trust };
+  });
+  return vi.spyOn(ApiService, 'markContactSeen').mockResolvedValue({ fingerprint: 'f', verifiedInPerson: false, firstSeenAt: '', lastSeenAt: '' });
+}
+
+const thresholdChanged = () => Object.assign(new Error('Request failed with status code 409'), {
+  isAxiosError: true,
+  response: { status: 409, data: { message: 'Your witness threshold changed.', code: 'THRESHOLD_CHANGED' } },
+});
+
 function rule(over: Partial<HandoffRule>): HandoffRule {
   return {
     id: 'r1', folderId: 'root', periodDays: 365, state: 'active', createdAt: '2026-10-01T00:00:00.000Z', nextCheckInAt: '2027-10-01T00:00:00.000Z', warningAt: null,
@@ -64,6 +84,7 @@ describe('rules.service', () => {
     it('sends one request whose shares cover exactly the accepted witnesses and whose items cover the whole folder subtree', async () => {
       const [a, b, c, invited] = [await witness('wa', 'accepted'), await witness('wb', 'accepted'), await witness('wc', 'accepted'), await witness('wd', 'invited')];
       vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(setOf(2, [a, b, c, invited]));
+      const seen = trustLookups();
       const tree: Record<string, FileMetadata[]> = {
         top: [await fileMeta('f1', 'top'), await fileMeta('f-pending', 'top', 'PENDING')],
         sub: [await fileMeta('f2', 'sub')],
@@ -87,6 +108,9 @@ describe('rules.service', () => {
       expect(req.periodDays).toBe(365);
       expect(req.items.map((i) => i.fileId).sort()).toEqual(['f1', 'f2', 'f3']);
       expect(req.shares.map((s) => s.witnessUserId).sort()).toEqual(['wa', 'wb', 'wc']);
+      expect(req.threshold).toBe(2);
+      // Each accepted witness's key went through the trust check, and was recorded on first use.
+      expect(seen.mock.calls.map((c) => c[0]).sort()).toEqual(['wa', 'wb', 'wc']);
 
       // The owner wrap opens with the master key; the recipient's wrap opens with their private key; both give the key that opens every item.
       const releaseOwner = await unwrapForOwner(JSON.parse(req.wrappedReleaseKeyOwner), master);
@@ -113,6 +137,7 @@ describe('rules.service', () => {
     it('wraps a single file for a file target', async () => {
       const [a, b] = [await witness('wa', 'accepted'), await witness('wb', 'accepted')];
       vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(setOf(2, [a, b]));
+      trustLookups();
       vi.spyOn(ApiService, 'getFile').mockResolvedValue(await fileMeta('only'));
       const post = vi.spyOn(ApiService, 'createHandoffRule').mockResolvedValue({} as HandoffRuleDetail);
       await Rules.createRule({ target: { fileId: 'only' }, recipients: [{ userId: 'rec', publicKey: await CryptoService.exportPublicKey(recipient.publicKey) }], periodDays: 30 });
@@ -131,6 +156,38 @@ describe('rules.service', () => {
       expect(post).not.toHaveBeenCalled();
     });
 
+    it('refuses a witness whose key changed since it was trusted, and sends nothing', async () => {
+      const [a, b] = [await witness('wa', 'accepted'), await witness('wb', 'accepted')];
+      vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(setOf(2, [a, b]));
+      const seen = trustLookups(['wb']);
+      const getFile = vi.spyOn(ApiService, 'getFile');
+      const post = vi.spyOn(ApiService, 'createHandoffRule');
+      await expect(
+        Rules.createRule({ target: { fileId: 'x' }, recipients: [{ userId: 'rec', publicKey: 'k' }], periodDays: 30 })
+      ).rejects.toBeInstanceOf(Rules.WitnessKeyChangedError);
+      expect(post).not.toHaveBeenCalled();
+      expect(getFile).not.toHaveBeenCalled();
+      expect(seen.mock.calls.map((c) => c[0])).not.toContain('wb');
+    });
+
+    it('re-reads the witnesses and re-splits once when the threshold changed, then gives up', async () => {
+      const [a, b, c] = [await witness('wa', 'accepted'), await witness('wb', 'accepted'), await witness('wc', 'accepted')];
+      vi.spyOn(ApiService, 'getWitnesses').mockResolvedValueOnce(setOf(3, [a, b, c])).mockResolvedValue(setOf(2, [a, b, c]));
+      trustLookups();
+      vi.spyOn(ApiService, 'getFile').mockResolvedValue(await fileMeta('only'));
+      const post = vi.spyOn(ApiService, 'createHandoffRule').mockRejectedValueOnce(thresholdChanged()).mockResolvedValue({} as HandoffRuleDetail);
+      const input: Rules.NewRule = { target: { fileId: 'only' }, recipients: [{ userId: 'rec', publicKey: await CryptoService.exportPublicKey(recipient.publicKey) }], periodDays: 30 };
+      await Rules.createRule(input);
+      expect(post.mock.calls.map((call) => call[0].threshold)).toEqual([3, 2]);
+      // The release key and items are the same on the retry; only the split changed.
+      expect(post.mock.calls[1][0].wrappedReleaseKeyOwner).toBe(post.mock.calls[0][0].wrappedReleaseKeyOwner);
+
+      post.mockReset();
+      post.mockRejectedValue(thresholdChanged());
+      await expect(Rules.createRule(input)).rejects.toMatchObject({ response: { data: { code: 'THRESHOLD_CHANGED' } } });
+      expect(post).toHaveBeenCalledTimes(2);
+    });
+
     it('refuses when fewer witnesses accepted than the threshold', async () => {
       vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(setOf(3, [await witness('wa', 'accepted'), await witness('wb', 'accepted')]));
       await expect(
@@ -143,6 +200,7 @@ describe('rules.service', () => {
     it('re-splits a stale rule against the current witnesses and fills a coverage gap, silently', async () => {
       const [a, b, c] = [await witness('wa', 'accepted'), await witness('wb', 'accepted'), await witness('wc', 'accepted')];
       vi.spyOn(ApiService, 'getWitnesses').mockResolvedValue(setOf(2, [a, b, c]));
+      trustLookups();
       const release = await createReleaseKey();
       const wrappedOwner = JSON.stringify(await wrapForOwner(release, master));
       const existing = await fileMeta('old', 'root');
@@ -167,11 +225,29 @@ describe('rules.service', () => {
       expect(replace).toHaveBeenCalledTimes(1);
       expect(replace.mock.calls[0][0]).toBe('stale');
       expect(replace.mock.calls[0][1].map((s) => s.witnessUserId).sort()).toEqual(['wa', 'wb', 'wc']);
+      expect(replace.mock.calls[0][2]).toBe(2);
       expect(add).toHaveBeenCalledTimes(1);
       expect(add.mock.calls[0][0]).toBe('gappy');
       expect(add.mock.calls[0][1].map((i) => i.fileId)).toEqual(['new']);
       const key = await unwrapFileKeyUnderRelease(JSON.parse(add.mock.calls[0][1][0].wrappedFileKey), release);
       expect(await crypto.subtle.exportKey('raw', key)).toEqual(await crypto.subtle.exportKey('raw', fileKeys.get('new')!));
+    });
+
+    it('re-splits a stale rule again when the threshold moved under it, and does not wrap for a changed key', async () => {
+      const [a, b, c] = [await witness('wa', 'accepted'), await witness('wb', 'accepted'), await witness('wc', 'accepted')];
+      vi.spyOn(ApiService, 'getWitnesses').mockResolvedValueOnce(setOf(3, [a, b, c])).mockResolvedValue(setOf(2, [a, b, c]));
+      trustLookups();
+      const wrappedOwner = JSON.stringify(await wrapForOwner(await createReleaseKey(), master));
+      vi.spyOn(ApiService, 'listHandoffRules').mockResolvedValue([rule({ id: 'stale', sharesStale: true })]);
+      vi.spyOn(ApiService, 'getHandoffRule').mockResolvedValue({ ...rule({ id: 'stale' }), items: [], wrappedReleaseKeyOwner: wrappedOwner } as HandoffRuleDetail);
+      const replace = vi.spyOn(ApiService, 'replaceHandoffShares').mockRejectedValueOnce(thresholdChanged()).mockResolvedValue({} as HandoffRuleDetail);
+      expect(await Rules.repairAtUnlock()).toEqual({ repaired: 1, failed: 0 });
+      expect(replace.mock.calls.map((call) => call[2])).toEqual([3, 2]);
+
+      replace.mockClear();
+      trustLookups(['wc']);
+      expect(await Rules.repairAtUnlock()).toEqual({ repaired: 0, failed: 1 });
+      expect(replace).not.toHaveBeenCalled();
     });
 
     it('counts a failed repair and keeps going', async () => {
@@ -227,10 +303,40 @@ describe('rules.service', () => {
         },
         { id: 'r2', owner: { id: 'o', email: 'o@x.co', displayName: null }, state: 'active', createdAt: '' },
       ]);
-      const out = await Rules.releasedItems();
+      const { items: out, failedRuleIds } = await Rules.releasedItems();
+      expect(failedRuleIds).toEqual([]);
       expect(out).toHaveLength(1);
       expect(out[0]).toMatchObject({ fileId: 'ff', name: 'Letter.pdf', ruleId: 'r1' });
       expect(StorageService.getCachedFileKey('ff')).toBeTruthy();
+    });
+  });
+
+  describe('releasedItems with a rule that cannot be opened', () => {
+    it('skips that rule, names it, and still opens the others', async () => {
+      const { wrapFileKeyUnderRelease } = await import('./handoff.service');
+      const release = await createReleaseKey();
+      const fk = await CryptoService.generateAesKey();
+      const name = await CryptoService.encryptString('Will.pdf', fk);
+      const stranger = await CryptoService.generateRSAKeyPair(2048);
+      StorageService.setPrivateKey(recipient.privateKey);
+      const item = (id: string) => ({ fileId: id, file: { id, encryptedName: name.data, encryptedNameIV: name.iv, encryptedSize: 100, mimeType: 'application/pdf' } as FileMetadata });
+      vi.spyOn(ApiService, 'handoffForMe').mockResolvedValue([
+        // Wrapped for someone else: this browser cannot open it.
+        {
+          id: 'bad', owner: { id: 'o', email: 'o@x.co', displayName: null }, state: 'released_timer', createdAt: '', releasedBy: 'timer',
+          wrappedReleaseKey: await wrapForUser(release, stranger.publicKey),
+          items: [{ ...item('fb'), wrappedFileKey: JSON.stringify(await wrapFileKeyUnderRelease(fk, release)) }],
+        },
+        {
+          id: 'good', owner: { id: 'o', email: 'o@x.co', displayName: null }, state: 'released_timer', createdAt: '', releasedBy: 'timer',
+          wrappedReleaseKey: await wrapForUser(release, recipient.publicKey),
+          items: [{ ...item('fg'), wrappedFileKey: JSON.stringify(await wrapFileKeyUnderRelease(fk, release)) }],
+        },
+      ]);
+      const { items, failedRuleIds } = await Rules.releasedItems();
+      expect(failedRuleIds).toEqual(['bad']);
+      expect(items.map((i) => i.fileId)).toEqual(['fg']);
+      expect(StorageService.getCachedFileKey('fb')).toBeFalsy();
     });
   });
 
@@ -253,7 +359,7 @@ describe('rules.service', () => {
           items: [{ fileId: 'fq', wrappedFileKey: JSON.stringify(await wrapFileKeyUnderRelease(fk, release)), file: { id: 'fq', encryptedName: name.data, encryptedNameIV: name.iv, encryptedSize: 100, mimeType: 'application/pdf' } as FileMetadata }],
         },
       ]);
-      const out = await Rules.releasedItems();
+      const { items: out } = await Rules.releasedItems();
       expect(out).toHaveLength(1);
       expect(out[0]).toMatchObject({ fileId: 'fq', name: 'Deed.pdf', ruleId: 'r9' });
     });

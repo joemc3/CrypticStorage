@@ -61,6 +61,7 @@ describe('DashboardPage', () => {
     rules.nameRuleTargets.mockResolvedValue(new Map());
     rules.repairAtUnlock.mockResolvedValue({ repaired: 0, failed: 0 });
     release.witnessCards.mockResolvedValue([]);
+    vi.spyOn(ApiService, 'listMyReleaseRequests').mockResolvedValue([]);
     sessionStorage.clear();
     useAuthStore.setState({ user, status: 'unlocked' });
     vi.spyOn(AuthService, 'refreshProfile').mockResolvedValue(user);
@@ -154,10 +155,13 @@ describe('DashboardPage', () => {
   });
   it('shows the witness cards and the owner\'s release notice, and Dismiss hides the notice', async () => {
     release.witnessCards.mockResolvedValue([{ owner: { id: 'o1', email: 'anna.lind@gmail.com', displayName: null }, open: null, closed: [] }]);
-    vi.spyOn(ApiService, 'getActivity').mockResolvedValue({
-      items: [{ id: 'a1', action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: 'q1', metadata: { reason: 'owner_activity' }, ipAddress: '', userAgent: '', success: true, createdAt: new Date().toISOString() }],
-      total: 1, page: 1, pageSize: 50, totalPages: 1,
-    });
+    const closedAt = new Date().toISOString();
+    vi.spyOn(ApiService, 'listMyReleaseRequests').mockResolvedValue([
+      {
+        id: 'q1', state: 'cancelled', reason: 'sign_in', requiredVotes: 2, openedAt: closedAt, closedAt,
+        openedBy: { id: 'w1', email: 'j.park@outlook.com', displayName: null }, votes: [], releasedRuleIds: [],
+      },
+    ]);
     renderPage();
     const witnessFor = await screen.findByRole('region', { name: 'You are a witness for' });
     expect(within(witnessFor).getByText('No release request is open.')).toBeInTheDocument();

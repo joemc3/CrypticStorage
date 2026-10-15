@@ -15,7 +15,8 @@ import { OneFact } from '../components/common/OneFact';
 import { Spinner } from '../components/common/Spinner';
 import { StateBadge, type BadgeState } from '../components/common/StateBadge';
 import { ContactKey, KeyChangedCallout } from '../components/handoff/ContactKey';
-import { toApiError, type WitnessEntry, type WitnessSet } from '../services/api.service';
+import { WitnessRecipientWarning } from '../components/handoff/WitnessRecipientWarning';
+import ApiService, { toApiError, type WitnessEntry, type WitnessSet } from '../services/api.service';
 import * as WitnessService from '../services/witness.service';
 import type { ContactLookup } from '../services/witness.service';
 import { useToast } from '../hooks/useToast';
@@ -33,6 +34,7 @@ const shortFingerprint = (hex: string) => `${(hex.slice(0, 16).toUpperCase().mat
 const nameOf = (w: WitnessEntry) => w.user.displayName || w.user.email;
 
 interface StagedWitness {
+  userId: string;
   email: string;
   fingerprint: string;
 }
@@ -56,6 +58,9 @@ const WitnessesPage: React.FC = () => {
   const [contact, setContact] = useState<ContactLookup | null>(null);
   const [verified, setVerified] = useState(false);
   const [trusting, setTrusting] = useState(false);
+  const [resending, setResending] = useState<string | null>(null);
+  // Who receives something from an open rule, so a witness who is also a recipient can be named (decision 6).
+  const [recipientIds, setRecipientIds] = useState<Set<string>>(new Set());
 
   const apply = useCallback((next: WitnessSet) => {
     setSet(next);
@@ -69,10 +74,32 @@ const WitnessesPage: React.FC = () => {
     WitnessService.listWitnesses()
       .then((s) => live && apply(s))
       .catch((e) => live && setLoadError(toApiError(e).message));
+    ApiService.listHandoffRules()
+      .then((rules) => {
+        if (!live) return;
+        const open = rules.filter((r) => r.state === 'active' || r.state === 'warning');
+        setRecipientIds(new Set(open.flatMap((r) => r.recipients.map((x) => x.userId))));
+      })
+      // Without the rules the page still works; it just cannot warn.
+      .catch(() => undefined);
     return () => {
       live = false;
     };
   }, [apply]);
+
+  const alsoRecipient = (userId: string) => recipientIds.has(userId);
+
+  const resend = async (w: WitnessEntry) => {
+    setResending(w.id);
+    try {
+      await WitnessService.resend(w.id);
+      toast.success('Invitation sent again', `${nameOf(w)} has a new email with the link.`);
+    } catch (e) {
+      toast.error('Could not send the invitation', toApiError(e).message);
+    } finally {
+      setResending(null);
+    }
+  };
 
   const current = (set?.witnesses ?? []).filter((w) => w.status === 'invited' || w.status === 'accepted');
   const shown = (set?.witnesses ?? []).filter((w) => w.status !== 'removed');
@@ -134,7 +161,7 @@ const WitnessesPage: React.FC = () => {
       setLookupError(`You can name at most ${maxN} witnesses.`);
       return;
     }
-    setStaged([...staged, { email: contact.email, fingerprint: contact.fingerprint }]);
+    setStaged([...staged, { userId: contact.id, email: contact.email, fingerprint: contact.fingerprint }]);
     resetAdd();
   };
 
@@ -191,16 +218,30 @@ const WitnessesPage: React.FC = () => {
       >
         <ul role="list" className="border-t border-line">
           {staying.map((w) => (
-            <li key={w.id} className="flex items-center justify-between gap-2 border-b border-line py-2.5 text-sm">
-              <span className="break-all text-ink">{nameOf(w)}</span>
-              <span className="flex-none text-ink-3">{badgeFor[w.status]?.label}</span>
-            </li>
+            <React.Fragment key={w.id}>
+              <li className="flex items-center justify-between gap-2 border-b border-line py-2.5 text-sm">
+                <span className="break-all text-ink">{nameOf(w)}</span>
+                <span className="flex-none text-ink-3">{badgeFor[w.status]?.label}</span>
+              </li>
+              {alsoRecipient(w.user.id) && (
+                <li className="border-b border-line py-2.5">
+                  <WitnessRecipientWarning name={nameOf(w)} />
+                </li>
+              )}
+            </React.Fragment>
           ))}
           {staged.map((s) => (
-            <li key={s.email} className="flex items-center justify-between gap-2 border-b border-line py-2.5 text-sm">
-              <span className="break-all text-ink">{s.email}</span>
-              <span className="flex-none text-ink-3">Invitation pending</span>
-            </li>
+            <React.Fragment key={s.email}>
+              <li className="flex items-center justify-between gap-2 border-b border-line py-2.5 text-sm">
+                <span className="break-all text-ink">{s.email}</span>
+                <span className="flex-none text-ink-3">Invitation pending</span>
+              </li>
+              {alsoRecipient(s.userId) && (
+                <li className="border-b border-line py-2.5">
+                  <WitnessRecipientWarning name={s.email} />
+                </li>
+              )}
+            </React.Fragment>
           ))}
         </ul>
       </OneFact>
@@ -243,44 +284,69 @@ const WitnessesPage: React.FC = () => {
                   const badge = badgeFor[w.status] ?? badgeFor.invited;
                   const going = removals.includes(w.id);
                   return (
-                    <ListRow
-                      key={w.id}
-                      icon={<UserIcon className="h-5 w-5" />}
-                      title={nameOf(w)}
-                      meta={
-                        <span className="flex flex-wrap items-center gap-x-3">
-                          {w.user.displayName && <span className="break-all">{w.user.email}</span>}
-                          <span className="font-mono">{shortFingerprint(w.user.fingerprint)}</span>
-                        </span>
-                      }
-                      markers={going ? <StateBadge state="revoked" label="Will be removed" /> : <StateBadge state={badge.state} label={badge.label} />}
-                      actions={
-                        going ? (
-                          <button type="button" aria-label={`Keep ${nameOf(w)}`} onClick={() => toggleRemoval(w.id)} className={`${iconButton} px-3 text-sm font-medium`}>
-                            Undo
-                          </button>
-                        ) : (
-                          <button type="button" aria-label={`Remove ${nameOf(w)}`} onClick={() => toggleRemoval(w.id)} className={`${iconButton} w-11`}>
-                            <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                          </button>
-                        )
-                      }
-                    />
+                    <React.Fragment key={w.id}>
+                      <ListRow
+                        icon={<UserIcon className="h-5 w-5" />}
+                        title={nameOf(w)}
+                        meta={
+                          <span className="flex flex-wrap items-center gap-x-3">
+                            {w.user.displayName && <span className="break-all">{w.user.email}</span>}
+                            <span className="font-mono">{shortFingerprint(w.user.fingerprint)}</span>
+                          </span>
+                        }
+                        markers={going ? <StateBadge state="revoked" label="Will be removed" /> : <StateBadge state={badge.state} label={badge.label} />}
+                        actions={
+                          going ? (
+                            <button type="button" aria-label={`Keep ${nameOf(w)}`} onClick={() => toggleRemoval(w.id)} className={`${iconButton} px-3 text-sm font-medium`}>
+                              Undo
+                            </button>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              {w.status === 'invited' && (
+                                <button
+                                  type="button"
+                                  aria-label={`Resend the invitation to ${nameOf(w)}`}
+                                  onClick={() => void resend(w)}
+                                  disabled={resending === w.id}
+                                  className={`${iconButton} px-3 text-sm font-medium disabled:opacity-40`}
+                                >
+                                  Resend
+                                </button>
+                              )}
+                              <button type="button" aria-label={`Remove ${nameOf(w)}`} onClick={() => toggleRemoval(w.id)} className={`${iconButton} w-11`}>
+                                <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                              </button>
+                            </span>
+                          )
+                        }
+                      />
+                      {alsoRecipient(w.user.id) && (
+                        <li className="border-t border-line px-4 py-3">
+                          <WitnessRecipientWarning name={nameOf(w)} />
+                        </li>
+                      )}
+                    </React.Fragment>
                   );
                 })}
                 {staged.map((s) => (
-                  <ListRow
-                    key={`new-${s.email}`}
-                    icon={<UserIcon className="h-5 w-5" />}
-                    title={s.email}
-                    meta={<span className="font-mono">{shortFingerprint(s.fingerprint)}</span>}
-                    markers={<StateBadge state="pending" label="New · invited when you save" />}
-                    actions={
-                      <button type="button" aria-label={`Do not add ${s.email}`} onClick={() => setStaged(staged.filter((x) => x.email !== s.email))} className={`${iconButton} w-11`}>
-                        <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                    }
-                  />
+                  <React.Fragment key={`new-${s.email}`}>
+                    <ListRow
+                      icon={<UserIcon className="h-5 w-5" />}
+                      title={s.email}
+                      meta={<span className="font-mono">{shortFingerprint(s.fingerprint)}</span>}
+                      markers={<StateBadge state="pending" label="New · invited when you save" />}
+                      actions={
+                        <button type="button" aria-label={`Do not add ${s.email}`} onClick={() => setStaged(staged.filter((x) => x.email !== s.email))} className={`${iconButton} w-11`}>
+                          <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      }
+                    />
+                    {alsoRecipient(s.userId) && (
+                      <li className="border-t border-line px-4 py-3">
+                        <WitnessRecipientWarning name={s.email} />
+                      </li>
+                    )}
+                  </React.Fragment>
                 ))}
               </RowList>
             )}

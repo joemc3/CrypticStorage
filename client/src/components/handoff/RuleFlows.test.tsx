@@ -115,9 +115,11 @@ describe('rule flows', () => {
     it('states the quorum path and the reminder dates in the person’s own numbers', async () => {
       renderFlow(estate);
       fireEvent.click(await screen.findByRole('button', { name: '1 year' }));
-      // 365 days from 14 Oct 2026 at noon: 75 % is 15 Jul 2027, 90 % is 7 Sep 2027, 95 % is 26 Sep 2027.
+      // 365 days from 14 Oct 2026 at noon UTC. The 90 % mark falls exactly on a UTC midnight, so the day shown
+      // depends on the machine's zone; compute the expectation through the same formatter the sheet uses.
+      const { first, second, final } = reminderDates(new Date('2026-10-14T12:00:00.000Z'), 365);
       expect(await screen.findByText(/any 2 of your 3 witnesses agree/)).toBeInTheDocument();
-      expect(screen.getByText(/reminders on 15 Jul 2027, 7 Sep 2027 and 26 Sep 2027/)).toBeInTheDocument();
+      expect(screen.getByText(`You will get reminders on ${formatDay(first)}, ${formatDay(second)} and ${formatDay(final)}.`, { exact: false })).toBeInTheDocument();
     });
 
     it('blocks Review and says why when the witnesses are not ready', async () => {

@@ -33,7 +33,8 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 - [x] Owner: add `MAIL_DRIVER=log` to the local root `.env`.
 - [x] Owner decision on lock at `pagehide`: keep (ruling R18).
 - [x] Implement the handoff, tasks 12 to 21, on `feat/handoff`.
-- [ ] Open the PR for `feat/handoff`, watch the four CI jobs, owner reviews and merges.
+- [x] Open the PR for `feat/handoff` (#9, 2026-10-14), four CI jobs green.
+- [ ] Owner reviews PR #9 (the `design-screenshots` artifact against the artboards, and the Decisions rows R20 to R46) and merges; delete `feat/handoff` after the merge.
 - [x] Owner-visible request history for the C7 timeline: `GET /api/handoff/requests/mine` (ruling R39), landed in the final fix wave.
 - [ ] API follow-ups: a Refuse action for witnesses, the witness set on the witness card.
 - [ ] A durable "last seen" marker for the owner's release notice, so it does not depend on the browser.
@@ -94,7 +95,7 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 
 ### 2026-10-14 · local (Claude Code) · handoff subsystem built on feat/handoff (tasks 12 to 21 of 21)
 
-Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt4i9g2h7TPtvoa) · Branch: `feat/handoff` · Commits: `e8587e4` … `befd61b` (30 commits), plus this journal commit · PR: opened at the end of this session (link in the next journal commit)
+Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt4i9g2h7TPtvoa) · Branch: `feat/handoff` · Commits: `e8587e4` … `8a35a74` (33 commits, plus this journal commit) · PR: https://github.com/joemc3/CrypticStorage/pull/9
 
 **Did**
 - Verified the owner's recreated root `.env` (all keys present, both secrets filled), booted the Docker stack, `/api/health` answered. Owner decision recorded: lock on `pagehide` stays.
@@ -106,7 +107,7 @@ Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt
 - Handoff end-to-end test (timer, quorum, cancel, repair, byte for byte), SECURITY.md Handoff section written to what the code does, README, emails.md, journal.
 - Test harness: per-run state file (the fixed path was clobbered by concurrent runs), Postgres port retry, test server bound to 127.0.0.1 (other programs on this Mac answered on loopback ephemeral ports and caused the long-standing stray 401s).
 
-**Verified**: `make typecheck`; `make test` server 166 and client 239; `make test-e2e` 11/11; Playwright 44/44; the quorum file five runs in a row; CI on the PR: pending at the time of this entry.
+**Verified**: `make typecheck`; `make test` server 166 and client 239; `make test-e2e` 11/11; Playwright 44/44; the quorum file five runs in a row; CI on the PR: four jobs green (run 38668428457) after one fix: a timezone-dependent reminder-date assertion that the UTC runner caught; the test now computes its expectation through the formatter.
 
 **Open**: owner review and merge of the PR; the owner's screenshot review of the new screens against the artboards; API follow-ups (Refuse for witnesses, the witness set on the witness card, an invited-only witness deleting their account leaves k unrefit, a durable last-seen marker for the release notice, moving a folder out of a covered folder); two timer notes (a concurrent tick can release on another tick's in-flight final-warning stamp that later rolls back; a final warning sent past 100 % quotes a past date); the deferred minors listed in the PR description. Lesson recorded: do not dispatch a successor implementer while the previous one is still running (task 19 rounds 3 and 4 overlapped on the same tree).
 

@@ -2,8 +2,8 @@
 project: CrypticStorage
 repo: https://github.com/joemc3/CrypticStorage
 journal_format: 1
-updated: 2026-10-14
-last_session: 2026-10-14
+updated: 2026-10-15
+last_session: 2026-10-15
 ---
 
 # CrypticStorage · project journal
@@ -14,7 +14,7 @@ Structure is fixed so it can be parsed: the frontmatter above, then the four sec
 
 ## Current state
 
-Stage 2, the design application and the handoff subsystem (slices A witnesses, B rules and timer, C quorum) are built on `feat/handoff`, awaiting the PR. The product is a safe with a contract signup, mandatory email verification, auto-lock and the reconciled design, plus witnesses with trust on first use, handoff rules released by a timer or a witness quorum, and an end-to-end run that proves both paths byte for byte.
+Stage 2, the design application and the handoff subsystem (slices A witnesses, B rules and timer, C quorum) are on `main` (PR #9 merged 2026-10-15). The product is a safe with a contract signup, mandatory email verification, auto-lock and the reconciled design, plus witnesses with trust on first use, handoff rules released by a timer or a witness quorum, and an end-to-end run that proves both paths byte for byte.
 
 | Area | State |
 |---|---|
@@ -22,9 +22,9 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 | Client (React, Vite) | 237 vitest tests in 38 files; Shamir and handoff crypto, witness, rules and release services; Witnesses page, rules screens, quorum witness and owner screens, Shared-with-me rows for released items; Playwright smoke 44 tests (11 specs at 4 projects) |
 | End-to-end | 11 tests, runs in CI: the stage 1 flow (7) and `handoff.e2e.test.ts` (4: timer with injected clock, quorum with a late third vote refused, cancel on owner sign-in, repair after a witness is removed) |
 | Crypto | content format, KDF and key hierarchy unchanged; per-rule release key, Shamir over GF(2^8), SECURITY.md has a Handoff section |
-| Ops | `WITNESS_MIN_N`, `WITNESS_MAX_N`, `WITNESS_MAY_BE_RECIPIENT` in env; handoff job runs in the API process; CI unchanged (four jobs) |
+| Ops | `WITNESS_MIN_N`, `WITNESS_MAX_N`, `WITNESS_MAY_BE_RECIPIENT` in env; handoff job runs in the API process; CI unchanged (four jobs); `make tidy` stops the local stack at session end |
 | Design | applied and extended to the handoff screens; deviations in `docs/design/decisions.md`; the owner's screenshot review is pending |
-| Branch | `feat/handoff` (from `main`), PR to open |
+| Branch | `chore/tidy-target` (from `main` at 8afe205), PR open |
 
 ## Next steps
 
@@ -34,7 +34,8 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 - [x] Owner decision on lock at `pagehide`: keep (ruling R18).
 - [x] Implement the handoff, tasks 12 to 21, on `feat/handoff`.
 - [x] Open the PR for `feat/handoff` (#9, 2026-10-14), four CI jobs green.
-- [ ] Owner reviews PR #9 (the `design-screenshots` artifact against the artboards, and the Decisions rows R20 to R46) and merges; delete `feat/handoff` after the merge.
+- [x] Owner reviewed and merged PR #9 (2026-10-15); `feat/handoff` deleted.
+- [ ] Owner merges the `make tidy` PR.
 - [x] Owner-visible request history for the C7 timeline: `GET /api/handoff/requests/mine` (ruling R39), landed in the final fix wave.
 - [ ] API follow-ups: a Refuse action for witnesses, the witness set on the witness card.
 - [ ] A durable "last seen" marker for the owner's release notice, so it does not depend on the browser.
@@ -92,6 +93,18 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 | 2026-10-14 | R45: the owner gets no mail for their own rule creation or revocation | Spec 7.2's "every state change is emailed" is read as changes that happen to the owner; a mail confirming one's own click is noise |
 
 ## Session log
+
+### 2026-10-15 · local (Claude Code) · PR #9 merged; `make tidy` wrap-up target
+
+Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt4i9g2h7TPtvoa), continued from the 2026-10-14 handoff sitting · Branch: `chore/tidy-target` · Commits: this one, plus the journal follow-up with the PR link · PR: #10 (https://github.com/joemc3/CrypticStorage/pull/10)
+
+**Did**
+- The owner merged PR #9 (merge commit 8afe205); `main` synced, `feat/handoff` deleted locally and on origin; the post-merge CI run on `main` passed all four jobs.
+- Owner rule, now global on this machine: every session stops the local Docker stack it used before it ends, so idle stacks do not pile up across projects. Added `make tidy` (`docker compose down --remove-orphans`, volumes kept, safe when already down, reports whether anything is still running) and named it in `CLAUDE.md` as the wrap-up step. No throwaway data to purge here: tests run on an embedded Postgres and there is no remote stack.
+
+**Verified**: `make tidy` run against the live stack (three containers removed, both volumes kept) and again with the stack down (no error); CI on the PR: four jobs, see the PR checks.
+
+**Open**: owner merges the `make tidy` PR. Everything else as listed in Next steps.
 
 ### 2026-10-14 · local (Claude Code) · handoff subsystem built on feat/handoff (tasks 12 to 21 of 21)
 

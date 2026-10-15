@@ -96,13 +96,13 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 
 ### 2026-10-15 · local (Claude Code) · PR #9 merged; `make tidy` wrap-up target
 
-Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt4i9g2h7TPtvoa), continued from the 2026-10-14 handoff sitting · Branch: `chore/tidy-target` · Commits: this one, plus the journal follow-up with the PR link · PR: __PR__
+Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt4i9g2h7TPtvoa), continued from the 2026-10-14 handoff sitting · Branch: `chore/tidy-target` · Commits: this one, plus the journal follow-up with the PR link · PR: #10 (https://github.com/joemc3/CrypticStorage/pull/10)
 
 **Did**
 - The owner merged PR #9 (merge commit 8afe205); `main` synced, `feat/handoff` deleted locally and on origin; the post-merge CI run on `main` passed all four jobs.
 - Owner rule, now global on this machine: every session stops the local Docker stack it used before it ends, so idle stacks do not pile up across projects. Added `make tidy` (`docker compose down --remove-orphans`, volumes kept, safe when already down, reports whether anything is still running) and named it in `CLAUDE.md` as the wrap-up step. No throwaway data to purge here: tests run on an embedded Postgres and there is no remote stack.
 
-**Verified**: `make tidy` run against the live stack (three containers removed, both volumes kept) and again with the stack down (no error); CI on the PR: __CI__.
+**Verified**: `make tidy` run against the live stack (three containers removed, both volumes kept) and again with the stack down (no error); CI on the PR: four jobs, see the PR checks.
 
 **Open**: owner merges the `make tidy` PR. Everything else as listed in Next steps.
 

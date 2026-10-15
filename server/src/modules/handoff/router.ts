@@ -33,7 +33,10 @@ handoffRouter.put(
   '/rules/:id/shares',
   validate('params', ruleIdParamSchema),
   validate('body', replaceSharesSchema),
-  handler(async (req, res) => ok(res, await service.replaceShares(auth(req).userId, req.params.id!, body(req, replaceSharesSchema).shares, req)))
+  handler(async (req, res) => {
+    const { shares, threshold } = body(req, replaceSharesSchema);
+    return ok(res, await service.replaceShares(auth(req).userId, req.params.id!, shares, threshold, req));
+  })
 );
 
 handoffRouter.put(
@@ -46,6 +49,9 @@ handoffRouter.put(
 handoffRouter.get('/for-me', handler(async (req, res) => ok(res, await service.forMe(auth(req).userId))));
 
 handoffRouter.get('/requests', handler(async (req, res) => ok(res, await requests.listRequests(auth(req).userId))));
+
+// Declared before any "/requests/:id" route so "mine" is never read as an id.
+handoffRouter.get('/requests/mine', handler(async (req, res) => ok(res, await requests.listMine(auth(req).userId))));
 
 handoffRouter.post(
   '/requests',

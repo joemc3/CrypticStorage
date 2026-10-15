@@ -35,4 +35,6 @@ witnessesRouter.post(
   handler(async (req, res) => ok(res, await service.respond(auth(req).userId, String(req.params.id), 'declined', req)))
 );
 
+witnessesRouter.post('/:id/resend', handler(async (req, res) => ok(res, await service.resend(auth(req).userId, String(req.params.id), req))));
+
 witnessesRouter.delete('/:id', handler(async (req, res) => ok(res, await service.remove(auth(req).userId, String(req.params.id), req))));

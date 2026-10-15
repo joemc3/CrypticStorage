@@ -31,7 +31,7 @@ async function withRule(witnessCount = 3, threshold = 2): Promise<Setup> {
   const w = await world(witnessCount);
   if (threshold !== 2) await api().put('/api/witnesses/threshold').set(bearer(w.owner)).send({ k: threshold }).expect(200);
   const file = await upload(w.owner);
-  const res = await api().post('/api/handoff/rules').set(bearer(w.owner)).send(ruleBody(w, { fileId: file.id }, [file.id]));
+  const res = await api().post('/api/handoff/rules').set(bearer(w.owner)).send(ruleBody(w, { fileId: file.id }, [file.id], { threshold }));
   expect(res.status).toBe(201);
   return { w, ruleId: res.body.data.id as string, fileId: file.id };
 }
@@ -305,7 +305,8 @@ describe('voting and release', () => {
     const s = await withRule(3, 3);
     const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
     clearOutbox();
-    const results = await Promise.all(s.w.witnesses.map((wit) => vote(wit, id, fullVote(s))));
+    // Connection: close, as for every concurrent request here: supertest's keep-alive sockets otherwise hang up under load.
+    const results = await Promise.all(s.w.witnesses.map((wit) => vote(wit, id, fullVote(s)).set('Connection', 'close')));
     expect(results.map((r) => r.status)).toEqual([201, 201, 201]);
     expect(await ruleState(s.ruleId)).toBe('released_quorum');
     expect(mailsTo(s.w.owner, 'Your witnesses released your items')).toHaveLength(1);
@@ -357,7 +358,7 @@ describe('cancelling on owner activity', () => {
     const id = (await open(s.w.witnesses[0]!, s.w.owner.id)).body.data.id as string;
     await ageOwner(s.w.owner);
     clearOutbox();
-    await Promise.all([1, 2, 3].map(() => api().get('/api/users/profile').set(bearer(s.w.owner))));
+    await Promise.all([1, 2, 3].map(() => api().get('/api/users/profile').set(bearer(s.w.owner)).set('Connection', 'close')));
     expect((await requestRow(id)).state).toBe('cancelled');
     for (const wit of s.w.witnesses) expect(mailsTo(wit, 'signed in, so the request is cancelled')).toHaveLength(1);
   });
@@ -509,7 +510,7 @@ describe('owner changes and login cancel the request', () => {
     await vote(w0, first, fullVote(s)).expect(201);
     clearOutbox();
     const fresh = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
-    await api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).send({ shares: fresh }).expect(200);
+    await api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).send({ shares: fresh, threshold: 2 }).expect(200);
     await cancelledWithMails(s, first);
 
     const second = (await open(w1, s.w.owner.id)).body.data.id as string;
@@ -584,7 +585,7 @@ describe('vote share lifetime', () => {
 
     // The owner repairs the second rule's shares before the next request.
     const repaired = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
-    await api().put(`/api/handoff/rules/${rule2}/shares`).set(bearer(s.w.owner)).send({ shares: repaired }).expect(200);
+    await api().put(`/api/handoff/rules/${rule2}/shares`).set(bearer(s.w.owner)).send({ shares: repaired, threshold: 2 }).expect(200);
 
     const b = (await open(w0, s.w.owner.id)).body.data.id as string;
     await vote(w0, b, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }])).expect(201);
@@ -622,14 +623,29 @@ describe('vote share lifetime', () => {
   });
 });
 
-/** Wait until `n` backends are blocked on a lock, so the order of the queue is known rather than guessed. */
-async function waitForLockWaiters(n: number): Promise<void> {
-  for (let i = 0; i < 200; i += 1) {
-    const rows = await prisma.$queryRaw<Array<{ c: bigint }>>`SELECT count(*) AS c FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()`;
-    if (Number(rows[0]!.c) >= n) return;
-    await new Promise((r) => setTimeout(r, 50));
+/**
+ * The statements that queue behind a held request row lock, as Postgres shows them in pg_stat_activity. Row-lock
+ * waiters are served first come, first served, so waiting for each one in turn fixes the order of the queue. Matching
+ * the text, rather than counting every waiting backend, keeps a stray waiter from another test from passing for ours.
+ */
+const WAITERS = {
+  /** lockOpenRequestsTx: every owner-side path (re-split, stale flag, accept) locks the owner's open requests first. */
+  ownerRequests: `%FROM release_requests WHERE owner_id = $1 AND state = 'open' ORDER BY id FOR UPDATE%`,
+  /** The vote's own row lock on the request it votes on. */
+  vote: `%FROM release_requests WHERE id = $1 AND state = 'open' FOR UPDATE%`,
+} as const;
+
+/** Wait until a backend running the `which` statement is blocked on a lock. */
+async function waitForLockWaiter(which: keyof typeof WAITERS): Promise<void> {
+  const pattern = WAITERS[which];
+  for (let i = 0; i < 400; i += 1) {
+    const rows = await prisma.$queryRaw<Array<{ c: bigint }>>`
+      SELECT count(*) AS c FROM pg_stat_activity
+      WHERE wait_event_type = 'Lock' AND datname = current_database() AND query LIKE ${pattern}`;
+    if (Number(rows[0]!.c) >= 1) return;
+    await new Promise((r) => setTimeout(r, 25));
   }
-  throw new Error(`fewer than ${n} backends waiting on a lock`);
+  throw new Error(`no backend is waiting on a lock in the ${which} statement`);
 }
 
 describe('replacing shares while a vote is in flight', () => {
@@ -656,15 +672,15 @@ describe('replacing shares while a vote is in flight', () => {
     await isLocked;
     const before = await prisma.handoffRuleShare.findMany({ where: { ruleId: s.ruleId }, orderBy: { witnessUserId: 'asc' } });
     const fresh = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
-    const replacing = api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).set('Connection', 'close').send({ shares: fresh }).then((r) => r);
-    await waitForLockWaiters(1);
+    const replacing = api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).set('Connection', 'close').send({ shares: fresh, threshold: 2 }).then((r) => r);
+    await waitForLockWaiter('ownerRequests');
     // The re-split is queued behind the lock and has written nothing: from another connection the rule is untouched.
     // Under the old ordering it committed without the lock and these would already have changed.
     const during = await prisma.handoffRule.findUniqueOrThrow({ where: { id: s.ruleId } });
     expect(during.sharesStale).toBe(false);
     expect(await prisma.handoffRuleShare.findMany({ where: { ruleId: s.ruleId }, orderBy: { witnessUserId: 'asc' } })).toEqual(before);
     const voting = vote(w1, id, fullVote(s)).set('Connection', 'close').then((r) => r);
-    await waitForLockWaiters(2);
+    await waitForLockWaiter('vote');
     release();
     await held;
     const [replaced, voted] = await Promise.all([replacing, voting]);
@@ -682,7 +698,7 @@ describe('replacing shares while a vote is in flight', () => {
     const id = (await open(w0, s.w.owner.id)).body.data.id as string;
     await vote(w0, id, fullVote(s)).expect(201);
     const fresh = s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() }));
-    await api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).send({ shares: fresh }).expect(200);
+    await api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).send({ shares: fresh, threshold: 2 }).expect(200);
     expect((await vote(w1, id, fullVote(s))).status).toBe(409);
     expect(await ruleState(s.ruleId)).toBe('active');
     expect(await prisma.releaseVoteShare.count({ where: { ruleId: s.ruleId } })).toBe(0);
@@ -723,9 +739,9 @@ describe('a stale flag and a completing vote on several rules', () => {
   it('vote first: it completes, then the flag finds nothing open; neither errors', async () => {
     const t = await arrange();
     const voting = t.finish();
-    await waitForLockWaiters(1);
+    await waitForLockWaiter('vote');
     const accepting = t.accept();
-    await waitForLockWaiters(2);
+    await waitForLockWaiter('ownerRequests');
     t.release();
     await t.held;
     const [voted, accepted] = await Promise.all([voting, accepting]);
@@ -738,9 +754,9 @@ describe('a stale flag and a completing vote on several rules', () => {
   it('flag first: the rules turn stale, then the vote sees them stale; neither errors', async () => {
     const t = await arrange();
     const accepting = t.accept();
-    await waitForLockWaiters(1);
+    await waitForLockWaiter('ownerRequests');
     const voting = t.finish();
-    await waitForLockWaiters(2);
+    await waitForLockWaiter('vote');
     t.release();
     await t.held;
     const [voted, accepted] = await Promise.all([voting, accepting]);
@@ -753,5 +769,98 @@ describe('a stale flag and a completing vote on several rules', () => {
       expect(rule.sharesStale).toBe(true);
     }
     expect((await requestRow(t.id)).state).toBe('open');
+  });
+});
+
+describe("the owner's request history (R39)", () => {
+  const mine = (user: TestUser) => api().get('/api/handoff/requests/mine').set(bearer(user));
+
+  it('lists the owner their requests newest first, with the opener, the votes, the ending and the rules released', async () => {
+    const s = await withRule();
+    const [w0, w1, w2] = s.w.witnesses as [TestUser, TestUser, TestUser];
+
+    // 1. Cancelled by the owner being seen.
+    const signIn = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await ageOwner(s.w.owner);
+    await api().get('/api/users/profile').set(bearer(s.w.owner)).expect(200);
+    // 2. Cancelled by an owner change.
+    const change = (await open(w1, s.w.owner.id)).body.data.id as string;
+    await vote(w1, change, fullVote(s)).expect(201);
+    await api().put('/api/witnesses/threshold').set(bearer(s.w.owner)).send({ k: 2 }).expect(200);
+    await api().put(`/api/handoff/rules/${s.ruleId}/shares`).set(bearer(s.w.owner)).send({ shares: s.w.witnesses.map((w, i) => ({ witnessUserId: w.id, shareIndex: i + 1, wrappedShare: blob() })), threshold: 2 }).expect(200);
+    // 3. Completed.
+    const done = (await open(w2, s.w.owner.id)).body.data.id as string;
+    await vote(w0, done, fullVote(s)).expect(201);
+    await vote(w2, done, fullVote(s)).expect(201);
+
+    const res = await mine(s.w.owner).expect(200);
+    expect(res.body.data.map((r: { id: string }) => r.id)).toEqual([done, change, signIn]);
+    const [c, b, a] = res.body.data;
+    expect(a).toMatchObject({ state: 'cancelled', reason: 'sign_in', openedBy: { id: w0.id, email: w0.email }, votes: [], releasedRuleIds: [] });
+    expect(a.closedAt).toBeTruthy();
+    expect(b).toMatchObject({ state: 'cancelled', reason: 'owner_change', openedBy: { id: w1.id }, releasedRuleIds: [] });
+    expect(b.votes).toEqual([{ witnessUserId: w1.id, displayName: null, email: w1.email, votedAt: expect.any(String) }]);
+    expect(c).toMatchObject({ state: 'completed', requiredVotes: 2, openedBy: { id: w2.id }, releasedRuleIds: [s.ruleId] });
+    expect(c.reason).toBeUndefined();
+    expect(c.votes.map((v: { witnessUserId: string }) => v.witnessUserId)).toEqual([w0.id, w2.id]);
+    // No share material and no rule details reach the owner here.
+    expect(c).not.toHaveProperty('myShares');
+    expect(c).not.toHaveProperty('rules');
+
+    // A witness and a recipient see only their own (none).
+    expect((await mine(w0).expect(200)).body.data).toEqual([]);
+    expect((await mine(s.w.recipient).expect(200)).body.data).toEqual([]);
+    expect((await api().get('/api/handoff/requests/mine')).status).toBe(401);
+  });
+
+  it('names a request that could not complete', async () => {
+    const s = await withRule();
+    const [w0, w1] = s.w.witnesses as [TestUser, TestUser];
+    const id = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w0, id, fullVote(s)).expect(201);
+    await prisma.handoffRule.update({ where: { id: s.ruleId }, data: { state: 'revoked' } });
+    const rule2 = await sneakRule(s);
+    await vote(w1, id, votes([{ ruleId: rule2, recipients: [s.w.recipient.id] }])).expect(201);
+    const res = await mine(s.w.owner).expect(200);
+    expect(res.body.data[0]).toMatchObject({ id, state: 'cancelled', reason: 'no_release_possible' });
+  });
+});
+
+describe('a witness deleting their account (R42)', () => {
+  const deleteAccount = (u: TestUser) => api().delete('/api/users/profile').set(bearer(u)).send({ passwordHash: u.passwordHash });
+
+  it('flags the open rules stale, keeps k when it still fits, and leaves a set of the others', async () => {
+    const s = await withRule(3, 2);
+    await deleteAccount(s.w.witnesses[2]!).expect(200);
+    const set = await api().get('/api/witnesses').set(bearer(s.w.owner)).expect(200);
+    expect(set.body.data.threshold).toBe(2);
+    expect(set.body.data.witnesses.map((w: { user: { id: string } }) => w.user.id).sort()).toEqual([s.w.witnesses[0]!.id, s.w.witnesses[1]!.id].sort());
+    const rule = await prisma.handoffRule.findUniqueOrThrow({ where: { id: s.ruleId } });
+    expect(rule.sharesStale).toBe(true);
+    expect(rule.state).toBe('active');
+  });
+
+  it('refits k to the set that is left', async () => {
+    const s = await withRule(3, 3);
+    await deleteAccount(s.w.witnesses[0]!).expect(200);
+    const set = await api().get('/api/witnesses').set(bearer(s.w.owner)).expect(200);
+    expect(set.body.data.threshold).toBe(2);
+    expect(set.body.data.witnesses).toHaveLength(2);
+    expect((await prisma.handoffRule.findUniqueOrThrow({ where: { id: s.ruleId } })).sharesStale).toBe(true);
+  });
+
+  it('cancels an open request, drops its vote shares and mails the remaining witnesses', async () => {
+    const s = await withRule(3, 2);
+    const [w0, w1, w2] = s.w.witnesses as [TestUser, TestUser, TestUser];
+    const id = (await open(w0, s.w.owner.id)).body.data.id as string;
+    await vote(w2, id, fullVote(s)).expect(201);
+    clearOutbox();
+    await deleteAccount(w2).expect(200);
+    const row = await requestRow(id);
+    expect(row.state).toBe('cancelled');
+    expect(row.reason).toBe('owner_change');
+    expect(await prisma.releaseVoteShare.count({ where: { requestId: id } })).toBe(0);
+    for (const w of [w0, w1]) expect(mailsTo(w, 'cancelled')).toHaveLength(1);
+    expect(outbox().filter((m) => m.to === w2.email)).toHaveLength(0);
   });
 });

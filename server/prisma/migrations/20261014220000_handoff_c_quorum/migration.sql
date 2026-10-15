@@ -13,6 +13,7 @@ CREATE TABLE "release_requests" (
     "required_votes" INTEGER NOT NULL,
     "opened_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "closed_at" TIMESTAMP(3),
+    "reason" TEXT,
 
     CONSTRAINT "release_requests_pkey" PRIMARY KEY ("id")
 );

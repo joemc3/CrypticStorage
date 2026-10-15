@@ -8,6 +8,7 @@ import { audit } from '../../lib/audit';
 import { storage } from '../../storage';
 import { hashCredential, verifyCredential } from '../auth/service';
 import { toPublicUser } from '../dto';
+import { withdrawFromAllSets } from '../witnesses/service';
 import type { updateProfileSchema } from './schema';
 
 async function loadUser(userId: string) {
@@ -64,6 +65,8 @@ export async function updateProfile(userId: string, sessionId: string, input: z.
 
 export async function deleteAccount(userId: string, passwordHash: string, req: Request): Promise<void> {
   await assertPassword(userId, passwordHash);
+  // Before the cascade: the owners this user witnesses for must see their set shrink, not a silent dead slot (R42).
+  await withdrawFromAllSets(userId);
   const files = await prisma.file.findMany({ where: { userId }, select: { storageKey: true } });
   await prisma.user.delete({ where: { id: userId } });
   const driver = storage();

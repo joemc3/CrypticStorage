@@ -372,6 +372,8 @@ model ReleaseRequest {
   requiredVotes  Int                 @map("required_votes")
   openedAt       DateTime            @default(now()) @map("opened_at")
   closedAt       DateTime?           @map("closed_at")
+  /// Why a cancelled request closed: owner_activity (the owner was seen), owner_change or no_release_possible.
+  reason         String?
 
   owner    User               @relation("RequestOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   openedBy User               @relation("RequestOpener", fields: [openedByUserId], references: [id], onDelete: Cascade)

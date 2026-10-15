@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import type { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
-import { BadRequestError, ConflictError, NotFoundError } from '../../lib/errors';
+import { AppError, BadRequestError, ConflictError, NotFoundError } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { logger } from '../../lib/logger';
 import { sendMail } from '../../lib/mail';
@@ -12,7 +12,7 @@ import { toFileDto } from '../dto';
 import { assertFileOwnership } from '../files/service';
 import { assertFolderOwnership, collectSubtree } from '../folders/service';
 import { RELEASED_STATES_FOR_ACCESS } from './access';
-import { announceCancelled, cancelOpenRequestsTx, dropOpenVoteShares } from './requests';
+import { announceCancelled, cancelOpenRequestsTx, dropOpenVoteShares, lockOwnerTx } from './requests';
 import { ruleCoverageGaps } from './coverage';
 import { WARNING_FRACTIONS } from './thresholds';
 import type { addItemsSchema, createRuleSchema, replaceSharesSchema } from './schema';
@@ -109,19 +109,27 @@ function assertPeriod(periodDays: number): void {
   }
 }
 
-/** The owner's accepted witnesses, if the set is big enough for the threshold. */
-async function readyWitnessIds(ownerId: string): Promise<string[]> {
-  const [user, accepted] = await Promise.all([
-    prisma.user.findUniqueOrThrow({ where: { id: ownerId }, select: { witnessThreshold: true } }),
-    prisma.witness.findMany({ where: { ownerId, status: 'accepted' }, select: { witnessUserId: true } }),
-  ]);
-  if (accepted.length < env.WITNESS_MIN_N || accepted.length < 2 || user.witnessThreshold > accepted.length) {
+/**
+ * The k the client split with must be the owner's threshold now (ruling R41). Read under the owner's row lock, so no
+ * threshold or witness change can land between this check and the write. Shares split for another k would release a
+ * key nobody can rebuild.
+ */
+function assertThreshold(current: number, given: number): void {
+  if (given !== current) {
+    throw new AppError(409, 'Your witness threshold changed. Read your witnesses again and re-split.', 'THRESHOLD_CHANGED');
+  }
+}
+
+/** The owner's accepted witnesses, if the set is big enough for the threshold. Call under the owner's row lock. */
+async function readyWitnessIds(tx: Tx, ownerId: string, threshold: number): Promise<string[]> {
+  const accepted = await tx.witness.findMany({ where: { ownerId, status: 'accepted' }, select: { witnessUserId: true } });
+  if (accepted.length < env.WITNESS_MIN_N || accepted.length < 2 || threshold > accepted.length) {
     throw fail('WITNESSES_NOT_READY', 'Your witnesses must have accepted, and be at least as many as the threshold');
   }
   return accepted.map((w) => w.witnessUserId);
 }
 
-function assertShares(witnessIds: string[], shares: ShareInput[]): void {
+function assertShares(witnessIds: string[], shares: ShareInput[], threshold: number): void {
   const given = new Set(shares.map((s) => s.witnessUserId));
   const exact = shares.length === witnessIds.length && given.size === witnessIds.length && witnessIds.every((id) => given.has(id));
   if (!exact) throw fail('COVERAGE_SHARES', 'Shares must cover exactly your accepted witnesses, one each');
@@ -129,9 +137,14 @@ function assertShares(witnessIds: string[], shares: ShareInput[]): void {
   if (indexes.size !== shares.length || shares.some((s) => s.shareIndex < 1 || s.shareIndex > shares.length)) {
     throw fail('SHARE_INDEX', 'Share indexes must be distinct and between 1 and the number of witnesses');
   }
+  if (shares.length < threshold) throw fail('SHARES_BELOW_THRESHOLD', 'There must be at least as many shares as the threshold');
 }
 
-async function assertWitnessNotRecipient(witnessIds: string[], recipientIds: string[]): Promise<void> {
+/**
+ * Applies at rule creation only. A later re-split (replaceShares) does not re-check it: the rule's recipients were
+ * fixed when it was made, and refusing the repair would strand a stale rule the owner cannot fix.
+ */
+function assertWitnessNotRecipient(witnessIds: string[], recipientIds: string[]): void {
   if (env.WITNESS_MAY_BE_RECIPIENT) return;
   const overlap = recipientIds.some((id) => witnessIds.includes(id));
   if (overlap) throw fail('WITNESS_IS_RECIPIENT', 'This server does not allow a witness to also be a recipient');
@@ -154,7 +167,7 @@ function assertItemCoverage(expected: string[], items: ItemInput[]): void {
 /** Lock a rule row and require it still be active or warning, so a concurrent revoke or release cannot interleave. */
 async function lockOpenRule(tx: Tx, ruleId: string): Promise<void> {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM handoff_rules WHERE id = ${ruleId} AND state IN ('active', 'warning') FOR UPDATE`;
+    SELECT id FROM handoff_rules WHERE id = ${ruleId} AND state IN ('active', 'warning') FOR NO KEY UPDATE`;
   if (rows.length === 0) throw new ConflictError('This rule is no longer active');
 }
 
@@ -184,18 +197,23 @@ export async function createRule(ownerId: string, input: z.infer<typeof createRu
   const found = await prisma.user.findMany({ where: { id: { in: recipientIds }, emailVerifiedAt: { not: null } }, select: personSelect });
   if (found.length !== recipientIds.length) throw fail('RECIPIENT_NOT_FOUND', 'Every recipient must be a verified account');
 
-  // Witnesses and shares
-  const witnessIds = await readyWitnessIds(ownerId);
-  assertShares(witnessIds, input.shares);
-  await assertWitnessNotRecipient(witnessIds, recipientIds);
-
   // Items
   const target = { fileId: input.fileId ?? null, folderId: input.folderId ?? null };
   assertItemCoverage(await coveredFileIds(ownerId, target), input.items);
 
   let cancelled: string[] = [];
+  let witnessCount = 0;
   const rule = await prisma.$transaction(async (tx) => {
+    // Lock order on every path: request rows, then the owner's users row, then rule rows.
     cancelled = await cancelOpenRequestsTx(tx, ownerId);
+    // Witnesses and shares, checked under the owner's lock so the set and k cannot move before the write.
+    const threshold = await lockOwnerTx(tx, ownerId);
+    assertThreshold(threshold, input.threshold);
+    const witnessIds = await readyWitnessIds(tx, ownerId, threshold);
+    assertShares(witnessIds, input.shares, threshold);
+    assertWitnessNotRecipient(witnessIds, recipientIds);
+    witnessCount = witnessIds.length;
+
     const created = await tx.handoffRule.create({
       data: { ownerId, ...target, periodDays: input.periodDays, wrappedReleaseKeyOwner: input.wrappedReleaseKeyOwner },
     });
@@ -233,7 +251,7 @@ export async function createRule(ownerId: string, input: z.infer<typeof createRu
     action: 'handoff.rule.create',
     resourceType: 'handoff_rule',
     resourceId: rule.id,
-    metadata: { periodDays: input.periodDays, recipients: recipientIds.length, items: input.items.length, witnesses: witnessIds.length },
+    metadata: { periodDays: input.periodDays, recipients: recipientIds.length, items: input.items.length, witnesses: witnessCount },
   });
   return detail(ownerId, rule.id);
 }
@@ -276,20 +294,18 @@ export async function revokeRule(ownerId: string, id: string, req: Request) {
   return dto!;
 }
 
-export async function replaceShares(ownerId: string, id: string, shares: ShareInput[], req: Request) {
+export async function replaceShares(ownerId: string, id: string, shares: ShareInput[], threshold: number, req: Request) {
   const rule = await findOwnedRule(ownerId, id);
   assertOpen(rule.state);
-  const witnessIds = await readyWitnessIds(ownerId);
-  assertShares(witnessIds, shares);
-  await assertWitnessNotRecipient(
-    witnessIds,
-    rule.recipients.map((r) => r.userId)
-  );
   let cancelled: string[] = [];
   await prisma.$transaction(async (tx) => {
     // First, under the request lock the vote path takes: after this no vote can mix the old split with the new one.
     cancelled = await cancelOpenRequestsTx(tx, ownerId);
     await dropOpenVoteShares([id], tx);
+    // Then the owner's row: the split must match the threshold and the accepted set as they are now.
+    const current = await lockOwnerTx(tx, ownerId);
+    assertThreshold(current, threshold);
+    assertShares(await readyWitnessIds(tx, ownerId, current), shares, current);
     await lockOpenRule(tx, id);
     await tx.handoffRuleShare.deleteMany({ where: { ruleId: id } });
     await tx.handoffRuleShare.createMany({

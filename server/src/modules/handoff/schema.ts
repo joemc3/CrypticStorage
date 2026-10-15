@@ -16,10 +16,16 @@ export const createRuleSchema = z.object({
   recipients: z.array(recipientInput).max(50),
   items: z.array(itemInput).max(50_000),
   shares: z.array(shareInput).max(20),
+  /** The k the shares were split with; the service refuses with THRESHOLD_CHANGED when it is not the owner's now. */
+  threshold: z.number().int(),
   wrappedReleaseKeyOwner: blob,
 });
 
-export const replaceSharesSchema = z.object({ shares: z.array(shareInput).max(20) });
+/**
+ * A re-split for the rule's current witnesses. The witness-is-recipient check (WITNESS_MAY_BE_RECIPIENT) applies
+ * at creation only and is not repeated here, so a stale rule can always be repaired.
+ */
+export const replaceSharesSchema = z.object({ shares: z.array(shareInput).max(20), threshold: z.number().int() });
 export const addItemsSchema = z.object({ items: z.array(itemInput).max(50_000) });
 export const ruleIdParamSchema = z.object({ id: uuid });
 

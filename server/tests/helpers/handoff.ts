@@ -45,6 +45,8 @@ export function ruleBody(w: World, target: { fileId?: string; folderId?: string 
     recipients: [{ userId: w.recipient.id, wrappedReleaseKey: blob(256) }],
     items: fileIds.map((fileId) => ({ fileId, wrappedFileKey: blob() })),
     shares: shares(w.witnesses),
+    // The k the shares were "split" with; 2 is the default threshold. Override when a test changes it.
+    threshold: 2,
     wrappedReleaseKeyOwner: blob(),
     ...over,
   };

@@ -107,6 +107,43 @@ export async function listRequests(userId: string) {
   return toDtos(userId, rows);
 }
 
+const MINE_CAP = 20;
+
+/** The stored cancel reason as the owner's client names it: the owner being seen is a sign-in. */
+function ownerReason(reason: string | null): 'sign_in' | 'owner_change' | 'no_release_possible' | undefined {
+  if (reason === 'owner_activity') return 'sign_in';
+  if (reason === 'owner_change' || reason === 'no_release_possible') return reason;
+  return undefined;
+}
+
+/**
+ * The owner's own release requests, newest first: who opened each, who voted and when, and how it ended. No shares,
+ * no rule details beyond the ids a completed request released. Only the owner's own requests are ever listed.
+ */
+export async function listMine(ownerId: string) {
+  const rows = await prisma.releaseRequest.findMany({
+    where: { ownerId },
+    include: { openedBy: { select: person }, votes: { include: { witness: { select: person } }, orderBy: { votedAt: 'asc' } } },
+    orderBy: [{ openedAt: 'desc' }, { id: 'asc' }],
+    take: MINE_CAP,
+  });
+  const completed = rows.filter((r) => r.state === 'completed').map((r) => r.id);
+  const released = completed.length
+    ? await prisma.handoffRule.findMany({ where: { ownerId, releasedByRequestId: { in: completed } }, select: { id: true, releasedByRequestId: true }, orderBy: { id: 'asc' } })
+    : [];
+  return rows.map((r) => ({
+    id: r.id,
+    state: r.state,
+    requiredVotes: r.requiredVotes,
+    openedAt: r.openedAt.toISOString(),
+    closedAt: r.closedAt?.toISOString(),
+    reason: r.state === 'cancelled' ? ownerReason(r.reason) : undefined,
+    openedBy: r.openedBy,
+    votes: r.votes.map((v) => ({ witnessUserId: v.witnessUserId, displayName: v.witness.displayName, email: v.witness.email, votedAt: v.votedAt.toISOString() })),
+    releasedRuleIds: released.filter((x) => x.releasedByRequestId === r.id).map((x) => x.id),
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Open
 // ---------------------------------------------------------------------------
@@ -196,8 +233,10 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
     }
 
     await tx.releaseVote.create({ data: { requestId, witnessUserId: userId } });
+    // In rule id order, so the foreign-key share locks on rule rows follow the same order as every other rule lock.
+    const ordered = [...shares].sort((a, b) => (a.ruleId < b.ruleId ? -1 : a.ruleId > b.ruleId ? 1 : 0));
     await tx.releaseVoteShare.createMany({
-      data: shares.map((s) => ({ requestId, witnessUserId: userId, ruleId: s.ruleId, recipientUserId: s.recipientUserId, wrappedShare: s.wrappedShare })),
+      data: ordered.map((s) => ({ requestId, witnessUserId: userId, ruleId: s.ruleId, recipientUserId: s.recipientUserId, wrappedShare: s.wrappedShare })),
     });
     const count = await tx.releaseVote.count({ where: { requestId } });
     const outcome: VoteOutcome = { count, completed: false, releasedRuleIds: [], recipients: [], awaitingRepair, closedAt: null, cancelled: false };
@@ -224,7 +263,7 @@ export async function vote(userId: string, requestId: string, shares: ShareInput
     }
     if (outcome.releasedRuleIds.length === 0) {
       // Nothing can ever be released by this request: say so instead of leaving it open for ever.
-      await tx.releaseRequest.update({ where: { id: requestId }, data: { state: 'cancelled', closedAt: at } });
+      await tx.releaseRequest.update({ where: { id: requestId }, data: { state: 'cancelled', closedAt: at, reason: 'no_release_possible' } });
       await tx.releaseVoteShare.deleteMany({ where: { requestId } });
       outcome.cancelled = true;
       outcome.closedAt = at;
@@ -288,16 +327,27 @@ export async function lockOpenRequestsTx(tx: Tx, ownerId: string): Promise<Array
 }
 
 /**
+ * Lock the owner's users row and return their threshold. Every path that reads or writes the threshold or the witness
+ * set and then writes rules or shares takes it, after the request locks and before any rule lock: requests (by id),
+ * then the user, then rules (by id). A split checked against this k cannot land under another one.
+ */
+export async function lockOwnerTx(tx: Tx, ownerId: string): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ witness_threshold: number }>>`SELECT witness_threshold FROM users WHERE id = ${ownerId} FOR NO KEY UPDATE`;
+  if (rows.length === 0) throw new NotFoundError('User not found');
+  return rows[0]!.witness_threshold;
+}
+
+/**
  * Cancel the owner's open requests inside the caller's transaction and return the ids it cancelled. It takes the same
  * row lock the vote path takes, so a vote either finished before this runs or finds the request closed afterwards.
  * Callers do this BEFORE writing whatever made the votes obsolete, and call `announceCancelled` after they commit.
  * Nothing was released, so the re-wrapped shares go with the request.
  */
-export async function cancelOpenRequestsTx(tx: Tx, ownerId: string): Promise<string[]> {
+export async function cancelOpenRequestsTx(tx: Tx, ownerId: string, reason: CancelReason = 'owner_change'): Promise<string[]> {
   const open = await lockOpenRequestsTx(tx, ownerId);
   const won: string[] = [];
   for (const { id } of open) {
-    const res = await tx.releaseRequest.updateMany({ where: { id, state: 'open' }, data: { state: 'cancelled', closedAt: new Date() } });
+    const res = await tx.releaseRequest.updateMany({ where: { id, state: 'open' }, data: { state: 'cancelled', closedAt: new Date(), reason } });
     if (res.count === 0) continue;
     await tx.releaseVoteShare.deleteMany({ where: { requestId: id } });
     won.push(id);
@@ -325,7 +375,7 @@ export async function announceCancelled(ownerId: string, requestIds: string[], r
 /** Cancel on its own, for callers with no transaction of their own (owner activity, invite). Never throws. */
 export async function cancelOpenRequests(ownerId: string, reason: CancelReason = 'owner_activity'): Promise<void> {
   try {
-    const ids = await prisma.$transaction((tx) => cancelOpenRequestsTx(tx, ownerId));
+    const ids = await prisma.$transaction((tx) => cancelOpenRequestsTx(tx, ownerId, reason));
     await announceCancelled(ownerId, ids, reason);
   } catch (err) {
     logger.warn({ err, ownerId }, 'release request cancel failed');

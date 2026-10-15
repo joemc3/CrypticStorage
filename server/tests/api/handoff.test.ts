@@ -180,7 +180,7 @@ describe('create', () => {
     const more = await acceptedWitnesses(owner, 1);
     await api().put('/api/witnesses/threshold').set(bearer(owner)).send({ k: 3 }).expect(200);
     const w2: World = { owner, witnesses: [...one, ...more], recipient };
-    const tooHigh = await create(owner, ruleBody(w2, { fileId: file.id }, [file.id]));
+    const tooHigh = await create(owner, ruleBody(w2, { fileId: file.id }, [file.id], { threshold: 3 }));
     expect(tooHigh.status).toBe(400);
     expect(tooHigh.body.code).toBe('WITNESSES_NOT_READY');
   });
@@ -272,11 +272,11 @@ describe('listing, coverage and repair', () => {
     expect((await api().get(`/api/handoff/rules/${id}`).set(bearer(w.owner))).body.data.sharesStale).toBe(true);
 
     // Stale shares still name the removed witness; the repair must cover exactly the two who remain.
-    const old = await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares(w.witnesses) });
+    const old = await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares(w.witnesses), threshold: 2 });
     expect(old.status).toBe(400);
     expect(old.body.code).toBe('COVERAGE_SHARES');
 
-    const fixed = await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares(w.witnesses.slice(0, 2)) });
+    const fixed = await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares(w.witnesses.slice(0, 2)), threshold: 2 });
     expect(fixed.status).toBe(200);
     expect(fixed.body.data.sharesStale).toBe(false);
     expect(await prisma.handoffRuleShare.count({ where: { ruleId: id } })).toBe(2);
@@ -284,7 +284,7 @@ describe('listing, coverage and repair', () => {
     // A new witness accepting changes the accepted set.
     const [added] = await acceptedWitnesses(w.owner, 1);
     expect((await api().get(`/api/handoff/rules/${id}`).set(bearer(w.owner))).body.data.sharesStale).toBe(true);
-    await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares([...w.witnesses.slice(0, 2), added!]) }).expect(200);
+    await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares([...w.witnesses.slice(0, 2), added!]), threshold: 2 }).expect(200);
 
     // Changing k also needs a re-split, and the threshold response names the rules.
     const th = await api().put('/api/witnesses/threshold').set(bearer(w.owner)).send({ k: 3 });
@@ -316,7 +316,7 @@ describe('revoke', () => {
     expect(mails[0]!.text).not.toContain(file.id);
 
     expect((await api().delete(`/api/handoff/rules/${id}`).set(bearer(w.owner))).status).toBe(409);
-    expect((await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares(w.witnesses) })).status).toBe(409);
+    expect((await api().put(`/api/handoff/rules/${id}/shares`).set(bearer(w.owner)).send({ shares: shares(w.witnesses), threshold: 2 })).status).toBe(409);
     expect((await api().put(`/api/handoff/rules/${id}/items`).set(bearer(w.owner)).send({ items: [] })).status).toBe(409);
     expect((await api().delete(`/api/handoff/rules/${id}`).set(bearer(w.recipient))).status).toBe(404);
   });
@@ -451,5 +451,74 @@ describe('metadata on files and folders', () => {
 
     await api().delete(`/api/handoff/rules/${id}`).set(bearer(w.owner)).expect(200);
     expect(await get(top)).toMatchObject({ ruleIds: [], coverageGaps: 0 });
+  });
+});
+
+describe('the k a split was made with (R41)', () => {
+  const putShares = (owner: TestUser, id: string, body: unknown) => api().put(`/api/handoff/rules/${id}/shares`).set(bearer(owner)).send(body as object);
+  const setK = (owner: TestUser, k: number) => api().put('/api/witnesses/threshold').set(bearer(owner)).send({ k }).expect(200);
+
+  it('refuses a create split for a threshold that is no longer the owner\'s with 409 THRESHOLD_CHANGED, and stores nothing', async () => {
+    const w = await world();
+    const file = await upload(w.owner);
+    await setK(w.owner, 3);
+    const res = await create(w.owner, ruleBody(w, { fileId: file.id }, [file.id], { threshold: 2 }));
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('THRESHOLD_CHANGED');
+    expect(await prisma.handoffRule.count({ where: { ownerId: w.owner.id } })).toBe(0);
+    expect((await create(w.owner, ruleBody(w, { fileId: file.id }, [file.id], { threshold: 3 }))).status).toBe(201);
+  });
+
+  it('refuses a re-split when the threshold was lowered between reading the set and the PUT, and changes no share', async () => {
+    const w = await world();
+    const file = await upload(w.owner);
+    await setK(w.owner, 3);
+    const id = (await create(w.owner, ruleBody(w, { fileId: file.id }, [file.id], { threshold: 3 })).expect(201)).body.data.id as string;
+    // A witness change leaves the rule stale; the client reads the set (k = 3) and splits for it ...
+    await setK(w.owner, 3);
+    const splitFor = (await api().get('/api/witnesses').set(bearer(w.owner))).body.data.threshold as number;
+    expect(splitFor).toBe(3);
+    // ... and the owner lowers k in another tab before the PUT lands.
+    await setK(w.owner, 2);
+    const before = await prisma.handoffRuleShare.findMany({ where: { ruleId: id }, orderBy: { witnessUserId: 'asc' } });
+    const res = await putShares(w.owner, id, { shares: shares(w.witnesses), threshold: splitFor });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('THRESHOLD_CHANGED');
+    expect(await prisma.handoffRuleShare.findMany({ where: { ruleId: id }, orderBy: { witnessUserId: 'asc' } })).toEqual(before);
+    expect((await prisma.handoffRule.findUniqueOrThrow({ where: { id } })).sharesStale).toBe(true);
+    // The client re-reads and re-splits for k = 2.
+    expect((await putShares(w.owner, id, { shares: shares(w.witnesses), threshold: 2 })).status).toBe(200);
+  });
+
+  it('removing a witness refits k, flags the rule and cancels a request together', async () => {
+    const w = await world();
+    const file = await upload(w.owner);
+    await setK(w.owner, 3);
+    const id = (await create(w.owner, ruleBody(w, { fileId: file.id }, [file.id], { threshold: 3 })).expect(201)).body.data.id as string;
+    const requestId = (await api().post('/api/handoff/requests').set(bearer(w.witnesses[0]!)).send({ ownerId: w.owner.id }).expect(201)).body.data.id as string;
+    const set = await api().get('/api/witnesses').set(bearer(w.owner));
+    const row = set.body.data.witnesses.find((x: { user: { id: string } }) => x.user.id === w.witnesses[2]!.id);
+    const removed = await api().delete(`/api/witnesses/${row.id}`).set(bearer(w.owner)).expect(200);
+    expect(removed.body.data).toEqual({ threshold: 2, activeRules: [{ id, sharesStale: true }] });
+    const owner = await prisma.user.findUniqueOrThrow({ where: { id: w.owner.id } });
+    expect(owner.witnessThreshold).toBe(2);
+    expect((await prisma.witness.findUniqueOrThrow({ where: { id: row.id } })).status).toBe('removed');
+    expect((await prisma.releaseRequest.findUniqueOrThrow({ where: { id: requestId } })).state).toBe('cancelled');
+  });
+
+  it('a declined invitation refits k and flags the rule together', async () => {
+    const w = await world();
+    const file = await upload(w.owner);
+    const late = await registerUser();
+    const invited = await api().post('/api/witnesses').set(bearer(w.owner)).send({ email: late.email }).expect(201);
+    await setK(w.owner, 4);
+    // k = 4 is above the three accepted, so no rule can be made; the decline brings it back to 3.
+    await api().post(`/api/witnesses/invitations/${invited.body.data.id}/decline`).set(bearer(late)).expect(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: w.owner.id } })).witnessThreshold).toBe(3);
+    const id = (await create(w.owner, ruleBody(w, { fileId: file.id }, [file.id], { threshold: 3 })).expect(201)).body.data.id as string;
+    const again = await api().post('/api/witnesses').set(bearer(w.owner)).send({ email: late.email }).expect(201);
+    await api().post(`/api/witnesses/invitations/${again.body.data.id}/decline`).set(bearer(late)).expect(200);
+    expect((await prisma.handoffRule.findUniqueOrThrow({ where: { id } })).sharesStale).toBe(true);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: w.owner.id } })).witnessThreshold).toBe(3);
   });
 });

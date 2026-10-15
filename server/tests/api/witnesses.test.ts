@@ -1,4 +1,5 @@
 import { api, bearer, closeDatabase, prepareDatabase, registerUser, registrationPayload, type TestUser } from '../helpers/api';
+import * as mail from '../../src/lib/mail';
 import { outbox } from '../../src/lib/mail';
 import { env } from '../../src/config/env';
 
@@ -191,6 +192,46 @@ describe('removal and threshold', () => {
 
   it('requires authentication', async () => {
     expect((await api().get('/api/witnesses')).status).toBe(401);
+  });
+});
+
+describe('invitation mail', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('keeps the invitation and answers 201 when the mail fails, and Resend sends it again', async () => {
+    const owner = await registerUser();
+    const w = await registerUser();
+    jest.spyOn(mail, 'sendMail').mockRejectedValueOnce(new Error('smtp down'));
+    const res = await invite(owner, w.email);
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('invited');
+    expect(outbox().filter((m) => m.to === w.email && m.text.includes('/witness/'))).toHaveLength(0);
+    // A second invite is still refused: the row is there.
+    expect((await invite(owner, w.email)).status).toBe(409);
+
+    const resent = await api().post(`/api/witnesses/${res.body.data.id}/resend`).set(bearer(owner));
+    expect(resent.status).toBe(200);
+    expect(resent.body.data).toMatchObject({ id: res.body.data.id, status: 'invited' });
+    const mails = outbox().filter((m) => m.to === w.email && m.text.includes(`/witness/${res.body.data.id}`));
+    expect(mails).toHaveLength(1);
+  });
+
+  it('resends only an invited row of the caller\'s own, and says so when the mail fails again', async () => {
+    const owner = await registerUser();
+    const w = await registerUser();
+    const id = (await invite(owner, w.email)).body.data.id as string;
+    const stranger = await registerUser();
+    expect((await api().post(`/api/witnesses/${id}/resend`).set(bearer(stranger))).status).toBe(404);
+    expect((await api().post(`/api/witnesses/${id}/resend`).set(bearer(w))).status).toBe(404);
+
+    jest.spyOn(mail, 'sendMail').mockRejectedValueOnce(new Error('smtp down'));
+    const failed = await api().post(`/api/witnesses/${id}/resend`).set(bearer(owner));
+    expect(failed.status).toBe(502);
+    expect(failed.body.code).toBe('MAIL_FAILED');
+
+    await api().post(`/api/witnesses/invitations/${id}/accept`).set(bearer(w)).expect(200);
+    expect((await api().post(`/api/witnesses/${id}/resend`).set(bearer(owner))).status).toBe(409);
+    expect((await api().post(`/api/witnesses/${id}/resend`)).status).toBe(401);
   });
 });
 

@@ -318,6 +318,11 @@ export interface CreateHandoffRuleRequest {
   recipients: Array<{ userId: string; wrappedReleaseKey: string }>;
   items: HandoffItemInput[];
   shares: HandoffShareInput[];
+  /**
+   * The k the shares were split with. The server refuses with 409 THRESHOLD_CHANGED when the owner's threshold is
+   * no longer this value, so a split never lands under a different k (re-read the witness set and re-split).
+   */
+  threshold: number;
   wrappedReleaseKeyOwner: string;
 }
 
@@ -376,6 +381,24 @@ export interface ReleaseRequest {
   rules: ReleaseRequestRule[];
   /** Open requests only: the caller's own wrapped share for each non-stale rule. Unwrap, then re-wrap per recipient. */
   myShares: Array<{ ruleId: string; shareIndex: number; wrappedShare: string }>;
+}
+
+/** Why a release request was cancelled. `sign_in` is the owner being seen; `owner_change` is a change to rules or witnesses. */
+export type ReleaseCancelReason = 'sign_in' | 'owner_change' | 'no_release_possible';
+
+/** The owner's view of a release request on their own account: who opened it, who voted and how it ended. */
+export interface OwnerReleaseRequest {
+  id: string;
+  state: ReleaseRequestState;
+  requiredVotes: number;
+  openedAt: string;
+  closedAt?: string;
+  /** Cancelled requests only. */
+  reason?: ReleaseCancelReason;
+  openedBy: ReleasePerson;
+  votes: Array<{ witnessUserId: string; displayName: string | null; email: string; votedAt: string }>;
+  /** Completed requests only: the rules this request released. */
+  releasedRuleIds: string[];
 }
 
 export interface ReleaseVoteShareInput {
@@ -541,6 +564,10 @@ class ApiService {
   inviteWitness(email: string): Promise<WitnessEntry> {
     return this.post('/witnesses', { email });
   }
+  /** Send an invited witness their invitation again. Invited rows only. */
+  resendWitnessInvitation(id: string): Promise<WitnessEntry> {
+    return this.post(`/witnesses/${id}/resend`);
+  }
   removeWitness(id: string): Promise<{ threshold: number; activeRules: ActiveRuleRef[] }> {
     return this.delete(`/witnesses/${id}`);
   }
@@ -567,8 +594,9 @@ class ApiService {
   revokeHandoffRule(id: string): Promise<HandoffRule> {
     return this.delete(`/handoff/rules/${id}`);
   }
-  replaceHandoffShares(id: string, shares: HandoffShareInput[]): Promise<HandoffRuleDetail> {
-    return this.put(`/handoff/rules/${id}/shares`, { shares });
+  /** `threshold` is the k the shares were split with; 409 THRESHOLD_CHANGED when it is no longer the owner's. */
+  replaceHandoffShares(id: string, shares: HandoffShareInput[], threshold: number): Promise<HandoffRuleDetail> {
+    return this.put(`/handoff/rules/${id}/shares`, { shares, threshold });
   }
   addHandoffItems(id: string, items: HandoffItemInput[]): Promise<HandoffRuleDetail> {
     return this.put(`/handoff/rules/${id}/items`, { items });
@@ -578,6 +606,10 @@ class ApiService {
   }
   listReleaseRequests(): Promise<ReleaseRequest[]> {
     return this.get('/handoff/requests');
+  }
+  /** The owner's own release requests, newest first, at most 20. */
+  listMyReleaseRequests(): Promise<OwnerReleaseRequest[]> {
+    return this.get('/handoff/requests/mine');
   }
   voteOnReleaseRequest(id: string, shares: ReleaseVoteShareInput[]): Promise<ReleaseVoteResult> {
     return this.post(`/handoff/requests/${id}/votes`, { shares });

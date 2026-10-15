@@ -1,6 +1,7 @@
 import request from 'supertest';
 import type { Response as AgentResponse } from 'superagent';
 import type { Express } from 'express';
+import http, { type Server } from 'http';
 import { randomBytes } from 'crypto';
 import { createApp } from '../../src/app';
 import { prisma } from '../../src/config/prisma';
@@ -9,13 +10,31 @@ import { clearOutbox, outbox } from '../../src/lib/mail';
 import { CONTRACT_PHRASE } from '../../src/modules/auth/schema';
 
 let app: Express | null = null;
+let server: Server | null = null;
 
+/**
+ * Supertest given a bare app listens on every interface but connects to 127.0.0.1. On a machine where another
+ * program holds 127.0.0.1 on the same ephemeral port, the request reaches that program instead (a 401, a 404 or a
+ * reset from nowhere). So each test file gets one server bound to 127.0.0.1 itself, started in prepareDatabase.
+ */
 export function api(): ReturnType<typeof request> {
   if (!app) app = createApp();
-  return request(app);
+  return request(server ?? app);
+}
+
+async function listenOnLoopback(): Promise<void> {
+  if (server) return;
+  if (!app) app = createApp();
+  const s = http.createServer(app);
+  await new Promise<void>((resolve, reject) => {
+    s.once('error', reject);
+    s.listen(0, '127.0.0.1', () => resolve());
+  });
+  server = s;
 }
 
 export async function prepareDatabase(): Promise<void> {
+  await listenOnLoopback();
   await storage().init();
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "audit_logs", "email_tokens", "sessions", "file_shares", "share_links", "files", "folders", "users" RESTART IDENTITY CASCADE'
@@ -32,6 +51,12 @@ export function verificationToken(to: string): string {
 }
 
 export async function closeDatabase(): Promise<void> {
+  if (server) {
+    const s = server;
+    server = null;
+    s.closeAllConnections();
+    await new Promise<void>((resolve) => s.close(() => resolve()));
+  }
   await prisma.$disconnect();
 }
 

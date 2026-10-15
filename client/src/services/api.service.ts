@@ -106,6 +106,8 @@ export interface FileMetadata {
   status: 'PENDING' | 'READY';
   createdAt: string;
   updatedAt: string;
+  /** Active user shares plus unexpired, unrevoked links. Present on listings and `getFile`. */
+  shareCount?: number;
 }
 
 export interface SharedFileMetadata extends FileMetadata {
@@ -113,6 +115,21 @@ export interface SharedFileMetadata extends FileMetadata {
   permissions: string;
   expiresAt?: string;
   sharedBy: { id: string; email: string };
+  /**
+   * Present when the file reached the caller through a released handoff rule. `encryptedFileKey` is then empty:
+   * the client unwraps `wrappedFileKey` with the release key (itself unwrapped from `wrappedReleaseKey`).
+   */
+  handoff?: {
+    ruleId: string;
+    from: { id: string; email: string; displayName: string | null };
+    releasedAt: string;
+    by: 'timer' | 'quorum';
+    /** Only after a timer release. */
+    wrappedReleaseKey?: string;
+    /** Only after a quorum release: the shares the voting witnesses re-wrapped for the caller. Combine k of them to get the release key. */
+    voteShares?: HandoffVoteShare[];
+    wrappedFileKey: string;
+  };
 }
 
 export interface UploadRequest {
@@ -142,6 +159,10 @@ export interface FolderMetadata {
   encryptedNameIV: string;
   createdAt: string;
   updatedAt: string;
+  /** Files under this folder that an active handoff rule covers but has no wrapped key for yet. Present on get and list. */
+  coverageGaps?: number;
+  /** Active or warning handoff rules on this folder or any ancestor. Present on get and list. */
+  ruleIds?: string[];
 }
 
 export interface ShareLink {
@@ -209,6 +230,215 @@ export type ProgressHandler = (loaded: number, total: number) => void;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
+// --- Witnesses and key trust ---------------------------------------------------
+
+export type WitnessStatus = 'invited' | 'accepted' | 'declined' | 'removed';
+
+export interface WitnessEntry {
+  id: string;
+  user: { id: string; email: string; displayName: string | null; publicKey: string; fingerprint: string };
+  status: WitnessStatus;
+  invitedAt: string;
+  respondedAt: string | null;
+}
+
+export interface WitnessSet {
+  threshold: number;
+  minN: number;
+  maxN: number;
+  witnesses: WitnessEntry[];
+}
+
+export interface WitnessInvitation {
+  id: string;
+  owner: { id: string; email: string; displayName: string | null };
+  status: WitnessStatus;
+  invitedAt: string;
+  respondedAt: string | null;
+}
+
+export interface WitnessInvitations {
+  invitations: Array<{ id: string; owner: WitnessInvitation['owner']; invitedAt: string }>;
+  serving: Array<{ id: string; owner: WitnessInvitation['owner']; respondedAt: string | null }>;
+}
+
+// --- Handoff rules -------------------------------------------------------------
+
+export type HandoffRuleState = 'active' | 'warning' | 'released_timer' | 'released_quorum' | 'revoked';
+
+export interface HandoffRecipient {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  notifiedAt: string | null;
+}
+
+export interface HandoffRule {
+  id: string;
+  fileId?: string;
+  folderId?: string;
+  periodDays: number;
+  state: HandoffRuleState;
+  createdAt: string;
+  /** Null once the rule is released or revoked. */
+  nextCheckInAt: string | null;
+  /** When the first reminder goes out (75 % of the period); null once the rule is no longer open. */
+  warningAt: string | null;
+  /** True when the witness set changed and the shares must be re-split (the client repairs at unlock). */
+  sharesStale: boolean;
+  /** Ready files under the target that have no wrapped key in the rule yet. */
+  coverageGaps: number;
+  recipients: HandoffRecipient[];
+  releasedAt?: string;
+  revokedAt?: string;
+}
+
+export interface HandoffRuleDetail extends HandoffRule {
+  /** Ids only. The owner holds their own file keys. */
+  items: Array<{ fileId: string }>;
+  /** Release key wrapped under the owner's master key (opaque client blob). */
+  wrappedReleaseKeyOwner: string;
+}
+
+export interface HandoffShareInput {
+  witnessUserId: string;
+  shareIndex: number;
+  wrappedShare: string;
+}
+
+export interface HandoffItemInput {
+  fileId: string;
+  wrappedFileKey: string;
+}
+
+export interface CreateHandoffRuleRequest {
+  fileId?: string;
+  folderId?: string;
+  periodDays: number;
+  recipients: Array<{ userId: string; wrappedReleaseKey: string }>;
+  items: HandoffItemInput[];
+  shares: HandoffShareInput[];
+  /**
+   * The k the shares were split with. The server refuses with 409 THRESHOLD_CHANGED when the owner's threshold is
+   * no longer this value, so a split never lands under a different k (re-read the witness set and re-split).
+   */
+  threshold: number;
+  wrappedReleaseKeyOwner: string;
+}
+
+export interface HandoffVoteShare {
+  witnessUserId: string;
+  /** A Shamir share, RSA-OAEP wrapped under the recipient's public key. */
+  wrappedShare: string;
+}
+
+export interface HandoffForMe {
+  id: string;
+  owner: { id: string; email: string; displayName: string | null };
+  state: Exclude<HandoffRuleState, 'revoked'>;
+  createdAt: string;
+  releasedAt?: string;
+  releasedBy?: 'timer' | 'quorum';
+  /** Only after a timer release. */
+  wrappedReleaseKey?: string;
+  /** Only after a quorum release: every share re-wrapped for the caller by the request that released the rule. */
+  voteShares?: HandoffVoteShare[];
+  /** After a timer or quorum release. `file.encryptedFileKey` is empty; use `wrappedFileKey`. */
+  items?: Array<{ fileId: string; wrappedFileKey: string; file: FileMetadata }>;
+}
+
+// --- Release requests (quorum) --------------------------------------------------
+
+export type ReleaseRequestState = 'open' | 'cancelled' | 'completed';
+
+export interface ReleasePerson {
+  id: string;
+  email: string;
+  displayName: string | null;
+}
+
+export interface ReleaseRequestRule {
+  ruleId: string;
+  /** A stale rule cannot be voted on until the owner re-splits it; leave it out of the vote. */
+  sharesStale: boolean;
+  state: 'active' | 'warning';
+  /** The people to re-wrap this rule's share for. */
+  recipients: Array<{ userId: string; publicKey: string }>;
+}
+
+export interface ReleaseRequest {
+  id: string;
+  owner: ReleasePerson;
+  /** Null once the opener has deleted their account: show "A former witness". */
+  openedBy: ReleasePerson | null;
+  state: ReleaseRequestState;
+  /** The owner's threshold when the request opened. */
+  requiredVotes: number;
+  openedAt: string;
+  closedAt?: string;
+  /** A witness whose account no longer exists comes back with null name and email: show "A former witness". */
+  votes: Array<{ witnessUserId: string; displayName: string | null; email: string | null; votedAt: string }>;
+  myVote: boolean;
+  /** Open requests only: the owner's active and warning rules now. */
+  rules: ReleaseRequestRule[];
+  /** Open requests only: the caller's own wrapped share for each non-stale rule. Unwrap, then re-wrap per recipient. */
+  myShares: Array<{ ruleId: string; shareIndex: number; wrappedShare: string }>;
+}
+
+/** Why a release request was cancelled. `sign_in` is the owner being seen; `owner_change` is a change to rules or witnesses. */
+export type ReleaseCancelReason = 'sign_in' | 'owner_change' | 'no_release_possible';
+
+/** The owner's view of a release request on their own account: who opened it, who voted and how it ended. */
+export interface OwnerReleaseRequest {
+  id: string;
+  state: ReleaseRequestState;
+  requiredVotes: number;
+  openedAt: string;
+  closedAt?: string;
+  /** Cancelled requests only. */
+  reason?: ReleaseCancelReason;
+  /** Null once the opener has deleted their account: show "A former witness". */
+  openedBy: ReleasePerson | null;
+  /** A witness whose account no longer exists comes back with null name and email: show "A former witness". */
+  votes: Array<{ witnessUserId: string; displayName: string | null; email: string | null; votedAt: string }>;
+  /** Completed requests only: the rules this request released. */
+  releasedRuleIds: string[];
+}
+
+export interface ReleaseVoteShareInput {
+  ruleId: string;
+  recipientUserId: string;
+  /** The caller's share for the rule, re-wrapped under this recipient's public key. */
+  wrappedShare: string;
+}
+
+export interface ReleaseVoteResult extends ReleaseRequest {
+  /** Rules left out of the vote because their shares are stale. They stay active. */
+  awaitingRepair: string[];
+}
+
+export interface ActiveRuleRef {
+  id: string;
+  sharesStale: boolean;
+}
+
+export interface TrustedKey {
+  fingerprint: string;
+  verifiedInPerson: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface PublicKeyLookup {
+  id: string;
+  email: string;
+  publicKey: string;
+  /** SHA-256 of the SPKI bytes, lowercase hex, computed by the server. */
+  fingerprint: string;
+  /** The caller's stored row for this contact, or null if never recorded. */
+  trust: TrustedKey | null;
+}
+
 class ApiService {
   private readonly client: AxiosInstance;
   private refreshing: Promise<Tokens> | null = null;
@@ -269,6 +499,9 @@ class ApiService {
   private async patch<T>(url: string, body?: unknown): Promise<T> {
     return (await this.client.patch<ApiResponse<T>>(url, body)).data.data;
   }
+  private async put<T>(url: string, body?: unknown): Promise<T> {
+    return (await this.client.put<ApiResponse<T>>(url, body)).data.data;
+  }
   private async delete<T>(url: string, body?: unknown): Promise<T> {
     return (await this.client.delete<ApiResponse<T>>(url, { data: body })).data.data;
   }
@@ -287,6 +520,11 @@ class ApiService {
   login(email: string, passwordHash: string): Promise<AuthResponse> {
     return this.post('/auth/login', { email, passwordHash });
   }
+  /** The link in a reminder email. Public: the token is the proof. */
+  checkIn(token: string): Promise<{ ok: true }> {
+    return this.post('/auth/check-in', { token });
+  }
+
   verifyTwoFactor(data: { token?: string; backupCode?: string }): Promise<AuthResponse> {
     return this.post('/auth/verify-2fa', data);
   }
@@ -308,8 +546,80 @@ class ApiService {
   deleteAccount(passwordHash: string): Promise<unknown> {
     return this.delete('/users/profile', { passwordHash });
   }
-  getPublicKey(email: string): Promise<{ id: string; email: string; publicKey: string }> {
+  getPublicKey(email: string): Promise<PublicKeyLookup> {
     return this.get('/users/public-key', { email });
+  }
+  /** Record that this contact's current key was seen (first use, or a fetch whose fingerprint matched). */
+  markContactSeen(userId: string): Promise<TrustedKey> {
+    return this.post(`/contacts/${userId}/seen`);
+  }
+  setContactTrust(userId: string, verifiedInPerson: boolean): Promise<TrustedKey> {
+    return this.put(`/contacts/${userId}/trust`, { verifiedInPerson });
+  }
+
+  // --- Witnesses ---------------------------------------------------------------
+
+  getWitnesses(): Promise<WitnessSet> {
+    return this.get('/witnesses');
+  }
+  setWitnessThreshold(k: number): Promise<WitnessSet & { activeRules: ActiveRuleRef[] }> {
+    return this.put('/witnesses/threshold', { k });
+  }
+  inviteWitness(email: string): Promise<WitnessEntry> {
+    return this.post('/witnesses', { email });
+  }
+  /** Send an invited witness their invitation again. Invited rows only. */
+  resendWitnessInvitation(id: string): Promise<WitnessEntry> {
+    return this.post(`/witnesses/${id}/resend`);
+  }
+  removeWitness(id: string): Promise<{ threshold: number; activeRules: ActiveRuleRef[] }> {
+    return this.delete(`/witnesses/${id}`);
+  }
+  getWitnessInvitations(): Promise<WitnessInvitations> {
+    return this.get('/witnesses/invitations');
+  }
+  acceptWitnessInvitation(id: string): Promise<WitnessInvitation> {
+    return this.post(`/witnesses/invitations/${id}/accept`);
+  }
+  declineWitnessInvitation(id: string): Promise<WitnessInvitation> {
+    return this.post(`/witnesses/invitations/${id}/decline`);
+  }
+  // --- Handoff rules -----------------------------------------------------------
+
+  createHandoffRule(input: CreateHandoffRuleRequest): Promise<HandoffRuleDetail> {
+    return this.post('/handoff/rules', input);
+  }
+  listHandoffRules(): Promise<HandoffRule[]> {
+    return this.get('/handoff/rules');
+  }
+  getHandoffRule(id: string): Promise<HandoffRuleDetail> {
+    return this.get(`/handoff/rules/${id}`);
+  }
+  revokeHandoffRule(id: string): Promise<HandoffRule> {
+    return this.delete(`/handoff/rules/${id}`);
+  }
+  /** `threshold` is the k the shares were split with; 409 THRESHOLD_CHANGED when it is no longer the owner's. */
+  replaceHandoffShares(id: string, shares: HandoffShareInput[], threshold: number): Promise<HandoffRuleDetail> {
+    return this.put(`/handoff/rules/${id}/shares`, { shares, threshold });
+  }
+  addHandoffItems(id: string, items: HandoffItemInput[]): Promise<HandoffRuleDetail> {
+    return this.put(`/handoff/rules/${id}/items`, { items });
+  }
+  openReleaseRequest(ownerId: string): Promise<ReleaseRequest> {
+    return this.post('/handoff/requests', { ownerId });
+  }
+  listReleaseRequests(): Promise<ReleaseRequest[]> {
+    return this.get('/handoff/requests');
+  }
+  /** The owner's own release requests, newest first, at most 20. */
+  listMyReleaseRequests(): Promise<OwnerReleaseRequest[]> {
+    return this.get('/handoff/requests/mine');
+  }
+  voteOnReleaseRequest(id: string, shares: ReleaseVoteShareInput[]): Promise<ReleaseVoteResult> {
+    return this.post(`/handoff/requests/${id}/votes`, { shares });
+  }
+  handoffForMe(): Promise<HandoffForMe[]> {
+    return this.get('/handoff/for-me');
   }
   setupTwoFactor(): Promise<{ secret: string; qrCode: string }> {
     return this.post('/users/2fa/setup');

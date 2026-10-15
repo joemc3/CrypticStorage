@@ -17,10 +17,10 @@ import { useEncryption } from '../hooks/useEncryption';
 import { useToast } from '../hooks/useToast';
 import { useUIStore, type Theme } from '../stores/ui.store';
 import CryptoService from '../services/crypto.service';
-import ApiService, { type StorageStats } from '../services/api.service';
+import ApiService, { type StorageStats, type WitnessSet } from '../services/api.service';
 import { formatFileSize } from '../services/file.service';
 
-type SettingsSection = 'profile' | 'password' | 'fingerprint' | 'two-factor' | 'look' | 'storage' | 'delete';
+type SettingsSection = 'profile' | 'password' | 'fingerprint' | 'two-factor' | 'witnesses' | 'look' | 'storage' | 'delete';
 
 const LOCK_OPTIONS = [1, 2, 5, 10, 15, 30];
 const THEME_OPTIONS: { id: Theme; name: string }[] = [
@@ -48,6 +48,18 @@ export const SettingsPage: React.FC = () => {
   const [showDelete, setShowDelete] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [savingName, setSavingName] = useState(false);
+  const [witnessSet, setWitnessSet] = useState<WitnessSet | null>(null);
+  const [witnessError, setWitnessError] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    ApiService.getWitnesses()
+      .then((w) => live && setWitnessSet(w))
+      .catch(() => live && setWitnessError(true));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -122,6 +134,16 @@ export const SettingsPage: React.FC = () => {
   const limit = stats?.limit ?? user?.storageLimit ?? 1;
   const percent = Math.min(100, (used / limit) * 100);
   const lockMinutes = user?.lockAfterMinutes ?? 5;
+  const witnesses = (witnessSet?.witnesses ?? []).filter((w) => w.status === 'invited' || w.status === 'accepted');
+  const witnessesAccepted = witnesses.filter((w) => w.status === 'accepted').length;
+  const witnessesPending = witnesses.length - witnessesAccepted;
+  const witnessLine = witnessError
+    ? 'Could not load your witnesses.'
+    : !witnessSet
+      ? ''
+      : witnesses.length === 0
+      ? 'No witnesses are set.'
+      : `Any ${witnessSet?.threshold} of ${witnesses.length} can release what you marked. ${witnessesAccepted} accepted, ${witnessesPending} pending.`;
   const themeName = THEME_OPTIONS.find((o) => o.id === theme)?.name ?? 'System';
 
   const sectionClass = (id: SettingsSection) =>
@@ -135,6 +157,11 @@ export const SettingsPage: React.FC = () => {
     { id: 'password', label: 'Password' },
     { id: 'fingerprint', label: 'Key fingerprint', value: fingerprint ? `${fingerprint.split(' ').slice(0, 2).join(' ')} …` : undefined, mono: true },
     { id: 'two-factor', label: 'Two-factor', value: user?.twoFactorEnabled ? 'On' : 'Off' },
+    {
+      id: 'witnesses',
+      label: 'Witnesses',
+      value: witnessError ? 'Could not load' : !witnessSet ? undefined : witnesses.length === 0 ? 'None set' : `Any ${witnessSet?.threshold} of ${witnesses.length}${witnessesPending ? ` · ${witnessesPending} pending` : ''}`,
+    },
     { id: 'look', label: 'Lock and look', value: `${lockMinutes} ${lockMinutes === 1 ? 'minute' : 'minutes'} · ${themeName} theme` },
     { id: 'storage', label: 'Storage', value: `${formatFileSize(used)} of ${formatFileSize(limit)}` },
     { id: 'delete', label: 'Delete account', danger: true },
@@ -208,6 +235,16 @@ export const SettingsPage: React.FC = () => {
           <section aria-labelledby="set-two-factor" className={sectionClass('two-factor')}>
             <h2 id="set-two-factor" className={headingClass}>Two-factor</h2>
             <TwoFactorSettings />
+          </section>
+
+          <section aria-labelledby="set-witnesses" className={sectionClass('witnesses')}>
+            <h2 id="set-witnesses" className={headingClass}>Witnesses</h2>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <p className="text-sm text-ink-2">{witnessLine}</p>
+              <Button variant="secondary" size="sm" onClick={() => navigate('/settings/witnesses')}>
+                Manage witnesses
+              </Button>
+            </div>
           </section>
 
           <section aria-labelledby="set-look" className={sectionClass('look')}>

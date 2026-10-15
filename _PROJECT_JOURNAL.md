@@ -14,27 +14,36 @@ Structure is fixed so it can be parsed: the frontmatter above, then the four sec
 
 ## Current state
 
-Stage 2 and the design application are built on `feat/stages-2-5`, awaiting the PR. The product is a safe with a contract signup, mandatory email verification, auto-lock, and the reconciled design on every screen; the handoff subsystem is specified and planned but not started.
+Stage 2, the design application and the handoff subsystem (slices A witnesses, B rules and timer, C quorum) are built on `feat/handoff`, awaiting the PR. The product is a safe with a contract signup, mandatory email verification, auto-lock and the reconciled design, plus witnesses with trust on first use, handoff rules released by a timer or a witness quorum, and an end-to-end run that proves both paths byte for byte.
 
 | Area | State |
 |---|---|
-| Server (Express, Prisma, Postgres) | 61 integration tests on a real Postgres; stage 2 migration (`stage2_contract_mail`); mail library with `log` and `smtp` drivers; register → verify → login gate; profile `displayName`/`lockAfterMinutes`; activity touch; unverified-account cleanup |
-| Client (React, Vite) | 89 vitest tests; design tokens and self-hosted fonts; `OneFact`; register wizard; verify page; idle lock; every screen restyled; five list components; Playwright smoke (28 checks, 90 screenshots) |
-| End-to-end (register → mail link → verify → login → upload → download → share → lock) | 7 tests, runs in CI |
-| Crypto | unchanged format; `publicKeyFingerprint` (SHA-256 of SPKI) added for display |
-| Ops | Docker Compose forwards `MAIL_DRIVER`, `SMTP_URL`, `MAIL_FROM`; `.env.example` ships `MAIL_DRIVER=log`; CI client job runs the Playwright smoke and uploads `design-screenshots` |
-| Design | applied (stage 2b); deviations recorded in `docs/design/decisions.md`; owner's screenshot review pending |
-| Branch | `feat/stages-2-5` (29 commits from `main` @ `ca32d3e`), PR to open |
+| Server (Express, Prisma, Postgres) | 162 integration and unit tests on a real Postgres (jest total; each run has its own state file and a test server bound to 127.0.0.1, and the quorum file passed five runs in a row); migrations `stage2_contract_mail`, `handoff_a_witnesses`, `handoff_b_rules`, `handoff_c_quorum`; witnesses, contacts (trust on first use), rules, timer job with injectable clock, quorum requests and votes, cancel on owner activity |
+| Client (React, Vite) | 237 vitest tests in 38 files; Shamir and handoff crypto, witness, rules and release services; Witnesses page, rules screens, quorum witness and owner screens, Shared-with-me rows for released items; Playwright smoke 44 tests (11 specs at 4 projects) |
+| End-to-end | 11 tests, runs in CI: the stage 1 flow (7) and `handoff.e2e.test.ts` (4: timer with injected clock, quorum with a late third vote refused, cancel on owner sign-in, repair after a witness is removed) |
+| Crypto | content format, KDF and key hierarchy unchanged; per-rule release key, Shamir over GF(2^8), SECURITY.md has a Handoff section |
+| Ops | `WITNESS_MIN_N`, `WITNESS_MAX_N`, `WITNESS_MAY_BE_RECIPIENT` in env; handoff job runs in the API process; CI unchanged (four jobs) |
+| Design | applied and extended to the handoff screens; deviations in `docs/design/decisions.md`; the owner's screenshot review is pending |
+| Branch | `feat/handoff` (from `main`), PR to open |
+
 ## Next steps
 
-- [x] Implement stage 2 and the design application (tasks 1 to 11 of the plan) on `feat/stages-2-5` (2026-10-14).
-- [ ] Open the PR for `feat/stages-2-5`, watch the four CI jobs, owner reviews the `design-screenshots` artifact against the artboards and merges.
-- [ ] Owner: add `MAIL_DRIVER=log` (or smtp with `SMTP_URL` and `MAIL_FROM`) to the local root `.env` before the next `make up`.
-- [ ] Owner decision: keep lock on `pagehide` (spec 3.5) knowing some mobile browsers fire it on a tab switch.
-- [ ] Next sitting: tasks 12 to 21 (Shamir, handoff crypto, witnesses, rules and timer, quorum, handoff e2e) from `docs/superpowers/plans/2026-10-14-stages-2-5-plan.md`, same subagent-driven loop; carry the known gap (share marker on rows needs share data in the file listing) into slice B.
-- [ ] Deferred minors from this sitting's reviews, in the PR description; a verify-token expiry test and `.strict()` on the profile schema first.
-- [ ] Later stages per spec section 12: admin role; reproducible client build; hosted service; compliance readiness. Streaming uploads, passkeys remain on the supporting list. Recovery key stays ruled out by the spec.
+- [x] Implement stage 2 and the design application (tasks 1 to 11) (2026-10-14).
+- [x] Open the PR for `feat/stages-2-5` and merge it.
+- [x] Owner: add `MAIL_DRIVER=log` to the local root `.env`.
+- [x] Owner decision on lock at `pagehide`: keep (ruling R18).
+- [x] Implement the handoff, tasks 12 to 21, on `feat/handoff`.
+- [x] Open the PR for `feat/handoff` (#9, 2026-10-14), four CI jobs green.
+- [ ] Owner reviews PR #9 (the `design-screenshots` artifact against the artboards, and the Decisions rows R20 to R46) and merges; delete `feat/handoff` after the merge.
+- [x] Owner-visible request history for the C7 timeline: `GET /api/handoff/requests/mine` (ruling R39), landed in the final fix wave.
+- [ ] API follow-ups: a Refuse action for witnesses, the witness set on the witness card.
+- [ ] A durable "last seen" marker for the owner's release notice, so it does not depend on the browser.
+- [ ] Moving a folder out of a covered folder should drop its files' item rows (a file move already does).
+- [x] The test harness keeps per-run state in a per-run file and retries the Postgres port; the interleave tests wait for named lock waiters.
+- [ ] Deferred minors from the reviews are in the PR description.
+- [ ] Later stages per spec section 12: admin role; reproducible client build; hosted service; compliance readiness. Streaming uploads and passkeys remain on the supporting list. Recovery key stays ruled out by the spec.
 - [ ] External security review before anyone stores real data.
+
 ## Decisions
 
 | Date | Decision | Why |
@@ -57,8 +66,50 @@ Stage 2 and the design application are built on `feat/stages-2-5`, awaiting the 
 | 2026-10-14 | Phone sign-out sits on the locked screen, behind Lock | The design's phone bar carries only brand and lock |
 | 2026-10-14 | This sitting's PR ends at task 11; the handoff slices are the next sitting | Session-sized development: eleven tasks with review loops filled the context's share; the handoff subsystem is a coherent unit on its own |
 | 2026-10-14 | Compose and `.env.example` ship `MAIL_DRIVER=log`; production defaults to `smtp` and refuses to start without `SMTP_URL` and `MAIL_FROM` | The Optional block must work for a local run; a real deployment must not silently lose verification mail |
+| 2026-10-14 | R18: lock on `pagehide` stays | Spec 3.5 says so; changing a spec is the owner's call, and the cost is only that phone users relock more often than the copy promises |
+| 2026-10-14 | R20: `splitForWitnesses` returns the share index with each wrapped share | The server needs the index to catch duplicate or zero indexes, and the wrapped blob is opaque to it |
+| 2026-10-14 | R21: slice A ships without the rules table | Each slice must leave the product working; the rules table, the stale flag and the shares PUT arrive in slice B |
+| 2026-10-14 | R25: the witness invitation link carries the row id, no token | Accepting is an authenticated act by an account holder, so a bearer token in the link would add a second credential for nothing |
+| 2026-10-14 | R26: the witness set size counts invited and accepted rows only | A declined or removed witness cannot hold a share, so counting them would let a threshold be picked that nobody can reach |
+| 2026-10-14 | R27: public-key lookup answers 404 for an unverified account | Nothing may address an unverified account, and the lookup must not reveal that one exists |
+| 2026-10-14 | R28: a rule on a folder covers its whole subtree | The spec says every file under the folder; skipping subfolders would hand over less than the owner saw |
+| 2026-10-14 | R29: the owner-activity hook lives in the throttled touch and in check-in | One place, already throttled, already on every authenticated request |
+| 2026-10-14 | R30: a changed contact key blocks share and invite until re-trusted | A changed key must be a loud warning, never silent; marking the key verified in person is the deliberate way through |
+| 2026-10-14 | R31: fingerprint comparison uses the 128-bit displayed prefix | The client has shown 32 hex since stage 2b and 128 bits is ample for trust on first use; the full value stays server side |
+| 2026-10-14 | R32: the Witnesses page stages every change behind one confirmation | The spec and artboard stage changes before saving; the client, not the server, decides when to call |
+| 2026-10-14 | R33: download-url admits recipients of released rules | Without it the Shared-with-me rows from a release could not be fetched; it serves ciphertext only |
+| 2026-10-14 | R34: a file moved out of a covered folder leaves the rule | The owner put a rule on a place, and what they take out of it must not be released quietly |
+| 2026-10-14 | R35: revoke clears the owner's wrapped release key | The spec deletes revoked blobs and the owner never needs that copy again |
+| 2026-10-14 | R36: the 90 % subject reads "1 day" when the count is 1 | The copy row gives a placeholder, not a rule to print bad grammar; the final warning covers today |
+| 2026-10-14 | R37: open requests are cancelled on login and on every owner-initiated handoff write; vote shares are tied to one split | A quorum must never run against a living owner, and a release must never combine shares from two different splits |
+| 2026-10-14 | R38: the cancel mail wording follows the reason | The design row covers only the sign-in case, and a mail must not state a false cause |
+| 2026-10-14 | R39: an owner request history endpoint for the C7 timeline | The spec asks for one line each with who and when, and the API had no owner-visible history; Refuse and the witness set on the card remain follow-ups |
+| 2026-10-14 | R40: a timer release waits for the final warning, or for a day past the period if it cannot be sent | Spec 7.4 orders reminders, final warning, release, so the owner gets a last chance; a mail outage must not keep a dead owner's rule armed forever |
+| 2026-10-14 | R41: create and re-split carry the k the shares were split with; the server refuses a mismatch with 409 THRESHOLD_CHANGED under a lock on the owner's row | Shares split for one k under a threshold of another release a key nobody can rebuild, irreversibly |
+| 2026-10-14 | R42: a witness who deletes their account first leaves each set they serve: open requests cancelled, rules flagged stale, k refit | Spec 7.1 says a changed set re-splits, and a silent dead slot can leave a quorum unreachable with no signal |
+| 2026-10-14 | R43: the Witnesses page warns about a witness who is also a recipient on an open rule | Decision 6 names both the rule form and the Witnesses page |
+| 2026-10-14 | R44: witness keys are checked against the owner's trust rows at create and repair; recipient keys at vote time are not, and SECURITY.md says so with the server's power to release alone | The safe must not claim a check it does not make |
+| 2026-10-14 | R45: the owner gets no mail for their own rule creation or revocation | Spec 7.2's "every state change is emailed" is read as changes that happen to the owner; a mail confirming one's own click is noise |
 
 ## Session log
+
+### 2026-10-14 · local (Claude Code) · handoff subsystem built on feat/handoff (tasks 12 to 21 of 21)
+
+Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt4i9g2h7TPtvoa) · Branch: `feat/handoff` · Commits: `e8587e4` … `8a35a74` (33 commits, plus this journal commit) · PR: https://github.com/joemc3/CrypticStorage/pull/9
+
+**Did**
+- Verified the owner's recreated root `.env` (all keys present, both secrets filled), booted the Docker stack, `/api/health` answered. Owner decision recorded: lock on `pagehide` stays.
+- Ran plan tasks 12 to 21 subagent-driven: one implementer and one reviewer per task, fix rounds where the review found Important issues (tasks 13, 14, 15, 17 one each; task 19 four, the last with a fresh implementer), one whole-branch review, one fix wave re-reviewed, then one narrow residual fix (ruling R46) for two release-path findings the final review surfaced outside its brief. Rulings R20 to R46 are in the Decisions table.
+- Client crypto: in-house Shamir over GF(2^8) with a known-answer vector from an independent reference; the handoff crypto service (release key, four wraps, witness re-wrap, recipient combine).
+- Slice A: witnesses module and migration, trust on first use with fingerprints and a server-held trust table, Witnesses page that stages every change behind one confirmation, invitation screen.
+- Slice B: rules module and migration, coverage of folder subtrees, share counts and coverage gaps on listings, timer job with injectable clock, reminders with single-use check-in tokens, release gated on the final warning, rule sheet and detail, dashboard rules, recipient notice, check-in page, repair at unlock.
+- Slice C: release requests and votes with k fixed at open and vote shares tied to one split, cancellation on login, check-in, every owner-initiated handoff write and the throttled activity touch, consistent lock order, owner request history for the C7 timeline, witness dashboard section and the two one-fact screens, recipient combine in Shared with me.
+- Handoff end-to-end test (timer, quorum, cancel, repair, byte for byte), SECURITY.md Handoff section written to what the code does, README, emails.md, journal.
+- Test harness: per-run state file (the fixed path was clobbered by concurrent runs), Postgres port retry, test server bound to 127.0.0.1 (other programs on this Mac answered on loopback ephemeral ports and caused the long-standing stray 401s).
+
+**Verified**: `make typecheck`; `make test` server 166 and client 239; `make test-e2e` 11/11; Playwright 44/44; the quorum file five runs in a row; CI on the PR: four jobs green (run 38668428457) after one fix: a timezone-dependent reminder-date assertion that the UTC runner caught; the test now computes its expectation through the formatter.
+
+**Open**: owner review and merge of the PR; the owner's screenshot review of the new screens against the artboards; API follow-ups (Refuse for witnesses, the witness set on the witness card, an invited-only witness deleting their account leaves k unrefit, a durable last-seen marker for the release notice, moving a folder out of a covered folder); two timer notes (a concurrent tick can release on another tick's in-flight final-warning stamp that later rolls back; a final warning sent past 100 % quotes a past date); the deferred minors listed in the PR description. Lesson recorded: do not dispatch a successor implementer while the previous one is still running (task 19 rounds 3 and 4 overlapped on the same tree).
 
 ### 2026-10-14 · local (Claude Code) · stage 2 and the design application built on feat/stages-2-5 (tasks 1 to 11 of 21)
 

@@ -13,6 +13,8 @@ import { clientIp, userAgent } from '../../lib/http';
 import { toAuthenticatedUser, toPublicUser } from '../dto';
 import { sendMail } from '../../lib/mail';
 import { logger } from '../../lib/logger';
+import { now } from '../../lib/clock';
+import { onOwnerActivity } from '../handoff/activity';
 import { verifyEmail as verifyEmailTemplate } from '../../mail/templates';
 import { CONTRACT_PHRASE } from './schema';
 import type { loginSchema, registerSchema } from './schema';
@@ -138,6 +140,28 @@ export async function verifyEmail(token: string, req: Request) {
   return { email: record.user.email };
 }
 
+/** The link in a reminder mail: proves the owner is alive without a sign-in. Single use. */
+export async function checkIn(token: string, req: Request) {
+  const at = now();
+  const record = await prisma.emailToken.findFirst({
+    where: { tokenHash: sha256Hex(token), purpose: 'check_in', usedAt: null, expiresAt: { gt: at } },
+    select: { id: true, userId: true },
+  });
+  if (!record) throw new BadRequestError('This link is invalid or has expired', undefined, 'TOKEN_INVALID');
+
+  const claimed = await prisma.$transaction(async (tx) => {
+    const used = await tx.emailToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: at } });
+    if (used.count === 0) return false;
+    await tx.user.update({ where: { id: record.userId }, data: { lastActivityAt: at } });
+    return true;
+  });
+  if (!claimed) throw new BadRequestError('This link is invalid or has expired', undefined, 'TOKEN_INVALID');
+
+  await onOwnerActivity(record.userId);
+  audit(req, { userId: record.userId, action: 'user.check_in' });
+  return { ok: true as const };
+}
+
 /** Always resolves; callers answer 202 whether or not anything was sent. */
 export async function resendVerification(emailAddress: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { email: emailAddress }, select: { id: true, email: true, emailVerifiedAt: true } });
@@ -167,7 +191,10 @@ export async function login(input: z.infer<typeof loginSchema>, req: Request) {
     };
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  const at = new Date();
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: at, lastActivityAt: at } });
+  // A login is activity whatever the five-minute touch throttle says: warned rules start over, an open request is cancelled.
+  await onOwnerActivity(user.id);
   const tokens = await issueSession(user, req);
   audit(req, { userId: user.id, action: 'auth.login' });
   return { requiresTwoFactor: false, user: toAuthenticatedUser(user), tokens };
@@ -207,11 +234,13 @@ export async function completeTwoFactor(
       where: { id: user.id },
       data: {
         lastLoginAt: new Date(),
+        lastActivityAt: new Date(),
         ...(usedBackupHash ? { backupCodeHashes: user.backupCodeHashes.filter((h) => h !== usedBackupHash) } : {}),
       },
     }),
   ]);
 
+  await onOwnerActivity(user.id);
   const tokens = await issueSession(user, req);
   audit(req, { userId: user.id, action: 'auth.2fa.verify', metadata: { method: input.token ? 'totp' : 'backup_code' } });
   return { requiresTwoFactor: false, user: toAuthenticatedUser(user), tokens };

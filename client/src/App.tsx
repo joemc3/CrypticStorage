@@ -9,6 +9,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Spinner } from './components/common/Spinner';
 import { Toast } from './components/common/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
+import { RepairAtUnlock } from './components/handoff/RepairAtUnlock';
 import { useAuthStore } from './stores/auth.store';
 import { useUIStore } from './stores/ui.store';
 
@@ -19,7 +20,11 @@ const VerifyPage = lazy(() => import('./pages/VerifyPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const FilesPage = lazy(() => import('./pages/FilesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const WitnessesPage = lazy(() => import('./pages/WitnessesPage'));
+const WitnessInvitePage = lazy(() => import('./pages/WitnessInvitePage'));
 const SharedPage = lazy(() => import('./pages/SharedPage').then((m) => ({ default: m.SharedPage })));
+const RecipientNoticePage = lazy(() => import('./pages/RecipientNoticePage'));
+const CheckInPage = lazy(() => import('./pages/CheckInPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 const LoadingFallback: React.FC = () => (
@@ -72,6 +77,7 @@ const App: React.FC = () => (
         <Route path="/verify/:token" element={<VerifyPage />} />
         <Route path="/s/:token" element={<SharedPage />} />
         <Route path="/shared/:token" element={<LegacySharedRedirect />} />
+        <Route path="/check-in/:token" element={<CheckInPage />} />
 
         <Route
           path="/dashboard"
@@ -113,12 +119,38 @@ const App: React.FC = () => (
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/settings/witnesses"
+          element={
+            <ProtectedRoute>
+              <WitnessesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/witness/:id"
+          element={
+            <ProtectedRoute>
+              <WitnessInvitePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/notice/:ruleId"
+          element={
+            <ProtectedRoute>
+              <RecipientNoticePage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/404" element={<NotFoundPage />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Routes>
     </Suspense>
     <ToastContainer />
+    <RepairAtUnlock />
   </BrowserRouter>
 );
 

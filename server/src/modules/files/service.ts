@@ -1,7 +1,7 @@
 import type { Request } from 'express';
 import type { Readable } from 'stream';
 import { randomUUID } from 'crypto';
-import type { File } from '@prisma/client';
+import type { File, Prisma } from '@prisma/client';
 import type { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
@@ -11,6 +11,7 @@ import { audit } from '../../lib/audit';
 import { ObjectTooLargeError, storage } from '../../storage';
 import { toFileDto } from '../dto';
 import { assertFolderOwnership } from '../folders/service';
+import { RELEASED_STATES_FOR_ACCESS } from '../handoff/access';
 import type { createUploadSchema, updateFileSchema } from './schema';
 
 const CONTENT_TTL = env.CONTENT_TOKEN_TTL_SECONDS;
@@ -125,14 +126,38 @@ export async function confirmUpload(userId: string, fileId: string, req: Request
 // Read
 // ---------------------------------------------------------------------------
 
+/** Active user shares plus unexpired, unrevoked links, per file. Two grouped queries however many files. */
+async function shareCounts(fileIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (fileIds.length === 0) return counts;
+  const now = new Date();
+  const [shares, links] = await Promise.all([
+    prisma.fileShare.groupBy({
+      by: ['fileId'],
+      where: { fileId: { in: fileIds }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      _count: { _all: true },
+    }),
+    prisma.shareLink.groupBy({
+      by: ['fileId'],
+      where: { fileId: { in: fileIds }, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      _count: { _all: true },
+    }),
+  ]);
+  for (const row of [...shares, ...links]) counts.set(row.fileId, (counts.get(row.fileId) ?? 0) + row._count._all);
+  return counts;
+}
+
 export async function listFiles(userId: string, folderId: string | undefined) {
   if (folderId) await assertFolderOwnership(userId, folderId);
   const rows = await prisma.file.findMany({ where: { userId, folderId: folderId ?? null, status: 'READY' }, orderBy: { createdAt: 'asc' } });
-  return rows.map(toFileDto);
+  const counts = await shareCounts(rows.map((r) => r.id));
+  return rows.map((r) => ({ ...toFileDto(r), shareCount: counts.get(r.id) ?? 0 }));
 }
 
 export async function getFile(userId: string, fileId: string) {
-  return toFileDto(await assertFileOwnership(userId, fileId));
+  const file = await assertFileOwnership(userId, fileId);
+  const counts = await shareCounts([file.id]);
+  return { ...toFileDto(file), shareCount: counts.get(file.id) ?? 0 };
 }
 
 /** Download URL for the owner, or for a recipient of a user-to-user share. */
@@ -141,7 +166,12 @@ export async function downloadUrl(userId: string, fileId: string) {
     where: {
       id: fileId,
       status: 'READY',
-      OR: [{ userId }, { shares: { some: { recipientId: userId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } } }],
+      OR: [
+        { userId },
+        { shares: { some: { recipientId: userId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } } },
+        // Released handoff items follow the ordinary sharing path: the recipient may fetch the ciphertext.
+        { handoffItems: { some: { rule: { state: { in: [...RELEASED_STATES_FOR_ACCESS] }, recipients: { some: { userId } } } } } },
+      ],
     },
   });
   if (!file) throw new NotFoundError('File not found');
@@ -179,11 +209,35 @@ export async function updateFile(userId: string, fileId: string, input: z.infer<
   return toFileDto(file);
 }
 
+/**
+ * A file that leaves the folder a handoff rule covers is no longer under that rule, so its wrapped key goes too.
+ * Moving into a covered folder changes nothing here: the missing key shows as a coverage gap and the client repairs it.
+ * A rule on the file itself follows the file and is untouched.
+ */
+async function dropItemsOutsideCoveredFolders(tx: Prisma.TransactionClient, userId: string, fileId: string, target: string | null): Promise<void> {
+  const rows = await tx.handoffRuleItem.findMany({
+    where: { fileId, rule: { ownerId: userId, state: { in: ['active', 'warning'] }, folderId: { not: null } } },
+    select: { ruleId: true, rule: { select: { folderId: true } } },
+  });
+  if (rows.length === 0) return;
+  const chain = new Set<string>();
+  for (let cur = target; cur && !chain.has(cur); ) {
+    chain.add(cur);
+    cur = (await tx.folder.findUnique({ where: { id: cur }, select: { parentId: true } }))?.parentId ?? null;
+  }
+  const outside = rows.filter((r) => !chain.has(r.rule.folderId!)).map((r) => r.ruleId);
+  if (outside.length) await tx.handoffRuleItem.deleteMany({ where: { fileId, ruleId: { in: outside } } });
+}
+
 export async function moveFile(userId: string, fileId: string, folderId: string | null | undefined, req: Request) {
   await assertFileOwnership(userId, fileId);
   const target = folderId ?? null;
   if (target) await assertFolderOwnership(userId, target);
-  const file = await prisma.file.update({ where: { id: fileId }, data: { folderId: target } });
+  const file = await prisma.$transaction(async (tx) => {
+    const moved = await tx.file.update({ where: { id: fileId }, data: { folderId: target } });
+    await dropItemsOutsideCoveredFolders(tx, userId, fileId, target);
+    return moved;
+  });
   audit(req, { userId, action: 'file.move', resourceType: 'file', resourceId: fileId });
   return toFileDto(file);
 }

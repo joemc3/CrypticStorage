@@ -10,6 +10,7 @@ import {
   passwordConfirmSchema,
   publicKeyQuerySchema,
   totpTokenSchema,
+  trustSchema,
   updateProfileSchema,
 } from './schema';
 
@@ -41,7 +42,7 @@ usersRouter.delete(
 usersRouter.get(
   '/public-key',
   validate('query', publicKeyQuerySchema),
-  handler(async (req, res) => ok(res, await service.publicKeyForEmail(query(req, publicKeyQuerySchema).email)))
+  handler(async (req, res) => ok(res, await service.publicKeyForEmail(auth(req).userId, query(req, publicKeyQuerySchema).email)))
 );
 
 usersRouter.post('/2fa/setup', handler(async (req, res) => ok(res, await service.setupTwoFactor(auth(req).userId))));
@@ -87,4 +88,21 @@ activityRouter.get(
     const q = query(req, activityQuerySchema);
     ok(res, await service.activity(auth(req).userId, q.page, q.pageSize));
   })
+);
+
+/** Mounted at /contacts. Trust on first use: the client decides when a key counts as seen. */
+export const contactsRouter = Router();
+contactsRouter.use(requireAuth);
+
+contactsRouter.post(
+  '/:userId/seen',
+  handler(async (req, res) => ok(res, await service.recordContactKey(auth(req).userId, String(req.params.userId), undefined)))
+);
+
+contactsRouter.put(
+  '/:userId/trust',
+  validate('body', trustSchema),
+  handler(async (req, res) =>
+    ok(res, await service.recordContactKey(auth(req).userId, String(req.params.userId), body(req, trustSchema).verifiedInPerson))
+  )
 );

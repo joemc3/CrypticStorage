@@ -11,6 +11,7 @@ import {
   ShareIcon,
   TrashIcon,
   EyeIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 import { Menu, Transition } from '@headlessui/react';
 import { ListRow } from '../common/ListRow';
@@ -33,6 +34,10 @@ export interface FileItemProps {
   onDelete?: () => void;
   onShare?: () => void;
   onPreview?: () => void;
+  /** "Hand off…": open the rule sheet for this item. */
+  onHandoff?: () => void;
+  /** "Rules": open the rules on this item. Given only when it has any. */
+  onRules?: () => void;
 }
 
 export const formatFileSize = (bytes: number): string => {
@@ -73,6 +78,8 @@ export const FileItem: React.FC<FileItemProps> = ({
   onDelete,
   onShare,
   onPreview,
+  onHandoff,
+  onRules,
 }) => {
   const Icon = getFileIcon(mimeType);
   const markers =
@@ -103,7 +110,7 @@ export const FileItem: React.FC<FileItemProps> = ({
           />
         ) : undefined
       }
-      actions={<FileActionsMenu name={name} onDownload={onDownload} onShare={onShare} onPreview={onPreview} onDelete={onDelete} />}
+      actions={<FileActionsMenu name={name} onDownload={onDownload} onShare={onShare} onPreview={onPreview} onHandoff={onHandoff} onRules={onRules} onDelete={onDelete} />}
     />
   );
 };
@@ -116,11 +123,15 @@ export const FileActionsMenu: React.FC<{
   onShare?: () => void;
   onPreview?: () => void;
   onDelete?: () => void;
-}> = ({ name, onDownload, onShare, onPreview, onDelete }) => {
+  onHandoff?: () => void;
+  onRules?: () => void;
+}> = ({ name, onDownload, onShare, onPreview, onDelete, onHandoff, onRules }) => {
   const entries: { label: string; icon: React.ReactNode; run?: () => void; danger?: boolean }[] = [
     { label: 'Preview', icon: <EyeIcon className="h-5 w-5" />, run: onPreview },
     { label: 'Download', icon: <ArrowDownTrayIcon className="h-5 w-5" />, run: onDownload },
     { label: 'Share', icon: <ShareIcon className="h-5 w-5" />, run: onShare },
+    { label: 'Hand off…', icon: <ClockIcon className="h-5 w-5" />, run: onHandoff },
+    { label: 'Rules', icon: <ClockIcon className="h-5 w-5" />, run: onRules },
     { label: 'Delete', icon: <TrashIcon className="h-5 w-5" />, run: onDelete, danger: true },
   ].filter((e) => e.run);
   if (entries.length === 0) return null;

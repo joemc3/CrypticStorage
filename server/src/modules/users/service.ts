@@ -2,12 +2,13 @@ import type { Request } from 'express';
 import type { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from '../../lib/errors';
-import { decryptAtRest, encryptAtRest, randomBackupCode, sha256Hex } from '../../lib/crypto';
+import { decryptAtRest, encryptAtRest, randomBackupCode, sha256Hex, spkiFingerprint } from '../../lib/crypto';
 import { generateTotpSecret, totpQrCodeDataUrl, verifyTotp } from '../../lib/totp';
 import { audit } from '../../lib/audit';
 import { storage } from '../../storage';
 import { hashCredential, verifyCredential } from '../auth/service';
 import { toPublicUser } from '../dto';
+import { withdrawFromAllSets } from '../witnesses/service';
 import type { updateProfileSchema } from './schema';
 
 async function loadUser(userId: string) {
@@ -64,6 +65,8 @@ export async function updateProfile(userId: string, sessionId: string, input: z.
 
 export async function deleteAccount(userId: string, passwordHash: string, req: Request): Promise<void> {
   await assertPassword(userId, passwordHash);
+  // Before the cascade: the owners this user witnesses for must see their set shrink, not a silent dead slot (R42).
+  await withdrawFromAllSets(userId);
   const files = await prisma.file.findMany({ where: { userId }, select: { storageKey: true } });
   await prisma.user.delete({ where: { id: userId } });
   const driver = storage();
@@ -71,10 +74,41 @@ export async function deleteAccount(userId: string, passwordHash: string, req: R
   audit(req, { userId: null, action: 'user.delete', metadata: { userId, files: files.length } });
 }
 
-export async function publicKeyForEmail(email: string) {
-  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, publicKey: true } });
-  if (!user) throw new NotFoundError('No user with that email');
-  return user;
+function toTrust(row: { fingerprint: string; verifiedInPerson: boolean; firstSeenAt: Date; lastSeenAt: Date }) {
+  return {
+    fingerprint: row.fingerprint,
+    verifiedInPerson: row.verifiedInPerson,
+    firstSeenAt: row.firstSeenAt.toISOString(),
+    lastSeenAt: row.lastSeenAt.toISOString(),
+  };
+}
+
+/** Read-only: the client compares the fingerprint with `trust` and then decides whether to record it. */
+export async function publicKeyForEmail(callerId: string, email: string) {
+  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, publicKey: true, emailVerifiedAt: true } });
+  // Unverified accounts answer exactly like missing ones, so they cannot be told apart.
+  if (!user || !user.emailVerifiedAt) throw new NotFoundError('No user with that email');
+  const row = await prisma.trustedKey.findUnique({
+    where: { userId_contactUserId: { userId: callerId, contactUserId: user.id } },
+  });
+  return { id: user.id, email: user.email, publicKey: user.publicKey, fingerprint: spkiFingerprint(user.publicKey), trust: row ? toTrust(row) : null };
+}
+
+/**
+ * Upserts the caller's trust row for a contact with the contact's current key.
+ * `verifiedInPerson` undefined leaves the flag as it was (false on insert).
+ */
+export async function recordContactKey(callerId: string, contactId: string, verifiedInPerson: boolean | undefined) {
+  const contact = await prisma.user.findUnique({ where: { id: contactId }, select: { publicKey: true, emailVerifiedAt: true } });
+  if (!contact || !contact.emailVerifiedAt) throw new NotFoundError('No such contact');
+  const fingerprint = spkiFingerprint(contact.publicKey);
+  const now = new Date();
+  const row = await prisma.trustedKey.upsert({
+    where: { userId_contactUserId: { userId: callerId, contactUserId: contactId } },
+    create: { userId: callerId, contactUserId: contactId, fingerprint, verifiedInPerson: verifiedInPerson ?? false, firstSeenAt: now, lastSeenAt: now },
+    update: { fingerprint, lastSeenAt: now, ...(verifiedInPerson === undefined ? {} : { verifiedInPerson }) },
+  });
+  return toTrust(row);
 }
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,10 @@ Plain text. Subject, two sentences, one link. Placeholders in braces. No email n
 | Vote added | owner | Release request: {count} of {k} votes | {witness} added a vote at {time}. Sign in now to cancel the request. | `https://{host}/login` |
 | Release completed | owner | Your witnesses released your items | {k} witnesses voted, and what you marked went to the people you named at {time}. Your own copies are unchanged. | `https://{host}/dashboard` |
 | Request cancelled | witnesses | {owner} signed in, so the request is cancelled | Nothing was released. There is nothing for you to do. | `https://{host}/dashboard` |
+| Request cancelled (owner write) | witnesses | {owner} changed their safe, so the request is cancelled | Nothing was released. There is nothing for you to do. | `https://{host}/dashboard` |
+| Request cancelled (no release possible) | witnesses | The release request for {owner} could not complete | Nothing was released. There is nothing for you to do. | `https://{host}/dashboard` |
 | Recipient notice | each recipient | {owner} has set something aside for you | You will receive it on their terms. There is nothing to do now. | `https://{host}/dashboard` |
+
+The quorum recipient notice reuses the "Released by timer" recipient row; the mail does not say which path released the rule.
 
 Two templates are additions to the brief's list: the recipient's copy of "released by timer" and "request cancelled" to witnesses (spec 7.5 says the witnesses are told). Both are flagged in `open-questions.md`.

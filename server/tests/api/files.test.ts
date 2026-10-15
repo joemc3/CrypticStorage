@@ -148,12 +148,18 @@ describe('file management', () => {
   it('records activity', async () => {
     const user = await registerUser();
     await uploadFile(user, randomBytes(10));
-    // Audit writes are fire-and-forget; give them a tick.
-    await new Promise((r) => setTimeout(r, 50));
-    const res = await api().get('/api/activity').set(bearer(user));
+    // Audit writes are fire-and-forget; poll until they land (a slow CI runner can take more than one tick).
+    const wanted = ['auth.register', 'file.upload.start', 'file.upload.complete'];
+    let res = await api().get('/api/activity').set(bearer(user));
+    for (let i = 0; i < 40; i++) {
+      const seen = res.body.data?.items?.map((it: { action: string }) => it.action) ?? [];
+      if (wanted.every((a) => seen.includes(a))) break;
+      await new Promise((r) => setTimeout(r, 50));
+      res = await api().get('/api/activity').set(bearer(user));
+    }
     expect(res.status).toBe(200);
     const actions = res.body.data.items.map((i: { action: string }) => i.action);
-    expect(actions).toEqual(expect.arrayContaining(['auth.register', 'file.upload.start', 'file.upload.complete']));
+    expect(actions).toEqual(expect.arrayContaining(wanted));
     expect(res.body.data.total).toBeGreaterThanOrEqual(3);
   });
 });

@@ -5,6 +5,7 @@ import { BadRequestError, NotFoundError } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { storage } from '../../storage';
 import { toFolderDto } from '../dto';
+import { folderCoverage } from '../handoff/coverage';
 import type { createFolderSchema, updateFolderSchema } from './schema';
 
 export async function assertFolderOwnership(userId: string, folderId: string) {
@@ -16,11 +17,14 @@ export async function assertFolderOwnership(userId: string, folderId: string) {
 export async function listFolders(userId: string, parentId: string | undefined) {
   if (parentId) await assertFolderOwnership(userId, parentId);
   const rows = await prisma.folder.findMany({ where: { userId, parentId: parentId ?? null }, orderBy: { createdAt: 'asc' } });
-  return rows.map(toFolderDto);
+  const coverage = await folderCoverage(userId, rows.map((r) => r.id));
+  return rows.map((r) => ({ ...toFolderDto(r), ...coverage.get(r.id)! }));
 }
 
 export async function getFolder(userId: string, folderId: string) {
-  return toFolderDto(await assertFolderOwnership(userId, folderId));
+  const folder = await assertFolderOwnership(userId, folderId);
+  const coverage = await folderCoverage(userId, [folder.id]);
+  return { ...toFolderDto(folder), ...coverage.get(folder.id)! };
 }
 
 export async function createFolder(userId: string, input: z.infer<typeof createFolderSchema>, req: Request) {

@@ -2,7 +2,7 @@
 project: CrypticStorage
 repo: https://github.com/joemc3/CrypticStorage
 journal_format: 1
-updated: 2026-10-14
+updated: 2026-10-15
 last_session: 2026-10-14
 ---
 
@@ -14,27 +14,34 @@ Structure is fixed so it can be parsed: the frontmatter above, then the four sec
 
 ## Current state
 
-Stage 2 and the design application are built on `feat/stages-2-5`, awaiting the PR. The product is a safe with a contract signup, mandatory email verification, auto-lock, and the reconciled design on every screen; the handoff subsystem is specified and planned but not started.
+Stage 2, the design application and the handoff subsystem (slices A witnesses, B rules and timer, C quorum) are built on `feat/handoff`, awaiting the PR. The product is a safe with a contract signup, mandatory email verification, auto-lock and the reconciled design, plus witnesses with trust on first use, handoff rules released by a timer or a witness quorum, and an end-to-end run that proves both paths byte for byte.
 
 | Area | State |
 |---|---|
-| Server (Express, Prisma, Postgres) | 61 integration tests on a real Postgres; stage 2 migration (`stage2_contract_mail`); mail library with `log` and `smtp` drivers; register → verify → login gate; profile `displayName`/`lockAfterMinutes`; activity touch; unverified-account cleanup |
-| Client (React, Vite) | 89 vitest tests; design tokens and self-hosted fonts; `OneFact`; register wizard; verify page; idle lock; every screen restyled; five list components; Playwright smoke (28 checks, 90 screenshots) |
-| End-to-end (register → mail link → verify → login → upload → download → share → lock) | 7 tests, runs in CI |
-| Crypto | unchanged format; `publicKeyFingerprint` (SHA-256 of SPKI) added for display |
-| Ops | Docker Compose forwards `MAIL_DRIVER`, `SMTP_URL`, `MAIL_FROM`; `.env.example` ships `MAIL_DRIVER=log`; CI client job runs the Playwright smoke and uploads `design-screenshots` |
-| Design | applied (stage 2b); deviations recorded in `docs/design/decisions.md`; owner's screenshot review pending |
-| Branch | `feat/stages-2-5` (29 commits from `main` @ `ca32d3e`), PR to open |
+| Server (Express, Prisma, Postgres) | 149 integration and unit tests on a real Postgres (jest total; a few quorum and timer tests flaked under load in this session and passed alone); migrations `stage2_contract_mail`, `handoff_a_witnesses`, `handoff_b_rules`, `handoff_c_quorum`; witnesses, contacts (trust on first use), rules, timer job with injectable clock, quorum requests and votes, cancel on owner activity |
+| Client (React, Vite) | 229 vitest tests in 38 files; Shamir and handoff crypto, witness, rules and release services; Witnesses page, rules screens, quorum witness and owner screens, Shared-with-me rows for released items; Playwright smoke 44 tests (11 specs at 4 projects) |
+| End-to-end | 11 tests, runs in CI: the stage 1 flow (7) and `handoff.e2e.test.ts` (4: timer with injected clock, quorum with a late third vote refused, cancel on owner sign-in, repair after a witness is removed) |
+| Crypto | content format, KDF and key hierarchy unchanged; per-rule release key, Shamir over GF(2^8), SECURITY.md has a Handoff section |
+| Ops | `WITNESS_MIN_N`, `WITNESS_MAX_N`, `WITNESS_MAY_BE_RECIPIENT` in env; handoff job runs in the API process; CI unchanged (four jobs) |
+| Design | applied and extended to the handoff screens; deviations in `docs/design/decisions.md`; the owner's screenshot review is pending |
+| Branch | `feat/handoff` (from `main`), PR to open |
+
 ## Next steps
 
-- [x] Implement stage 2 and the design application (tasks 1 to 11 of the plan) on `feat/stages-2-5` (2026-10-14).
-- [ ] Open the PR for `feat/stages-2-5`, watch the four CI jobs, owner reviews the `design-screenshots` artifact against the artboards and merges.
-- [ ] Owner: add `MAIL_DRIVER=log` (or smtp with `SMTP_URL` and `MAIL_FROM`) to the local root `.env` before the next `make up`.
-- [ ] Owner decision: keep lock on `pagehide` (spec 3.5) knowing some mobile browsers fire it on a tab switch.
-- [ ] Next sitting: tasks 12 to 21 (Shamir, handoff crypto, witnesses, rules and timer, quorum, handoff e2e) from `docs/superpowers/plans/2026-10-14-stages-2-5-plan.md`, same subagent-driven loop; carry the known gap (share marker on rows needs share data in the file listing) into slice B.
-- [ ] Deferred minors from this sitting's reviews, in the PR description; a verify-token expiry test and `.strict()` on the profile schema first.
-- [ ] Later stages per spec section 12: admin role; reproducible client build; hosted service; compliance readiness. Streaming uploads, passkeys remain on the supporting list. Recovery key stays ruled out by the spec.
+- [x] Implement stage 2 and the design application (tasks 1 to 11) (2026-10-14).
+- [x] Open the PR for `feat/stages-2-5` and merge it.
+- [x] Owner: add `MAIL_DRIVER=log` to the local root `.env`.
+- [x] Owner decision on lock at `pagehide`: keep (ruling R18).
+- [x] Implement the handoff, tasks 12 to 21, on `feat/handoff`.
+- [ ] Open the PR for `feat/handoff`, watch the four CI jobs, owner reviews and merges.
+- [ ] API follow-ups: owner-visible request history for the owner's timeline (`GET /api/handoff/requests/mine`, ruling R39; check it landed in the final fix wave), a Refuse action for witnesses, the witness set on the witness card.
+- [ ] A durable "last seen" marker for the owner's release notice, so it does not depend on the browser.
+- [ ] Moving a folder out of a covered folder should drop its files' item rows (a file move already does).
+- [ ] The test harness keeps per-run state in a file; make it per-run isolated. Server tests that flaked under load: quorum votes, timer claim race.
+- [ ] Deferred minors from the reviews are in the PR description.
+- [ ] Later stages per spec section 12: admin role; reproducible client build; hosted service; compliance readiness. Streaming uploads and passkeys remain on the supporting list. Recovery key stays ruled out by the spec.
 - [ ] External security review before anyone stores real data.
+
 ## Decisions
 
 | Date | Decision | Why |
@@ -57,6 +64,24 @@ Stage 2 and the design application are built on `feat/stages-2-5`, awaiting the 
 | 2026-10-14 | Phone sign-out sits on the locked screen, behind Lock | The design's phone bar carries only brand and lock |
 | 2026-10-14 | This sitting's PR ends at task 11; the handoff slices are the next sitting | Session-sized development: eleven tasks with review loops filled the context's share; the handoff subsystem is a coherent unit on its own |
 | 2026-10-14 | Compose and `.env.example` ship `MAIL_DRIVER=log`; production defaults to `smtp` and refuses to start without `SMTP_URL` and `MAIL_FROM` | The Optional block must work for a local run; a real deployment must not silently lose verification mail |
+| 2026-10-14 | R18: lock on `pagehide` stays | Spec 3.5 says so; changing a spec is the owner's call, and the cost is only that phone users relock more often than the copy promises |
+| 2026-10-14 | R20: `splitForWitnesses` returns the share index with each wrapped share | The server needs the index to catch duplicate or zero indexes, and the wrapped blob is opaque to it |
+| 2026-10-14 | R21: slice A ships without the rules table | Each slice must leave the product working; the rules table, the stale flag and the shares PUT arrive in slice B |
+| 2026-10-14 | R25: the witness invitation link carries the row id, no token | Accepting is an authenticated act by an account holder, so a bearer token in the link would add a second credential for nothing |
+| 2026-10-14 | R26: the witness set size counts invited and accepted rows only | A declined or removed witness cannot hold a share, so counting them would let a threshold be picked that nobody can reach |
+| 2026-10-14 | R27: public-key lookup answers 404 for an unverified account | Nothing may address an unverified account, and the lookup must not reveal that one exists |
+| 2026-10-14 | R28: a rule on a folder covers its whole subtree | The spec says every file under the folder; skipping subfolders would hand over less than the owner saw |
+| 2026-10-14 | R29: the owner-activity hook lives in the throttled touch and in check-in | One place, already throttled, already on every authenticated request |
+| 2026-10-14 | R30: a changed contact key blocks share and invite until re-trusted | A changed key must be a loud warning, never silent; marking the key verified in person is the deliberate way through |
+| 2026-10-14 | R31: fingerprint comparison uses the 128-bit displayed prefix | The client has shown 32 hex since stage 2b and 128 bits is ample for trust on first use; the full value stays server side |
+| 2026-10-14 | R32: the Witnesses page stages every change behind one confirmation | The spec and artboard stage changes before saving; the client, not the server, decides when to call |
+| 2026-10-14 | R33: download-url admits recipients of released rules | Without it the Shared-with-me rows from a release could not be fetched; it serves ciphertext only |
+| 2026-10-14 | R34: a file moved out of a covered folder leaves the rule | The owner put a rule on a place, and what they take out of it must not be released quietly |
+| 2026-10-14 | R35: revoke clears the owner's wrapped release key | The spec deletes revoked blobs and the owner never needs that copy again |
+| 2026-10-14 | R36: the 90 % subject reads "1 day" when the count is 1 | The copy row gives a placeholder, not a rule to print bad grammar; the final warning covers today |
+| 2026-10-14 | R37: open requests are cancelled on login and on every owner-initiated handoff write; vote shares are tied to one split | A quorum must never run against a living owner, and a release must never combine shares from two different splits |
+| 2026-10-14 | R38: the cancel mail wording follows the reason | The design row covers only the sign-in case, and a mail must not state a false cause |
+| 2026-10-14 | R39: an owner request history endpoint for the C7 timeline | The spec asks for one line each with who and when, and the API had no owner-visible history; Refuse and the witness set on the card remain follow-ups |
 
 ## Session log
 

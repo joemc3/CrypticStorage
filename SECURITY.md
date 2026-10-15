@@ -44,7 +44,32 @@ No format version changes here: the content format, KDF and key hierarchy are un
 ## Sharing
 
 - **Links:** `https://app/s/<token>#<file key, base64url>`. The fragment never leaves the browser. The server enforces password (bcrypt), expiry, revocation and download caps, and increments the counter only when bytes are actually served. A link therefore protects against the server but not against anyone who obtains the full URL.
-- **User to user:** the owner fetches the recipient's public key, wraps the file key with RSA-OAEP, and the server stores the wrapped key. Either party can revoke. Public keys are not yet verified out of band, so a malicious server could substitute a public key (a classic key-server attack); the fingerprint in Settings is the SHA-256 of the account's RSA public key in SPKI form, shown grouped by four, and the share dialog shows the same for a recipient, so two people can compare them. Trust is not stored yet; that is the handoff stage.
+- **User to user:** the owner fetches the recipient's public key, wraps the file key with RSA-OAEP, and the server stores the wrapped key. Either party can revoke. Public keys are not yet verified out of band, so a malicious server could substitute a public key (a classic key-server attack); the fingerprint in Settings is the SHA-256 of the account's RSA public key in SPKI form, and the share dialog shows the same for a recipient, so two people can compare them. The displayed value is the first 128 bits: 32 hex characters grouped by four, not the full digest. Trust is stored since the handoff stage, see below.
+
+## Handoff
+
+A handoff rule names a file or a folder (with its whole subtree), one or more recipients and a period. When the rule releases, the recipients can read what it covers. The owner chose this ahead of time; nobody asks the owner again.
+
+**Release key.** Each rule has its own random AES-256 release key, made in the owner's browser. The server never receives it in the clear. It exists in four wrapped forms:
+
+- the owner's copy, wrapped with the owner's master key, so the owner can repair the rule later;
+- one copy per recipient, wrapped with RSA-OAEP under that recipient's public key, released by the server only after a timer release;
+- each covered file's key, wrapped with AES-GCM under the release key, one blob per file;
+- Shamir shares of the release key, one per witness, each wrapped with RSA-OAEP under that witness's public key.
+
+Shamir splitting is in-house, over GF(2^8) with the AES polynomial. A set has n witnesses with k of n, where n is 2 to 7 and k is at least 2 and at most n. A witness can unwrap a share but one share reveals nothing about the release key.
+
+**What the server stores.** Opaque blobs only. It stores no release key, no share in the clear and no file key in the clear. Before a release it keeps every blob and hands none of them to a recipient. It still sees the shape: which accounts are witnesses, which are recipients, which files a rule covers, when each rule was made and when the owner was last active.
+
+**Timer.** The server clock decides. The owner's activity (a sign-in, or any authenticated request, checked at most every five minutes) restarts the period. At 75, 90 and 95 percent of the period the owner is emailed, and at 100 percent the rule releases and the recipients' wrapped release key is served. Reminder mails carry a check-in link. Its token is 32 random bytes, stored as SHA-256 only, single use, and resets the clock when followed. Mail never names a file or folder, because the server cannot read names. The period is 30 days by default.
+
+**Quorum.** Any accepted witness can open a release request. The request fixes k at the moment it opens. Each witness who votes unwraps their own share in the browser and re-wraps it under the public key of every recipient of every covered rule, then sends those blobs. When k votes are in, the rule releases and the recipients receive the re-wrapped shares, combine k of them and unwrap the release key themselves. The server never combines shares. A request is cancelled when the owner signs in and by any owner-initiated handoff write: a new rule, a revoke, new shares, a witness invited or removed, a changed threshold. The witnesses are told. Vote shares are tied to one split of the key through `released_by_request_id`: replacing or staling a rule's shares deletes its vote shares in open requests, so a release can never combine shares from two different splits. When the witness set changes, the rule's shares are flagged stale and the owner's client re-splits the release key at the next unlock.
+
+**Trust on first use.** Before wrapping anything for a person, the client looks up their public key and computes the fingerprint locally. The server stores its own 64-hex SHA-256 of the SPKI bytes; the client displays and compares the first 32 hex, a 128-bit prefix. The first key seen for a contact is recorded. If a later lookup returns a different key, nothing is wrapped for it and the person is warned. Sharing and inviting stay blocked until the owner marks the new key verified in person. Public-key lookup answers 404 for an unverified account, the same as for no account.
+
+**What a released rule means.** Release cannot be undone. The server keeps the record of the rule, who it covered and when it released. The owner's own files and keys are unchanged. Revoking a rule before it releases deletes its blobs, including the owner's wrapped release key.
+
+This is a design for a trusted dead man's switch, not a guarantee. A witness quorum that colludes with a malicious server, or recipients whose keys were substituted before the first sighting, can still release what the owner meant to keep.
 
 ## Transport and content endpoints
 
@@ -59,6 +84,8 @@ No format version changes here: the content format, KDF and key hierarchy are un
 - A malicious client build. Users must trust the served JavaScript; subresource integrity or a packaged client would reduce this.
 - Traffic analysis of sizes and timing.
 - Password recovery: there is none by design until the recovery-key feature lands.
+- A fingerprint that two people never compare. Trust on first use catches a changed key, not a key that was wrong from the start.
+- A witness quorum that colludes. Any k witnesses together can release what the rule covers.
 
 ## Reporting
 

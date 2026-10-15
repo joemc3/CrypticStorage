@@ -12,6 +12,7 @@ Zero-knowledge, end-to-end encrypted file storage. Files, file names and folder 
 - **Per-file keys.** Every file gets a random AES-256 key, wrapped with the account's master key. File content is sealed in 1 MiB AES-GCM chunks with a per-chunk nonce and the chunk index and count in the authenticated data, so chunks cannot be reordered, dropped or duplicated.
 - **Sharing that stays zero-knowledge.** Anonymous links carry the file key in the URL fragment, which browsers never send to the server; the server can still enforce passwords, expiry and download caps. User-to-user shares wrap the file key with the recipient's RSA-OAEP public key.
 - **Signup as a contract.** Three facts read one at a time, then the form. Email verification is mandatory, a display name is optional, and the app locks itself after an idle period you choose (1 to 30 minutes, default 5). Raw keys exist only in memory and are dropped on lock.
+- **Handoff.** Name up to seven witnesses, pick how many of them must agree, then put a rule on a file or folder for the people who should get it. The rule releases when you stop signing in for the period you chose (reminders first), or when enough witnesses vote that it should. Nothing is revealed to the server on the way; recipients unlock with their own key. A release cannot be undone.
 - **Two-factor authentication** with TOTP and single-use backup codes, a locked-vault screen after reload that unlocks offline, password change by re-wrapping the master key, refresh-token rotation, quotas, an audit log.
 - **Storage drivers.** Local filesystem for development, tests and single-node deployments; any S3-compatible store (AWS S3, R2, Garage, ...) for production, with optional presigned URLs straight from the browser.
 
@@ -64,7 +65,8 @@ make dev-web       # terminal 3: web app on :3000, proxies /api to :4000
 
 ```bash
 make test          # server integration suite (boots an embedded Postgres) + client crypto unit tests
-make test-e2e      # starts a real API and drives the real client services through register → upload → share
+make test-e2e      # starts a real API and drives the real client services through register → upload → share,
+                   # and the handoff: timer release, quorum release, cancel on sign-in, re-split repair
 make typecheck
 (cd client && npm run test:browser)   # Playwright smoke: every screen at desktop and phone width, light and dark
 ```
@@ -87,11 +89,14 @@ All routes live under `/api` and return `{ success, data }` or `{ success: false
 
 | Area | Routes |
 |---|---|
-| Auth | `POST /auth/register`, `/auth/login`, `/auth/verify-2fa`, `/auth/refresh`, `/auth/logout` |
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/verify-2fa`, `/auth/refresh`, `/auth/logout`, `/auth/check-in` (the emailed reset link) |
 | Users | `GET/PATCH/DELETE /users/profile`, `GET /users/public-key?email=`, `POST /users/2fa/{setup,enable,disable,backup-codes}`, `GET /storage/stats`, `GET /activity` |
 | Files | `GET /files`, `POST /files/upload-url` → `PUT <uploadUrl>` → `POST /files/:id/confirm`, `GET /files/:id`, `GET /files/:id/download-url`, `PATCH /files/:id`, `POST /files/:id/{move,copy}`, `DELETE /files/:id` |
 | Folders | `GET/POST /folders`, `GET/PATCH/DELETE /folders/:id`, `POST /folders/:id/move` |
 | Sharing | `POST/GET /shares/links`, `DELETE /shares/links/:id`, `GET /files/:id/links`, `GET /shares/public/:token`, `POST /shares/public/:token/download-url`, `POST /shares`, `GET /shares/with-me`, `GET /files/:id/shares`, `DELETE /shares/:id` |
+| Witnesses | `GET/POST /witnesses`, `PUT /witnesses/threshold`, `DELETE /witnesses/:id`, `GET /witnesses/invitations`, `POST /witnesses/invitations/:id/{accept,decline}` |
+| Contacts | `POST /contacts/:userId/seen`, `PUT /contacts/:userId/trust` (trust on first use for public keys) |
+| Handoff | `GET/POST /handoff/rules`, `GET/DELETE /handoff/rules/:id`, `PUT /handoff/rules/:id/{shares,items}`, `GET /handoff/for-me`, `GET/POST /handoff/requests`, `POST /handoff/requests/:id/votes` |
 
 Uploads are a three-step reservation so the server can verify size and quota before a file becomes visible. When the storage driver can presign (S3 with `S3_PUBLIC_ENDPOINT`), the upload and download URLs point straight at object storage; otherwise they point at `/api/files/:id/content` with a short-lived token and the API streams the bytes.
 
@@ -111,6 +116,8 @@ Everything is read from the environment and validated at startup (`server/src/co
 | `API_PUBLIC_URL` | leave empty when `/api` is proxied on the app's origin |
 | `MAIL_DRIVER` | `log` or `smtp`. `log` (the default outside production) prints each mail to the API log; production defaults to `smtp` |
 | `SMTP_URL`, `MAIL_FROM` | required when `MAIL_DRIVER=smtp`: connection URL and the From address |
+| `WITNESS_MIN_N`, `WITNESS_MAX_N` | smallest and largest witness set a person can hold (defaults `2` and `7`) |
+| `WITNESS_MAY_BE_RECIPIENT` | whether a witness can also be a recipient of the owner's rules (default `true`) |
 | `DEFAULT_STORAGE_QUOTA_BYTES`, `MAX_FILE_SIZE_BYTES` | limits |
 
 ## License

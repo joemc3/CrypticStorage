@@ -1,4 +1,4 @@
-.PHONY: help install typecheck test test-e2e build dev-db dev-api dev-web up down logs ps migrate clean
+.PHONY: help install typecheck test test-e2e build dev-db dev-api dev-web up down logs ps migrate clean tidy
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -52,3 +52,9 @@ migrate: ## Apply migrations inside the running API container
 
 clean: ## Stop the stack and delete its volumes (destroys all data)
 	docker compose down -v
+
+# --- Session wrap-up ---------------------------------------------------------
+
+tidy: ## End of session: stop the local stack (volumes kept); safe when already down
+	-docker compose down --remove-orphans
+	@docker compose ps --quiet | grep -q . && echo "tidy: containers still running" || echo "tidy: local stack is down"

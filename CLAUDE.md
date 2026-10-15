@@ -17,6 +17,7 @@ Every session that changes anything:
 - `make test` runs the server integration suite (boots an embedded Postgres) and the client unit tests. `make test-e2e` runs the real API with the real client crypto. `make typecheck` for both halves.
 - CI (`.github/workflows/ci.yml`) runs the same three things. Do not push a change without running at least the suite that covers it.
 - Local dev without Docker: `make dev-db`, then `make dev-api` and `make dev-web` with a `server/.env` built from `server/.env.example`.
+- `make tidy` at the end of every session: it stops the local Docker stack and keeps its volumes. Run it before the handoff, and whenever the stack is no longer needed; this Mac runs many projects and idle stacks come back on every boot. Only this project's containers; other projects' stacks and any remote stack are left alone.
 
 ## Code conventions that matter here
 

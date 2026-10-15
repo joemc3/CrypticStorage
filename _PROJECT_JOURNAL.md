@@ -92,6 +92,24 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 
 ## Session log
 
+### 2026-10-14 · local (Claude Code) · handoff subsystem built on feat/handoff (tasks 12 to 21 of 21)
+
+Session: Claude Code, local checkout (https://claude.ai/code/session_01N3pACkpAt4i9g2h7TPtvoa) · Branch: `feat/handoff` · Commits: `e8587e4` … `befd61b` (30 commits), plus this journal commit · PR: opened at the end of this session (link in the next journal commit)
+
+**Did**
+- Verified the owner's recreated root `.env` (all keys present, both secrets filled), booted the Docker stack, `/api/health` answered. Owner decision recorded: lock on `pagehide` stays.
+- Ran plan tasks 12 to 21 subagent-driven: one implementer and one reviewer per task, fix rounds where the review found Important issues (tasks 13, 14, 15, 17 one each; task 19 four, the last with a fresh implementer), one whole-branch review, one fix wave re-reviewed, then one narrow residual fix (ruling R46) for two release-path findings the final review surfaced outside its brief. Rulings R20 to R46 are in the Decisions table.
+- Client crypto: in-house Shamir over GF(2^8) with a known-answer vector from an independent reference; the handoff crypto service (release key, four wraps, witness re-wrap, recipient combine).
+- Slice A: witnesses module and migration, trust on first use with fingerprints and a server-held trust table, Witnesses page that stages every change behind one confirmation, invitation screen.
+- Slice B: rules module and migration, coverage of folder subtrees, share counts and coverage gaps on listings, timer job with injectable clock, reminders with single-use check-in tokens, release gated on the final warning, rule sheet and detail, dashboard rules, recipient notice, check-in page, repair at unlock.
+- Slice C: release requests and votes with k fixed at open and vote shares tied to one split, cancellation on login, check-in, every owner-initiated handoff write and the throttled activity touch, consistent lock order, owner request history for the C7 timeline, witness dashboard section and the two one-fact screens, recipient combine in Shared with me.
+- Handoff end-to-end test (timer, quorum, cancel, repair, byte for byte), SECURITY.md Handoff section written to what the code does, README, emails.md, journal.
+- Test harness: per-run state file (the fixed path was clobbered by concurrent runs), Postgres port retry, test server bound to 127.0.0.1 (other programs on this Mac answered on loopback ephemeral ports and caused the long-standing stray 401s).
+
+**Verified**: `make typecheck`; `make test` server 166 and client 239; `make test-e2e` 11/11; Playwright 44/44; the quorum file five runs in a row; CI on the PR: pending at the time of this entry.
+
+**Open**: owner review and merge of the PR; the owner's screenshot review of the new screens against the artboards; API follow-ups (Refuse for witnesses, the witness set on the witness card, an invited-only witness deleting their account leaves k unrefit, a durable last-seen marker for the release notice, moving a folder out of a covered folder); two timer notes (a concurrent tick can release on another tick's in-flight final-warning stamp that later rolls back; a final warning sent past 100 % quotes a past date); the deferred minors listed in the PR description. Lesson recorded: do not dispatch a successor implementer while the previous one is still running (task 19 rounds 3 and 4 overlapped on the same tree).
+
 ### 2026-10-14 · local (Claude Code) · stage 2 and the design application built on feat/stages-2-5 (tasks 1 to 11 of 21)
 
 Session: Claude Code, local checkout · Branch: `feat/stages-2-5` · Commits: `858873f` … `560ee64` (29 commits), plus this journal commit

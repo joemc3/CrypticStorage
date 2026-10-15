@@ -6,7 +6,7 @@
 import CryptoService from './crypto.service';
 import ApiService, { toApiError, type FileMetadata, type FolderMetadata, type SharedFileMetadata } from './api.service';
 import StorageService from './storage.service';
-import { unwrapFileKeyUnderRelease, unwrapForUser } from './handoff.service';
+import { combineAndUnwrap, unwrapFileKeyUnderRelease, unwrapForUser } from './handoff.service';
 
 // ============================================================================
 // Types
@@ -54,7 +54,7 @@ export interface SharedFileListItem extends FileListItem {
   sharedBy: string;
   expiresAt?: string;
   /** Set when the file reached this account through a released handoff rule. */
-  handoff?: { ruleId: string; from: string; releasedAt: string; by: 'timer' | 'quorum' };
+  handoff?: { ruleId: string; from: string; releasedAt: string; by: 'timer' | 'quorum'; /** After a quorum release: how many witnesses' shares came with it. */ witnesses?: number };
 }
 
 export interface FolderListItem {
@@ -91,10 +91,19 @@ export async function fileKeyFor(file: Pick<FileMetadata, 'id' | 'encryptedFileK
   return key;
 }
 
+/** The release key of a released row: unwrapped for me after a timer, combined from the voting witnesses' shares after a quorum. */
+async function releaseKeyFor(handoff: NonNullable<SharedFileMetadata['handoff']>, privateKey: CryptoKey): Promise<CryptoKey> {
+  if (handoff.by === 'quorum') {
+    if (!handoff.voteShares?.length) throw new Error('This handoff has not released its key to you yet.');
+    return combineAndUnwrap(handoff.voteShares.map((s) => s.wrappedShare), privateKey);
+  }
+  if (!handoff.wrappedReleaseKey) throw new Error('This handoff has not released its key to you yet.');
+  return unwrapForUser(handoff.wrappedReleaseKey, privateKey);
+}
+
 /** A released handoff row has no `encryptedFileKey`: open the release key with my private key, then the file key with that. */
 async function handoffFileKey(handoff: NonNullable<SharedFileMetadata['handoff']>, privateKey: CryptoKey): Promise<CryptoKey> {
-  if (!handoff.wrappedReleaseKey) throw new Error('This handoff has not released its key to you yet.');
-  const releaseKey = await unwrapForUser(handoff.wrappedReleaseKey, privateKey);
+  const releaseKey = await releaseKeyFor(handoff, privateKey);
   return unwrapFileKeyUnderRelease(JSON.parse(handoff.wrappedFileKey), releaseKey);
 }
 
@@ -267,6 +276,7 @@ export async function listSharedWithMe(): Promise<SharedFileListItem[]> {
         from: file.handoff.from.displayName || file.handoff.from.email,
         releasedAt: file.handoff.releasedAt,
         by: file.handoff.by,
+        ...(file.handoff.by === 'quorum' ? { witnesses: file.handoff.voteShares?.length ?? 0 } : {}),
       };
       return {
         ...item,

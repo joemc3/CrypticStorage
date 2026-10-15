@@ -263,7 +263,7 @@ export const FilesPage: React.FC<FilesPageProps> = ({ view = 'files' }) => {
                     icon={<DocumentTextIcon className="h-5 w-5" />}
                     title={file.name}
                     meta={<span className="break-all">{`From ${file.sharedBy} · ${formatDate(file.createdAt)} · ${formatFileSize(file.size)}`}</span>}
-                    markers={file.handoff ? <FromHandoffMarker from={file.handoff.from} /> : null}
+                    markers={file.handoff ? <FromHandoffMarker from={file.handoff.from} witnesses={file.handoff.by === 'quorum' ? file.handoff.witnesses : undefined} /> : null}
                     actions={
                       <button
                         type="button"

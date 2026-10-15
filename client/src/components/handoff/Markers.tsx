@@ -25,9 +25,9 @@ export const ShareMarker: React.FC = () => (
 );
 
 /** Marker on a row of Shared with me, for an item that reached this account through a handoff. */
-export const FromHandoffMarker: React.FC<{ from: string }> = ({ from }) => (
+export const FromHandoffMarker: React.FC<{ from: string; /** After a quorum release: how many witnesses released it. */ witnesses?: number }> = ({ from, witnesses }) => (
   <RowMarker tone="handoff" icon={<ClockIcon className="h-3.5 w-3.5" />}>
-    Handed off by {from}
+    {witnesses ? `Handed off by ${from} · released by ${witnesses} ${witnesses === 1 ? 'witness' : 'witnesses'}` : `Handed off by ${from}`}
   </RowMarker>
 );
 

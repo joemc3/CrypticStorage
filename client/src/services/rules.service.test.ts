@@ -234,6 +234,31 @@ describe('rules.service', () => {
     });
   });
 
+  describe('releasedItems after a quorum release', () => {
+    it('combines the voting witnesses\' shares into the release key and opens the items', async () => {
+      const { splitForWitnesses, rewrapShareForRecipient, wrapFileKeyUnderRelease } = await import('./handoff.service');
+      const [w1, w2, w3] = await Promise.all([1, 2, 3].map(() => CryptoService.generateRSAKeyPair(2048)));
+      const release = await createReleaseKey();
+      const fk = await CryptoService.generateAesKey();
+      const name = await CryptoService.encryptString('Deed.pdf', fk);
+      const split = await splitForWitnesses(release, new Map([['w1', w1.publicKey], ['w2', w2.publicKey], ['w3', w3.publicKey]]), 2);
+      StorageService.setPrivateKey(recipient.privateKey);
+      vi.spyOn(ApiService, 'handoffForMe').mockResolvedValue([
+        {
+          id: 'r9', owner: { id: 'o', email: 'o@x.co', displayName: null }, state: 'released_quorum', createdAt: '', releasedAt: '2026-10-14T00:00:00.000Z', releasedBy: 'quorum',
+          voteShares: [
+            { witnessUserId: 'w1', wrappedShare: await rewrapShareForRecipient(split.get('w1')!.wrappedShare, w1.privateKey, recipient.publicKey) },
+            { witnessUserId: 'w3', wrappedShare: await rewrapShareForRecipient(split.get('w3')!.wrappedShare, w3.privateKey, recipient.publicKey) },
+          ],
+          items: [{ fileId: 'fq', wrappedFileKey: JSON.stringify(await wrapFileKeyUnderRelease(fk, release)), file: { id: 'fq', encryptedName: name.data, encryptedNameIV: name.iv, encryptedSize: 100, mimeType: 'application/pdf' } as FileMetadata }],
+        },
+      ]);
+      const out = await Rules.releasedItems();
+      expect(out).toHaveLength(1);
+      expect(out[0]).toMatchObject({ fileId: 'fq', name: 'Deed.pdf', ruleId: 'r9' });
+    });
+  });
+
   describe('names', () => {
     it('joins recipients with commas and "and"', () => {
       expect(Rules.joinNames(['a'])).toBe('a');

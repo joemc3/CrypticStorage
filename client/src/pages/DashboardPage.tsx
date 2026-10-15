@@ -12,10 +12,14 @@ import { RecentFiles } from '../components/dashboard/RecentFiles';
 import { QuickStats, type StatCard } from '../components/dashboard/QuickStats';
 import { ForYouSection, RulesSection, WitnessesEntry } from '../components/handoff/DashboardSections';
 import { RuleFlows, type FlowIntent } from '../components/handoff/RuleFlows';
+import { WitnessForSection } from '../components/handoff/WitnessForSection';
+import { QuorumFlows, type QuorumIntent } from '../components/handoff/QuorumFlows';
+import { ReleaseNoticeCard, dismissedNotice, ownerNotices, rememberDismissed, type OwnerNotice } from '../components/handoff/ReleaseNotice';
 import { formatDay, stateLabel } from '../components/handoff/format';
 import { useAuth } from '../hooks/useAuth';
 import { useFiles } from '../hooks/useFiles';
 import ApiService, { type HandoffForMe, type HandoffRule, type StorageStats } from '../services/api.service';
+import { witnessCards, type WitnessCard } from '../services/release.service';
 import { forMe, isOpen, listRules, nameRuleTargets, repairAtUnlock, repairRunning, witnessSummary, type WitnessSummary } from '../services/rules.service';
 
 export const DashboardPage: React.FC = () => {
@@ -28,21 +32,30 @@ export const DashboardPage: React.FC = () => {
   const [forYou, setForYou] = useState<HandoffForMe[]>([]);
   const [witnesses, setWitnesses] = useState<WitnessSummary | null>(null);
   const [flow, setFlow] = useState<FlowIntent | null>(null);
+  const [served, setServed] = useState<WitnessCard[]>([]);
+  const [quorum, setQuorum] = useState<QuorumIntent | null>(null);
+  const [notice, setNotice] = useState<OwnerNotice | null>(null);
   const toast = useToast();
   const retried = useRef(false);
 
   const loadHandoff = useCallback(async () => {
     // Each part fails alone: a missing list leaves its section empty, never the whole page.
-    const [mine, theirs, summary] = await Promise.all([
+    const [mine, theirs, summary, owners, activity] = await Promise.all([
       listRules().catch(() => [] as HandoffRule[]),
       forMe().catch(() => [] as HandoffForMe[]),
       witnessSummary().catch(() => null),
+      witnessCards().catch(() => [] as WitnessCard[]),
+      ApiService.getActivity(1, 50).then((page) => page.items).catch(() => []),
     ]);
     const shown = mine.filter((r) => r.state !== 'revoked');
     setRules(shown);
     setForYou(theirs);
     setWitnesses(summary);
-    setNames(await nameRuleTargets(shown));
+    setServed(owners);
+    const targetNames = await nameRuleTargets(shown);
+    setNames(targetNames);
+    const newest = ownerNotices(mine, targetNames, activity)[0] ?? null;
+    setNotice(newest && newest.id !== dismissedNotice() ? newest : null);
 
     // The repair at unlock may have failed (offline, a witness not yet accepted). Try again once per visit.
     if (!retried.current && !repairRunning() && shown.some((r) => isOpen(r) && (r.sharesStale || r.coverageGaps > 0))) {
@@ -111,16 +124,28 @@ export const DashboardPage: React.FC = () => {
       <div className="flex flex-col gap-6">
         <h1 className="font-sans text-2xl font-semibold leading-[30px] tracking-[-0.01em] text-ink md:text-[28px] md:leading-[34px]">Your safe</h1>
 
+        {notice && (
+          <ReleaseNoticeCard
+            notice={notice}
+            onDismiss={() => {
+              rememberDismissed(notice.id);
+              setNotice(null);
+            }}
+          />
+        )}
+
         <QuickStats stats={cards} isLoading={isLoading && !stats}>
           <StorageChart data={{ used, total: limit }} />
         </QuickStats>
 
+        <WitnessForSection cards={served} meId={user?.id} onOpen={(owner) => setQuorum({ kind: 'open', owner })} onVote={(request) => setQuorum({ kind: 'vote', request })} />
         <ForYouSection rules={forYou} />
         <RulesSection rules={rules} names={names} onOpen={openRule} />
         {witnesses && <WitnessesEntry summary={witnesses} />}
 
         <RecentFiles files={recent} isLoading={isLoading && files.length === 0} onFileClick={(id) => void downloadFile(id)} onViewAll={() => navigate('/files')} />
       </div>
+      <QuorumFlows intent={quorum} onClose={() => setQuorum(null)} onChanged={() => void loadHandoff()} />
       <RuleFlows intent={flow} onClose={() => setFlow(null)} onChanged={() => void loadHandoff()} />
     </DashboardLayout>
   );

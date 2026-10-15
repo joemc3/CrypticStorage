@@ -19,6 +19,12 @@ vi.mock('../services/rules.service', async () => ({
   ...rules,
 }));
 
+const release = vi.hoisted(() => ({ witnessCards: vi.fn() }));
+vi.mock('../services/release.service', async () => ({
+  ...(await vi.importActual<typeof import('../services/release.service')>('../services/release.service')),
+  ...release,
+}));
+
 vi.mock('../layouts/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -54,6 +60,8 @@ describe('DashboardPage', () => {
     rules.witnessSummary.mockResolvedValue({ threshold: 2, accepted: 2, total: 3, acceptedUserIds: [] });
     rules.nameRuleTargets.mockResolvedValue(new Map());
     rules.repairAtUnlock.mockResolvedValue({ repaired: 0, failed: 0 });
+    release.witnessCards.mockResolvedValue([]);
+    sessionStorage.clear();
     useAuthStore.setState({ user, status: 'unlocked' });
     vi.spyOn(AuthService, 'refreshProfile').mockResolvedValue(user);
     vi.spyOn(ApiService, 'getStorageStats').mockResolvedValue({
@@ -143,5 +151,19 @@ describe('DashboardPage', () => {
     renderPage();
     await waitFor(() => expect(rules.repairAtUnlock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(useUIStore.getState().toasts.some((t) => t.message === 'Some handoff rules could not be repaired.')).toBe(true));
+  });
+  it('shows the witness cards and the owner\'s release notice, and Dismiss hides the notice', async () => {
+    release.witnessCards.mockResolvedValue([{ owner: { id: 'o1', email: 'anna.lind@gmail.com', displayName: null }, open: null, closed: [] }]);
+    vi.spyOn(ApiService, 'getActivity').mockResolvedValue({
+      items: [{ id: 'a1', action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: 'q1', metadata: { reason: 'owner_activity' }, ipAddress: '', userAgent: '', success: true, createdAt: new Date().toISOString() }],
+      total: 1, page: 1, pageSize: 50, totalPages: 1,
+    });
+    renderPage();
+    const witnessFor = await screen.findByRole('region', { name: 'You are a witness for' });
+    expect(within(witnessFor).getByText('No release request is open.')).toBeInTheDocument();
+    const notice = await screen.findByRole('status', { name: 'Release notice' });
+    expect(within(notice).getByText('Your sign-in cancelled a release request.')).toBeInTheDocument();
+    screen.getByRole('button', { name: 'Dismiss' }).click();
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Release notice' })).toBeNull());
   });
 });

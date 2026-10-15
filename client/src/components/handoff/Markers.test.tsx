@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { HandoffRule } from '../../services/api.service';
 import { FileList } from '../files/FileList';
-import { FolderRuleBanner, HandoffMarker, ShareMarker } from './Markers';
+import { FolderRuleBanner, FromHandoffMarker, HandoffMarker, ShareMarker } from './Markers';
 
 beforeAll(() => {
   globalThis.ResizeObserver ??= class {
@@ -75,5 +75,14 @@ describe('row markers and actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Receipts' }));
     fireEvent.click(screen.getAllByRole('menuitem', { name: 'Hand off…' })[0]);
     expect(onFolder).toHaveBeenCalledWith('f2');
+  });
+});
+
+describe('from-handoff marker', () => {
+  it('names the witnesses after a quorum release and leaves the timer wording alone', () => {
+    const { rerender } = render(<FromHandoffMarker from="Tom" />);
+    expect(screen.getByText('Handed off by Tom')).toBeInTheDocument();
+    rerender(<FromHandoffMarker from="Tom" witnesses={2} />);
+    expect(screen.getByText('Handed off by Tom · released by 2 witnesses')).toBeInTheDocument();
   });
 });

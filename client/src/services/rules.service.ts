@@ -227,14 +227,21 @@ export async function coverFile(fileId: string, folderId: string | null | undefi
 
 // --- Recipient -------------------------------------------------------------------
 
-/** Items of rules that released by timer, opened with my private key. Quorum releases come with the quorum screens. */
+/** Items of rules that released, opened with my private key: by timer from my wrapped release key, by quorum from the voting witnesses' shares. */
 export async function releasedItems(): Promise<ReleasedItem[]> {
   const privateKey = StorageService.getPrivateKey();
   if (!privateKey) throw new Error('Your vault is locked. Unlock it to continue.');
   const out: ReleasedItem[] = [];
   for (const rule of await forMe()) {
-    if (rule.state !== 'released_timer' || !rule.wrappedReleaseKey || !rule.items) continue;
-    const releaseKey = await Handoff.unwrapForUser(rule.wrappedReleaseKey, privateKey);
+    if (!rule.items) continue;
+    let releaseKey: CryptoKey;
+    if (rule.state === 'released_timer' && rule.wrappedReleaseKey) {
+      releaseKey = await Handoff.unwrapForUser(rule.wrappedReleaseKey, privateKey);
+    } else if (rule.state === 'released_quorum' && rule.voteShares?.length) {
+      releaseKey = await Handoff.combineAndUnwrap(rule.voteShares.map((s) => s.wrappedShare), privateKey);
+    } else {
+      continue;
+    }
     for (const item of rule.items) {
       const fileKey = await Handoff.unwrapFileKeyUnderRelease(JSON.parse(item.wrappedFileKey), releaseKey);
       StorageService.cacheFileKey(item.fileId, fileKey);

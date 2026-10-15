@@ -83,8 +83,23 @@ const witnessSet = {
 };
 const witnessInvitations = {
   invitations: [{ id: 'inv1', owner: { id: 'o1', email: 'r.okafor@gmail.com', displayName: null }, invitedAt: '2026-10-13T12:00:00.000Z' }],
-  serving: [],
+  serving: [] as unknown[],
 };
+
+// Quorum (slice C): the owners I serve, the release requests I can see, and the owner's own activity feed.
+const annaPerson = { id: 'o-anna', email: 'anna.lind@gmail.com', displayName: null };
+const openRequest = {
+  id: 'req-1', owner: annaPerson, openedBy: { id: 'u-jpark', email: 'j.park@outlook.com', displayName: null }, state: 'open', requiredVotes: 2,
+  openedAt: '2026-10-13T14:02:00.000Z', myVote: false,
+  votes: [{ witnessUserId: 'u-jpark', displayName: null, email: 'j.park@outlook.com', votedAt: '2026-10-13T14:02:00.000Z' }],
+  rules: [{ ruleId: 'r-a', sharesStale: false, state: 'active', recipients: [] }], myShares: [],
+};
+const quorum: { serving: unknown[]; requests: unknown[]; activity: unknown[] } = { serving: [], requests: [], activity: [] };
+function resetQuorum() {
+  quorum.serving = [];
+  quorum.requests = [];
+  quorum.activity = [];
+}
 
 const vaultUser = { ...fx.user, ...fx.vault };
 
@@ -115,6 +130,7 @@ const recipientLookup = {
 
 /** Every request the signed-in screens make. Anything else answers 404, which the console check catches. */
 async function mockVaultApi(page: Page) {
+  resetQuorum();
   await page.route('**/api/**', async (route: Route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*?\/api/, '');
@@ -135,12 +151,15 @@ async function mockVaultApi(page: Page) {
         return route.fulfill(ok(folder?.id === 'folder-estate' ? { ...folder, ruleIds: ['rule-estate'] } : folder));
       }
       if (path === '/witnesses') return route.fulfill(ok(witnessSet));
-      if (path === '/witnesses/invitations') return route.fulfill(ok(witnessInvitations));
+      if (path === '/witnesses/invitations') return route.fulfill(ok({ ...witnessInvitations, serving: quorum.serving }));
+      if (path === '/handoff/requests') return route.fulfill(ok(quorum.requests));
+      if (path === '/activity') return route.fulfill(ok({ items: quorum.activity, total: quorum.activity.length, page: 1, pageSize: 50, totalPages: 1 }));
       if (path === '/shares/with-me') return route.fulfill(ok(fx.sharedWithMe));
       if (/^\/files\/[^/]+\/(shares|links)$/.test(path)) return route.fulfill(ok([]));
       const one = path.match(/^\/files\/([^/]+)$/);
       if (one) return route.fulfill(ok(Object.values<{ id: string }[]>(fx.files).flat().find((f) => f.id === one[1])));
     }
+    if (method === 'POST' && path === '/handoff/requests') return route.fulfill(ok({ ...openRequest, openedBy: { id: 'u-me', email: fx.user.email, displayName: null }, votes: [] }));
     if (method === 'POST' && /^\/contacts\/[^/]+\/seen$/.test(path)) return route.fulfill(ok({ fingerprint: recipientLookup.fingerprint, verifiedInPerson: false, firstSeenAt: '', lastSeenAt: '' }));
     if (method === 'POST' && path === '/auth/refresh') return route.fulfill(ok({ accessToken: 'fixture-access', refreshToken: 'fixture-refresh', expiresIn: 900 }));
     return route.fulfill(fail(404, `Unmocked ${method} ${path}`));
@@ -427,4 +446,75 @@ test('handoff rules: dashboard, rule detail, revoke, sheet, confirmation, folder
   await expect(page.getByText('If you do not know this person, you can ignore this.')).toBeVisible();
   await page.waitForLoadState('networkidle');
   await shot(page, info, 'notice');
+});
+
+// ---------------------------------------------------------------------------
+// Quorum
+// ---------------------------------------------------------------------------
+
+test('quorum, witness side: no request, an open request, both one-fact screens', async ({ page, watch: _ }, info) => {
+  await seedSession(page);
+  await mockVaultApi(page);
+  quorum.serving = [{ id: 's1', owner: annaPerson, respondedAt: '2026-09-04T00:00:00.000Z' }];
+  await page.goto('/dashboard');
+  await page.getByLabel('Password').fill(FIXTURE_PASSWORD);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 30_000 });
+
+  const section = page.getByRole('region', { name: 'You are a witness for' });
+  await expect(section.getByText('No release request is open.')).toBeVisible();
+  await expect(section.getByText('You cannot read their items. You can, with others, release them to the people they chose.')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'witness-for-none');
+
+  await section.getByRole('button', { name: 'Open a release request' }).click();
+  await expect(page.getByText('Witness · open a release request')).toBeVisible();
+  await expect(page.getByRole('heading', { name: "You are asking to release anna.lind@gmail.com's items now." })).toBeVisible();
+  await expect(page.getByText('anna.lind@gmail.com and the other witnesses will be told. If anna.lind@gmail.com signs in, the request is cancelled.')).toBeVisible();
+  await shot(page, info, 'release-open');
+  await page.getByRole('button', { name: 'Not now' }).click();
+  await expect(page.getByText('Witness · open a release request')).toBeHidden();
+
+  // The request now exists: the dashboard reloads it from the list.
+  quorum.requests = [openRequest];
+  await page.reload();
+  await page.getByLabel('Password').fill(FIXTURE_PASSWORD);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  const open = page.getByRole('region', { name: 'You are a witness for' });
+  await expect(open.getByText(/^Opened by j\.park@outlook\.com · \d+ Oct, \d\d:\d\d$/)).toBeVisible();
+  await expect(open.getByText('1 of 2 votes')).toBeVisible();
+  await expect(open.getByText('If anna.lind@gmail.com signs in, the request is cancelled.')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'witness-for-open');
+
+  await open.getByRole('button', { name: 'Add your vote' }).click();
+  await expect(page.getByText('Witness · vote 2 of 2')).toBeVisible();
+  await expect(page.getByRole('heading', { name: "Add your vote to release anna.lind@gmail.com's items." })).toBeVisible();
+  await expect(page.getByText("Once 2 votes are in, the items go to the people anna.lind@gmail.com chose. This cannot be undone.")).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add my vote' })).toBeVisible();
+  await shot(page, info, 'release-vote');
+  await page.getByRole('button', { name: 'Not now' }).click();
+  await expect(page.getByText('Witness · vote 2 of 2')).toBeHidden();
+});
+
+test('quorum, owner side: the release notice after a sign-in cancelled a request', async ({ page, watch: _ }, info) => {
+  await seedSession(page);
+  await mockVaultApi(page);
+  quorum.activity = [
+    { id: 'act-1', action: 'handoff.request.cancel', resourceType: 'release_request', resourceId: 'req-1', metadata: { reason: 'owner_activity' }, ipAddress: '', userAgent: '', success: true, createdAt: new Date().toISOString() },
+  ];
+  await page.goto('/dashboard');
+  await page.getByLabel('Password').fill(FIXTURE_PASSWORD);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 30_000 });
+
+  const notice = page.getByRole('status', { name: 'Release notice' });
+  await expect(notice.getByText('Your sign-in cancelled a release request.')).toBeVisible();
+  await expect(notice.getByText('Your witnesses have been told. Nothing was released.')).toBeVisible();
+  await expect(notice.getByText('Cancelled by your sign-in')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await shot(page, info, 'release-notice');
+
+  await notice.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(notice).toBeHidden();
 });

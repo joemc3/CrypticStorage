@@ -2,8 +2,8 @@
 project: CrypticStorage
 repo: https://github.com/joemc3/CrypticStorage
 journal_format: 1
-updated: 2026-10-15
-last_session: 2026-10-15
+updated: 2026-10-19
+last_session: 2026-10-19
 ---
 
 # CrypticStorage · project journal
@@ -24,7 +24,9 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 | Crypto | content format, KDF and key hierarchy unchanged; per-rule release key, Shamir over GF(2^8), SECURITY.md has a Handoff section |
 | Ops | `WITNESS_MIN_N`, `WITNESS_MAX_N`, `WITNESS_MAY_BE_RECIPIENT` in env; handoff job runs in the API process; CI unchanged (four jobs); `make tidy` stops the local stack at session end |
 | Design | applied and extended to the handoff screens; deviations in `docs/design/decisions.md`; the owner's screenshot review is pending |
-| Branch | `chore/tidy-target` (from `main` at 8afe205), PR open |
+| Usability | first owner run (2026-10-19): too much text, the concepts (witness, k-of-n, timer) do not land, needs motion; not in a usable spot. Notes in `docs/notes/2026-10-19-usability-and-test-hosting.md` |
+| Local mail | with `MAIL_DRIVER=log` nobody can complete email verification or open a witness invite: the log driver logs only the envelope and the outbox route is test-only |
+| Branch | `docs/usability-and-hosting-notes` (from `main` at 4f20c96), docs only, PR open |
 
 ## Next steps
 
@@ -35,7 +37,11 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 - [x] Implement the handoff, tasks 12 to 21, on `feat/handoff`.
 - [x] Open the PR for `feat/handoff` (#9, 2026-10-14), four CI jobs green.
 - [x] Owner reviewed and merged PR #9 (2026-10-15); `feat/handoff` deleted.
-- [ ] Owner merges the `make tidy` PR.
+- [ ] Owner adds their further thoughts to `docs/notes/2026-10-19-usability-and-test-hosting.md` and answers its open questions (which VPS and subdomain, first testers, rework before or after a test deploy, plainer names).
+- [ ] Usability rework ahead of feature work: fewer words, animations that show witnesses, k-of-n and the timer, a first-run walk-through. Brainstorm and design pass first, no code until the owner signs off.
+- [ ] Make local and test-deploy email work for verification and witness invites; the owner rejected both the full-body log driver and a verification-off switch, so decide it together with the test-hosting mail choice.
+- [ ] Test deployment on one of the owner's VPSs behind Pangolin (HTTPS is required for WebCrypto); no Supabase needed. Checklist in the notes file.
+- [x] Owner merged the `make tidy` PR (#10, 2026-10-15).
 - [x] Owner-visible request history for the C7 timeline: `GET /api/handoff/requests/mine` (ruling R39), landed in the final fix wave.
 - [ ] API follow-ups: a Refuse action for witnesses, the witness set on the witness card.
 - [ ] A durable "last seen" marker for the owner's release notice, so it does not depend on the browser.
@@ -90,9 +96,26 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 | 2026-10-14 | R42: a witness who deletes their account first leaves each set they serve: open requests cancelled, rules flagged stale, k refit | Spec 7.1 says a changed set re-splits, and a silent dead slot can leave a quorum unreachable with no signal |
 | 2026-10-14 | R43: the Witnesses page warns about a witness who is also a recipient on an open rule | Decision 6 names both the rule form and the Witnesses page |
 | 2026-10-14 | R44: witness keys are checked against the owner's trust rows at create and repair; recipient keys at vote time are not, and SECURITY.md says so with the server's power to release alone | The safe must not claim a check it does not make |
+| 2026-10-19 | Usability comes before the API follow-ups: the owner judged the app too texty and the concepts unexplained | A first-time visitor cannot tell what a witness or k-of-n is, so the remaining handoff polish would not be seen |
+| 2026-10-19 | No quick fix for local email verification: neither logging the full body nor a switch to turn verification off | Owner's call; to be decided together with how testers receive mail on a VPS deployment |
+| 2026-10-19 | A VPS test deployment stays on the self-contained stack (own Postgres, local storage), no Supabase | The stack has never used Supabase and needs no paid service; moving would mean rewriting auth and storage |
 | 2026-10-14 | R45: the owner gets no mail for their own rule creation or revocation | Spec 7.2's "every state change is emailed" is read as changes that happen to the owner; a mail confirming one's own click is noise |
 
 ## Session log
+
+### 2026-10-19 · local (Claude Code) · first owner run: not usable yet; notes on usability and VPS test hosting
+
+Session: Claude Code, local checkout · Branch: `docs/usability-and-hosting-notes` · Commits: this one · PR: see the branch's PR
+
+**Did**
+- Re-oriented from the journal and the vault status; `main` clean at 4f20c96, post-merge CI on `main` green.
+- Started the Docker stack (`make up`), all three containers healthy, `/api/health` ok. The owner registered and could not sign in: login 403 for an unverified email, and the log mail driver records only the recipient and subject, so the link was not reachable. Unblocked the owner's local account by setting `email_verified_at` in the local database (local stack only).
+- Owner verdict after trying it: too texty, the witness and k-of-n concepts will not land, needs animations; not in a usable spot. Owner ruled out code changes for the day and rejected both offered email fixes.
+- Wrote `docs/notes/2026-10-19-usability-and-test-hosting.md`: the verdict, the email blocker, a VPS test-deploy checklist (Pangolin pattern from the vault's VPS notes, HTTPS for WebCrypto, mail options, a way to show a timer release, test-data framing) and open questions. Checked that nothing in the repo uses Supabase.
+
+**Verified**: no code changed, so no suites run; docs-only PR, CI as shown on the PR.
+
+**Open**: the owner has more thoughts to add to the notes. The usability rework now comes before the API follow-ups. Cleaned: `make tidy` stopped the local stack, volumes kept; the owner's local account stays (their own, not throwaway).
 
 ### 2026-10-15 · local (Claude Code) · PR #9 merged; `make tidy` wrap-up target
 

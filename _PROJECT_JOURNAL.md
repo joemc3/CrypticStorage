@@ -105,7 +105,7 @@ Stage 2, the design application and the handoff subsystem (slices A witnesses, B
 
 ### 2026-10-19 · local (Claude Code) · first owner run: not usable yet; notes on usability and VPS test hosting
 
-Session: Claude Code, local checkout · Branch: `docs/usability-and-hosting-notes` · Commits: this one · PR: see the branch's PR
+Session: Claude Code, local checkout · Branch: `docs/usability-and-hosting-notes` · Commits: this one · PR: #11 (https://github.com/joemc3/CrypticStorage/pull/11)
 
 **Did**
 - Re-oriented from the journal and the vault status; `main` clean at 4f20c96, post-merge CI on `main` green.
